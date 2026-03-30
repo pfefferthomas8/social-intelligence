@@ -1,4 +1,5 @@
 const TOKEN_KEY = 'si_token'
+const SUPABASE_URL = 'https://shrsluxbrazqscgiwfpu.supabase.co'
 
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY)
@@ -16,11 +17,9 @@ export function isAuthenticated() {
   return !!getToken()
 }
 
-// Ruft eine Edge Function mit Auth-Header auf
 export async function apiFetch(path, options = {}) {
   const token = getToken()
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-  const res = await fetch(`${supabaseUrl}/functions/v1/${path}`, {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
