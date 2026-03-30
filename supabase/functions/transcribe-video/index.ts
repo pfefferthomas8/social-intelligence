@@ -1,5 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-import { createClient } from "jsr:@supabase/supabase-js@2"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -26,8 +25,12 @@ Deno.serve(async (req) => {
   }
 
   const ASSEMBLYAI_KEY = Deno.env.get('ASSEMBLYAI_API_KEY')!
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+  const DASHBOARD_TOKEN = Deno.env.get('DASHBOARD_TOKEN')!
 
-  // Transkription starten
+  // Webhook URL — AssemblyAI ruft uns auf wenn fertig (kein Polling, kein Timeout-Problem)
+  const webhookUrl = `${SUPABASE_URL}/functions/v1/transcribe-webhook?token=${DASHBOARD_TOKEN}&post_id=${post_id}`
+
   const submitRes = await fetch('https://api.assemblyai.com/v2/transcript', {
     method: 'POST',
     headers: {
@@ -36,51 +39,23 @@ Deno.serve(async (req) => {
     },
     body: JSON.stringify({
       audio_url: video_url,
-      language_detection: true, // Auto-Sprachdetection (DE/EN)
+      language_detection: true,
       punctuate: true,
       format_text: true,
+      webhook_url: webhookUrl,
     })
   })
 
   if (!submitRes.ok) {
     const err = await submitRes.text()
-    await supabase.from('instagram_posts')
-      .update({ transcript_status: 'error' })
-      .eq('id', post_id)
+    await supabase.from('instagram_posts').update({ transcript_status: 'error' }).eq('id', post_id)
     return new Response(JSON.stringify({ error: 'AssemblyAI error: ' + err }), { status: 502, headers: CORS })
   }
 
   const { id: transcriptId } = await submitRes.json()
+  await supabase.from('instagram_posts').update({ transcript_status: 'pending' }).eq('id', post_id)
 
-  // Polling bis fertig (max 5 Minuten, alle 6 Sekunden)
-  for (let i = 0; i < 50; i++) {
-    await new Promise(r => setTimeout(r, 6000))
-
-    const pollRes = await fetch(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, {
-      headers: { 'Authorization': ASSEMBLYAI_KEY }
-    })
-    const pollData = await pollRes.json()
-
-    if (pollData.status === 'completed') {
-      await supabase.from('instagram_posts')
-        .update({ transcript: pollData.text, transcript_status: 'done' })
-        .eq('id', post_id)
-      return new Response(JSON.stringify({ success: true, transcript: pollData.text }), {
-        headers: { ...CORS, 'Content-Type': 'application/json' }
-      })
-    }
-
-    if (pollData.status === 'error') {
-      await supabase.from('instagram_posts')
-        .update({ transcript_status: 'error' })
-        .eq('id', post_id)
-      return new Response(JSON.stringify({ error: 'AssemblyAI: ' + pollData.error }), { status: 502, headers: CORS })
-    }
-
-    // status === 'processing' oder 'queued' → weiter warten
-  }
-
-  // Timeout
-  await supabase.from('instagram_posts').update({ transcript_status: 'error' }).eq('id', post_id)
-  return new Response(JSON.stringify({ error: 'Timeout' }), { status: 504, headers: CORS })
+  return new Response(JSON.stringify({ ok: true, transcript_id: transcriptId }), {
+    headers: { ...CORS, 'Content-Type': 'application/json' }
+  })
 })
