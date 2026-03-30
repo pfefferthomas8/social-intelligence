@@ -244,11 +244,11 @@ export default function ContentGenerator() {
                     key={t.key}
                     onClick={() => setTone(t.key)}
                     style={{
-                      padding: '7px 14px', borderRadius: 100, border: 'none',
+                      padding: '7px 14px', borderRadius: 100,
+                      border: `1px solid ${tone === t.key ? '#3a3a3a' : '#1e1e1e'}`,
                       cursor: 'pointer', fontFamily: 'var(--font)', fontSize: 12, fontWeight: 600,
                       background: tone === t.key ? '#1c1c1c' : '#141414',
                       color: tone === t.key ? '#fff' : '#606060',
-                      border: `1px solid ${tone === t.key ? '#3a3a3a' : '#1e1e1e'}`,
                       transition: 'all 0.15s'
                     }}
                   >{t.label}</button>
