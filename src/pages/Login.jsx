@@ -13,9 +13,9 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
-      const expected = import.meta.env.VITE_DASHBOARD_TOKEN
-      if (password === expected) {
-        setToken(password)
+      const API_TOKEN = '1gmbsxqvG6ImxKk5zFyGguUMNXy-guFlAJmSbEo2CeI'
+      if (password === 'thomas2026') {
+        setToken(API_TOKEN)
         navigate('/dashboard')
       } else {
         setError('Falsches Passwort.')
