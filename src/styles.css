@@ -42,11 +42,20 @@ html, body, #root {
 
 body {
   font-family: var(--font);
-  background: var(--bg);
+  background: #050505;
   color: var(--text);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  display: flex;
+  justify-content: center;
+}
+
+#root {
+  width: 100%;
+  max-width: 480px;
+  background: var(--bg);
+  position: relative;
 }
 
 ::-webkit-scrollbar { width: 0px; }
