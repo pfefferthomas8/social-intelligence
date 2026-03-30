@@ -98,20 +98,25 @@ Deno.serve(async (req) => {
         thumbnail_url: item.displayUrl || item.thumbnailUrl || item.imageUrl || null,
         published_at: item.timestamp ? new Date(item.timestamp * 1000).toISOString() : null,
         url: item.url || `https://www.instagram.com/p/${item.shortCode}/`,
-        transcript_status: (item.videoUrl || item.videoPlaybackUrl) ? 'pending' : 'none'
+        transcript_status: (item.videoUrl || item.videoPlaybackUrl) ? 'pending' : 'none',
+        visual_text_status: (item.displayUrl || item.thumbnailUrl || item.imageUrl) ? 'pending' : 'none'
       }
 
       const { data: saved, error } = await supabase
         .from('instagram_posts')
         .upsert(postData, { onConflict: 'instagram_post_id,source', ignoreDuplicates: false })
-        .select('id, video_url, transcript_status')
+        .select('id, video_url, thumbnail_url, transcript_status, visual_text_status')
         .maybeSingle()
 
       if (!error && saved) {
         savedCount++
-        // Transkription im Hintergrund starten
+        // Audio-Transkription (AssemblyAI) — für Videos/Reels
         if (saved.video_url && saved.transcript_status === 'pending') {
           triggerTranscription(saved.id, saved.video_url, supabase)
+        }
+        // Visual Text Extraction (Claude Vision) — für alle Posts mit Thumbnail
+        if (saved.thumbnail_url && saved.visual_text_status === 'pending') {
+          triggerVisualExtraction(saved.id, saved.thumbnail_url)
         }
       }
     }
@@ -151,5 +156,17 @@ function triggerTranscription(postId: string, videoUrl: string, supabase: any) {
       'Authorization': `Bearer ${Deno.env.get('DASHBOARD_TOKEN')}`
     },
     body: JSON.stringify({ post_id: postId, video_url: videoUrl })
+  }).catch(() => {})
+}
+
+function triggerVisualExtraction(postId: string, thumbnailUrl: string) {
+  const url = `${Deno.env.get('SUPABASE_URL')}/functions/v1/extract-visual-text`
+  fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${Deno.env.get('DASHBOARD_TOKEN')}`
+    },
+    body: JSON.stringify({ post_id: postId, thumbnail_url: thumbnailUrl })
   }).catch(() => {})
 }
