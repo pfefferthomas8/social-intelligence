@@ -4,37 +4,17 @@ import { supabase } from '../lib/supabase.js'
 import { apiFetch } from '../lib/auth.js'
 
 const CONTENT_TYPES = [
-  {
-    key: 'video_script',
-    label: 'Video Script',
-    icon: '🎬',
-    desc: 'Vollständiges Skript mit Hook, Body & CTA',
-  },
-  {
-    key: 'carousel',
-    label: 'Karussell',
-    icon: '📋',
-    desc: 'Slide-für-Slide Texte inkl. Hook & CTA',
-  },
-  {
-    key: 'single_post',
-    label: 'Single Post',
-    icon: '📝',
-    desc: 'Starke Caption für ein Einzelbild',
-  },
-  {
-    key: 'b_roll',
-    label: 'B-Roll Hook',
-    icon: '⚡',
-    desc: 'Kurze Text-Overlays für B-Roll Clips',
-  },
+  { key: 'video_script', label: 'Video Script', icon: '🎬', desc: 'Hook, Body & CTA' },
+  { key: 'carousel', label: 'Karussell', icon: '📋', desc: 'Slide-für-Slide' },
+  { key: 'single_post', label: 'Single Post', icon: '📝', desc: 'Caption für Einzelbild' },
+  { key: 'b_roll', label: 'B-Roll Hook', icon: '⚡', desc: 'Text-Overlays' },
 ]
 
 const TONE_OPTIONS = [
   { key: 'direct', label: 'Direkt & provokant' },
-  { key: 'educational', label: 'Lehrreich & informativ' },
-  { key: 'motivational', label: 'Motivierend & energetisch' },
-  { key: 'story', label: 'Story-basiert & persönlich' },
+  { key: 'educational', label: 'Lehrreich' },
+  { key: 'motivational', label: 'Motivierend' },
+  { key: 'story', label: 'Story-basiert' },
 ]
 
 function CopyButton({ text }) {
@@ -45,17 +25,17 @@ function CopyButton({ text }) {
     setTimeout(() => setCopied(false), 2000)
   }
   return (
-    <button onClick={copy} className="btn btn-sm" style={{ gap: 6, fontSize: 12 }}>
+    <button onClick={copy} className="btn btn-sm" style={{ gap: 5 }}>
       {copied ? (
         <>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-            <path d="M20 6L9 17l-5-5" stroke="#4ade80" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+            <path d="M20 6L9 17l-5-5" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round"/>
           </svg>
-          <span style={{ color: '#4ade80' }}>Kopiert!</span>
+          <span style={{ color: '#22c55e' }}>Kopiert</span>
         </>
       ) : (
         <>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
             <rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="1.8"/>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="currentColor" strokeWidth="1.8"/>
           </svg>
@@ -76,27 +56,17 @@ export default function ContentGenerator() {
   const [result, setResult] = useState(null)
   const [history, setHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('generate')
   const [progress, setProgress] = useState(0)
   const progressRef = useRef(null)
 
   useEffect(() => { loadHistory() }, [])
-
-  // Wenn Thema vom Dashboard übergeben wird → sofort anzeigen
   useEffect(() => {
-    if (location.state?.topic) {
-      setTopic(location.state.topic)
-      setActiveTab('generate')
-    }
+    if (location.state?.topic) { setTopic(location.state.topic) }
   }, [location.state])
 
   async function loadHistory() {
     setHistoryLoading(true)
-    const { data } = await supabase
-      .from('generated_content')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(20)
+    const { data } = await supabase.from('generated_content').select('*').order('created_at', { ascending: false }).limit(20)
     setHistory(data || [])
     setHistoryLoading(false)
   }
@@ -106,14 +76,11 @@ export default function ContentGenerator() {
     setGenerating(true)
     setResult(null)
     setProgress(0)
-
-    // Fake progress animation während generiert wird
     let p = 0
     progressRef.current = setInterval(() => {
       p = Math.min(p + Math.random() * 8, 88)
       setProgress(p)
     }, 400)
-
     try {
       const data = await apiFetch('generate-content', {
         method: 'POST',
@@ -123,7 +90,7 @@ export default function ContentGenerator() {
       setResult(data)
       await loadHistory()
     } catch (e) {
-      alert('Fehler beim Generieren: ' + e.message)
+      alert('Fehler: ' + e.message)
     } finally {
       clearInterval(progressRef.current)
       setGenerating(false)
@@ -133,209 +100,197 @@ export default function ContentGenerator() {
   const selectedType = CONTENT_TYPES.find(t => t.key === contentType)
 
   return (
-    <div className="screen">
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Header */}
       <div className="page-header">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700 }}>Content Generator</h1>
-          <span style={{ fontSize: 13, color: '#505050' }}>{history.length} generiert</span>
+        <div>
+          <div className="page-title">Content Generator</div>
+          <div className="page-subtitle">KI-generierter Content basierend auf deinen Top Posts & Competitor Trends</div>
         </div>
-
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: 4, marginTop: 14 }}>
-          {[['generate', 'Generieren'], ['history', 'Historie']].map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              style={{
-                padding: '7px 18px', borderRadius: 100, fontSize: 13, fontWeight: 600,
-                border: 'none', cursor: 'pointer', fontFamily: 'var(--font)',
-                background: activeTab === key ? '#ee4f00' : '#1a1a1a',
-                color: activeTab === key ? '#fff' : '#707070',
-                transition: 'all 0.15s'
-              }}
-            >{label}</button>
-          ))}
-        </div>
+        <span style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
+          {history.length} generiert
+        </span>
       </div>
 
-      <div className="screen-content">
-        {activeTab === 'history' ? (
-          historyLoading ? (
-            <div className="empty-state"><div className="spinner" style={{ width: 24, height: 24 }} /></div>
-          ) : history.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-state-icon">✨</div>
-              <p className="empty-state-title">Noch nichts generiert</p>
-              <p className="empty-state-text">Dein Content-Verlauf erscheint hier.</p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {history.map(item => (
-                <div key={item.id} style={{
-                  background: '#161616', border: '1px solid #1e1e1e',
-                  borderRadius: 12, padding: '16px'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10, gap: 8 }}>
-                    <div>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
-                        <span className="badge badge-orange">
-                          {CONTENT_TYPES.find(t => t.key === item.content_type)?.icon} {CONTENT_TYPES.find(t => t.key === item.content_type)?.label}
-                        </span>
-                        <span style={{ fontSize: 11, color: '#505050' }}>
-                          {new Date(item.created_at).toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                      <p style={{ fontSize: 13, fontWeight: 600, color: '#c0c0c0' }}>{item.topic}</p>
+      {/* Two Column Body */}
+      <div style={{ flex: 1, overflow: 'hidden', display: 'grid', gridTemplateColumns: '420px 1fr' }}>
+        {/* Left: Form */}
+        <div style={{ borderRight: '1px solid var(--border)', overflowY: 'auto', padding: '24px' }}>
+          {/* Content Type */}
+          <div style={{ marginBottom: 20 }}>
+            <div className="section-label">Format</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              {CONTENT_TYPES.map(type => (
+                <button
+                  key={type.key}
+                  onClick={() => setContentType(type.key)}
+                  style={{
+                    background: contentType === type.key ? 'var(--accent-dim)' : 'var(--bg-card)',
+                    border: `1px solid ${contentType === type.key ? 'rgba(238,79,0,0.3)' : 'var(--border)'}`,
+                    borderRadius: 'var(--r)',
+                    padding: '10px 12px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontFamily: 'var(--font)',
+                    display: 'flex', gap: 8, alignItems: 'center',
+                    transition: 'all 0.12s'
+                  }}
+                >
+                  <span style={{ fontSize: 16 }}>{type.icon}</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: contentType === type.key ? 'var(--accent)' : 'var(--text2)' }}>
+                      {type.label}
                     </div>
-                    <CopyButton text={item.content} />
+                    <div style={{ fontSize: 10, color: 'var(--text3)' }}>{type.desc}</div>
                   </div>
-                  <div style={{
-                    background: '#0f0f0f', borderRadius: 8, padding: '12px',
-                    fontSize: 13, lineHeight: 1.65, color: '#909090',
-                    whiteSpace: 'pre-wrap', maxHeight: 200, overflowY: 'auto'
-                  }}>
-                    {item.content}
-                  </div>
-                  <button
-                    onClick={() => { setTopic(item.topic); setContentType(item.content_type); setActiveTab('generate') }}
-                    className="btn btn-sm btn-ghost"
-                    style={{ marginTop: 10, fontSize: 12, padding: '6px 12px' }}
-                  >
-                    ↗ Nochmal generieren
-                  </button>
-                </div>
+                </button>
               ))}
             </div>
-          )
-        ) : (
-          /* Generator */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {/* Content Type Auswahl */}
-            <div>
-              <p className="section-label">Format</p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                {CONTENT_TYPES.map(type => (
-                  <button
-                    key={type.key}
-                    onClick={() => setContentType(type.key)}
-                    style={{
-                      background: contentType === type.key ? 'rgba(238,79,0,0.1)' : '#141414',
-                      border: `1px solid ${contentType === type.key ? 'rgba(238,79,0,0.35)' : '#1e1e1e'}`,
-                      borderRadius: 10, padding: '10px 12px', cursor: 'pointer',
-                      textAlign: 'left', transition: 'all 0.15s', fontFamily: 'var(--font)',
-                      display: 'flex', alignItems: 'center', gap: 10
-                    }}
-                  >
-                    <span style={{ fontSize: 18, flexShrink: 0 }}>{type.icon}</span>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: contentType === type.key ? '#ee4f00' : '#c0c0c0' }}>
-                        {type.label}
-                      </div>
-                      <div style={{ fontSize: 10, color: '#505050', lineHeight: 1.3 }}>{type.desc}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Ton */}
-            <div>
-              <p className="section-label">Ton</p>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {TONE_OPTIONS.map(t => (
-                  <button
-                    key={t.key}
-                    onClick={() => setTone(t.key)}
-                    style={{
-                      padding: '6px 12px', borderRadius: 100,
-                      border: `1px solid ${tone === t.key ? '#3a3a3a' : '#1e1e1e'}`,
-                      cursor: 'pointer', fontFamily: 'var(--font)', fontSize: 11, fontWeight: 600,
-                      background: tone === t.key ? '#222' : '#141414',
-                      color: tone === t.key ? '#fff' : '#555',
-                      transition: 'all 0.15s'
-                    }}
-                  >{t.label}</button>
-                ))}
-              </div>
-            </div>
-
-            {/* Thema */}
-            <div>
-              <p className="section-label">Thema / Idee</p>
-              <textarea
-                className="input"
-                placeholder="z.B. Warum Cardio Muskeln NICHT killt"
-                value={topic}
-                onChange={e => setTopic(e.target.value)}
-                style={{ minHeight: 68 }}
-              />
-            </div>
-
-            {/* Zusatzinfos */}
-            <div>
-              <p className="section-label">Zusatzinfos (optional)</p>
-              <textarea
-                className="input"
-                placeholder="Zielgruppe, Fokus, Besonderheiten…"
-                value={additionalInfo}
-                onChange={e => setAdditionalInfo(e.target.value)}
-                style={{ minHeight: 52 }}
-              />
-            </div>
-
-            {/* Generieren Button */}
-            <button
-              onClick={generate}
-              disabled={!topic.trim() || generating}
-              className="btn btn-primary"
-              style={{ width: '100%', padding: '13px', fontSize: 14, fontWeight: 700 }}
-            >
-              {generating ? (
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span className="spinner" style={{ width: 16, height: 16 }} />
-                  Wird generiert…
-                </span>
-              ) : (
-                `${selectedType?.icon} ${selectedType?.label} generieren`
-              )}
-            </button>
-
-            {/* Progress Bar */}
-            {generating && (
-              <div className="progress-bar">
-                <div className="progress-fill" style={{ width: `${progress}%` }} />
-              </div>
-            )}
-
-            {/* Result */}
-            {result && (
-              <div style={{ animation: 'fadeUp 0.3s ease forwards' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <p className="section-label" style={{ marginBottom: 0 }}>
-                    {CONTENT_TYPES.find(t => t.key === contentType)?.icon} Ergebnis
-                  </p>
-                  <CopyButton text={result.content} />
-                </div>
-                <div style={{
-                  background: '#0f0f0f', border: '1px solid #2a2a2a',
-                  borderRadius: 12, padding: '20px',
-                  fontSize: 14, lineHeight: 1.8, color: '#d0d0d0',
-                  whiteSpace: 'pre-wrap', minHeight: 200
-                }}>
-                  {result.content}
-                </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                  <button onClick={generate} className="btn btn-sm" style={{ flex: 1 }}>
-                    ↻ Neu generieren
-                  </button>
-                  <button onClick={() => setActiveTab('history')} className="btn btn-sm" style={{ flex: 1 }}>
-                    Verlauf anzeigen
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
-        )}
+
+          {/* Tone */}
+          <div style={{ marginBottom: 20 }}>
+            <div className="section-label">Ton</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {TONE_OPTIONS.map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setTone(t.key)}
+                  className={`pill ${tone === t.key ? 'active' : ''}`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Topic */}
+          <div style={{ marginBottom: 16 }}>
+            <div className="section-label">Thema / Idee</div>
+            <textarea
+              className="input"
+              placeholder="z.B. Warum Cardio Muskeln NICHT killt"
+              value={topic}
+              onChange={e => setTopic(e.target.value)}
+              style={{ minHeight: 72 }}
+            />
+          </div>
+
+          {/* Additional Info */}
+          <div style={{ marginBottom: 20 }}>
+            <div className="section-label">
+              Zusatzinfos{' '}
+              <span style={{ color: 'var(--text4)', textTransform: 'none', fontSize: 10 }}>(optional)</span>
+            </div>
+            <textarea
+              className="input"
+              placeholder="Zielgruppe, Fokus, besondere Anforderungen…"
+              value={additionalInfo}
+              onChange={e => setAdditionalInfo(e.target.value)}
+              style={{ minHeight: 60 }}
+            />
+          </div>
+
+          {/* Generate */}
+          <button
+            onClick={generate}
+            disabled={!topic.trim() || generating}
+            className="btn btn-primary"
+            style={{ width: '100%', padding: '11px', fontSize: 14, fontWeight: 700 }}
+          >
+            {generating ? (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="spinner" style={{ width: 15, height: 15, borderColor: 'rgba(255,255,255,0.3)', borderTopColor: '#fff' }} />
+                Generiert…
+              </span>
+            ) : (
+              `${selectedType?.icon} ${selectedType?.label} generieren`
+            )}
+          </button>
+
+          {generating && (
+            <div className="progress-bar" style={{ marginTop: 10 }}>
+              <div className="progress-fill" style={{ width: `${progress}%` }} />
+            </div>
+          )}
+        </div>
+
+        {/* Right: Result or History */}
+        <div style={{ overflowY: 'auto', padding: '24px' }}>
+          {result ? (
+            <div className="fade-in">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
+                    {CONTENT_TYPES.find(t => t.key === contentType)?.icon} Ergebnis
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{topic}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <CopyButton text={result.content} />
+                  <button onClick={generate} className="btn btn-sm">↻ Neu</button>
+                </div>
+              </div>
+              <div style={{
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
+                borderRadius: 'var(--r-lg)', padding: '20px',
+                fontSize: 14, lineHeight: 1.8, color: 'var(--text2)',
+                whiteSpace: 'pre-wrap', minHeight: 300
+              }}>
+                {result.content}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div className="section-header" style={{ marginBottom: 16 }}>
+                <span className="section-title">Verlauf</span>
+                <span style={{ fontSize: 12, color: 'var(--text3)' }}>{history.length} Einträge</span>
+              </div>
+              {historyLoading ? (
+                <div className="empty-state"><div className="spinner" /></div>
+              ) : history.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-state-icon">✨</div>
+                  <p className="empty-state-title">Noch nichts generiert</p>
+                  <p className="empty-state-text">Wähle ein Format, gib ein Thema ein und klick "Generieren".</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {history.map(item => (
+                    <div
+                      key={item.id}
+                      style={{
+                        background: 'var(--bg-card)', border: '1px solid var(--border)',
+                        borderRadius: 'var(--r)', padding: '14px',
+                        cursor: 'pointer', transition: 'border-color 0.12s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-strong)'}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                      onClick={() => { setTopic(item.topic); setContentType(item.content_type) }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+                            <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                              {CONTENT_TYPES.find(t => t.key === item.content_type)?.icon} {CONTENT_TYPES.find(t => t.key === item.content_type)?.label}
+                            </span>
+                            <span style={{ fontSize: 11, color: 'var(--text3)' }}>
+                              {new Date(item.created_at).toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {item.topic}
+                          </p>
+                        </div>
+                        <CopyButton text={item.content} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

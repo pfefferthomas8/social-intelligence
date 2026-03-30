@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase.js'
-import { fetchWithCache } from '../lib/cache.js'
 import { apiFetch } from '../lib/auth.js'
 import TopicCard from '../components/TopicCard.jsx'
 import PostCard from '../components/PostCard.jsx'
@@ -30,11 +29,10 @@ export default function Dashboard() {
   const [trendingPosts, setTrendingPosts] = useState([])
   const [competitors, setCompetitors] = useState([])
   const [topics, setTopics] = useState([])
-  const [stats, setStats] = useState({ totalPosts: 0, totalCompetitors: 0, generatedContent: 0 })
+  const [stats, setStats] = useState({ totalPosts: 0, generatedContent: 0 })
   const [topicsLoading, setTopicsLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [scrapeLoading, setScrapeLoading] = useState(false)
-  const [activeSection, setActiveSection] = useState('overview')
 
   useEffect(() => { loadAll() }, [])
 
@@ -50,48 +48,20 @@ export default function Dashboard() {
   }
 
   async function loadPosts() {
-    // Eigene Top Posts
-    const { data: own } = await supabase
-      .from('instagram_posts')
-      .select('*')
-      .eq('source', 'own')
-      .order('views_count', { ascending: false })
-      .limit(6)
+    const { data: own } = await supabase.from('instagram_posts').select('*').eq('source', 'own').order('views_count', { ascending: false }).limit(6)
     setTopOwnPosts(own || [])
-
-    // Trending Competitor Posts (letzte 30 Tage, meiste Views)
     const since = new Date(Date.now() - 30 * 86400000).toISOString()
-    const { data: trending } = await supabase
-      .from('instagram_posts')
-      .select('*, competitor_profiles(username)')
-      .eq('source', 'competitor')
-      .gte('scraped_at', since)
-      .order('views_count', { ascending: false })
-      .limit(5)
-
-    // Competitor-Username in Post mergen
-    setTrendingPosts((trending || []).map(p => ({
-      ...p,
-      competitor_username: p.competitor_profiles?.username
-    })))
+    const { data: trending } = await supabase.from('instagram_posts').select('*, competitor_profiles(username)').eq('source', 'competitor').gte('scraped_at', since).order('views_count', { ascending: false }).limit(6)
+    setTrendingPosts((trending || []).map(p => ({ ...p, competitor_username: p.competitor_profiles?.username })))
   }
 
   async function loadCompetitors() {
-    const { data } = await supabase
-      .from('competitor_profiles')
-      .select('*')
-      .eq('is_active', true)
-      .order('followers_count', { ascending: false })
+    const { data } = await supabase.from('competitor_profiles').select('*').eq('is_active', true).order('followers_count', { ascending: false })
     setCompetitors(data || [])
   }
 
   async function loadTopics() {
-    const { data } = await supabase
-      .from('topic_suggestions')
-      .select('*')
-      .eq('used', false)
-      .order('created_at', { ascending: false })
-      .limit(8)
+    const { data } = await supabase.from('topic_suggestions').select('*').eq('used', false).order('created_at', { ascending: false }).limit(8)
     setTopics(data || [])
   }
 
@@ -100,10 +70,7 @@ export default function Dashboard() {
       supabase.from('instagram_posts').select('id', { count: 'exact', head: true }),
       supabase.from('generated_content').select('id', { count: 'exact', head: true })
     ])
-    setStats({
-      totalPosts: postsRes.count || 0,
-      generatedContent: contentRes.count || 0,
-    })
+    setStats({ totalPosts: postsRes.count || 0, generatedContent: contentRes.count || 0 })
   }
 
   async function generateTopics() {
@@ -112,31 +79,21 @@ export default function Dashboard() {
       const result = await apiFetch('topic-suggestions', { method: 'POST' })
       if (result.topics) setTopics(result.topics)
       else await loadTopics()
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setTopicsLoading(false)
-    }
+    } catch (e) { console.error(e) }
+    finally { setTopicsLoading(false) }
   }
 
   async function refreshOwnProfile() {
     if (!ownProfile?.username) return
     setScrapeLoading(true)
     try {
-      await apiFetch('scrape-profile', {
-        method: 'POST',
-        body: JSON.stringify({ username: ownProfile.username, source: 'own' })
-      })
+      await apiFetch('scrape-profile', { method: 'POST', body: JSON.stringify({ username: ownProfile.username, source: 'own' }) })
       setTimeout(loadAll, 2000)
-    } catch (e) {
-      alert('Scrape fehlgeschlagen: ' + e.message)
-    } finally {
-      setScrapeLoading(false)
-    }
+    } catch (e) { alert('Scrape fehlgeschlagen: ' + e.message) }
+    finally { setScrapeLoading(false) }
   }
 
   function handleTopicSelect(topic) {
-    // Zum Generator navigieren mit vorausgefülltem Thema
     navigate('/generator', { state: { topic: topic.title } })
   }
 
@@ -144,27 +101,35 @@ export default function Dashboard() {
     ? (topOwnPosts.reduce((s, p) => s + ((p.likes_count || 0) + (p.comments_count || 0)), 0) / topOwnPosts.length / (ownProfile.followers_count || 1) * 100).toFixed(2)
     : null
 
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+        <div className="spinner" style={{ width: 28, height: 28 }} />
+      </div>
+    )
+  }
+
   return (
-    <div className="screen">
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Header */}
-      <div className="page-header" style={{ background: '#0a0a0a' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <h1 style={{ fontSize: 20, fontWeight: 700, color: '#fff' }}>Dashboard</h1>
-            <p style={{ fontSize: 13, color: '#505050', marginTop: 2 }}>
-              {ownProfile ? `@${ownProfile.username}` : 'Kein Profil konfiguriert'}
-            </p>
-          </div>
+      <div className="page-header">
+        <div>
+          <div className="page-title">Dashboard</div>
+          <div className="page-subtitle">{ownProfile ? `@${ownProfile.username}` : 'Kein Profil konfiguriert'}</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={() => navigate('/konkurrenten')} className="btn btn-sm">
+            + Competitor
+          </button>
           <button
             onClick={refreshOwnProfile}
             disabled={scrapeLoading || !ownProfile}
             className="btn btn-sm"
-            style={{ gap: 6 }}
           >
-            {scrapeLoading ? <span className="spinner" style={{ width: 14, height: 14 }} /> : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            {scrapeLoading ? <span className="spinner" /> : (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                <path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
               </svg>
             )}
             Aktualisieren
@@ -172,149 +137,138 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="screen-content">
-        {loading ? (
-          <div className="empty-state"><div className="spinner" style={{ width: 28, height: 28 }} /></div>
-        ) : (
-          <>
-            {/* Stats-Reihe */}
-            <div className="grid-3" style={{ marginBottom: 16 }}>
-              <div className="stat-card">
-                <span className="stat-value">{formatNumber(ownProfile?.followers_count)}</span>
-                <span className="stat-label">Follower</span>
-              </div>
-              <div className="stat-card">
-                <span className="stat-value" style={{ color: '#4ade80', fontSize: 18 }}>{engRate ? `${engRate}%` : '—'}</span>
-                <span className="stat-label">Engagement</span>
-              </div>
-              <div className="stat-card">
-                <span className="stat-value">{stats.totalPosts}</span>
-                <span className="stat-label">Posts</span>
-              </div>
+      {/* Content */}
+      <div className="page-body">
+        {/* Stats Row */}
+        <div className="stat-grid" style={{ marginBottom: 24 }}>
+          <div className="stat-card">
+            <div className="stat-label">Follower</div>
+            <div className="stat-value">{formatNumber(ownProfile?.followers_count)}</div>
+            <div className="stat-sub">@{ownProfile?.username || '—'}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Engagement Rate</div>
+            <div className="stat-value" style={{ color: engRate ? '#22c55e' : 'var(--text3)', fontSize: 24 }}>
+              {engRate ? `${engRate}%` : '—'}
             </div>
-
-            {/* Themenvorschläge */}
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span className="section-label" style={{ marginBottom: 0 }}>Themenvorschläge</span>
-                <button
-                  onClick={generateTopics}
-                  disabled={topicsLoading}
-                  className="btn btn-sm"
-                >
-                  {topicsLoading ? <span className="spinner" style={{ width: 11, height: 11 }} /> : '+ Generieren'}
-                </button>
-              </div>
-
-              {topics.length === 0 ? (
-                <div style={{
-                  background: '#111', border: '1px dashed #2a2a2a', borderRadius: 12,
-                  padding: '20px', textAlign: 'center'
-                }}>
-                  <p style={{ fontSize: 13, color: '#505050', marginBottom: 10 }}>
-                    Noch keine Vorschläge. Scrap erst dein Profil + Competitors.
-                  </p>
-                  <button onClick={generateTopics} className="btn btn-sm btn-primary">
-                    Jetzt analysieren
-                  </button>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {topics.map((t, i) => (
-                    <TopicCard key={t.id || i} topic={t} onSelect={handleTopicSelect} />
-                  ))}
-                </div>
-              )}
+            <div className="stat-sub">Ø letzte Posts</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Posts in DB</div>
+            <div className="stat-value">{formatNumber(stats.totalPosts)}</div>
+            <div className="stat-sub">{competitors.length} Competitors</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Content generiert</div>
+            <div className="stat-value">{stats.generatedContent}</div>
+            <div className="stat-sub">
+              <span
+                onClick={() => navigate('/generator')}
+                style={{ color: 'var(--accent)', cursor: 'pointer', fontSize: 11 }}
+              >
+                Neu erstellen →
+              </span>
             </div>
+          </div>
+        </div>
 
-            {/* Trending bei Competitors */}
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span className="section-label" style={{ marginBottom: 0 }}>Trending bei Competitors</span>
-                <span style={{ fontSize: 10, color: '#404040' }}>30 Tage</span>
-              </div>
-              {trendingPosts.length === 0 ? (
-                <div className="empty-state" style={{ padding: '24px' }}>
-                  <span className="empty-state-title" style={{ fontSize: 14 }}>Keine Daten</span>
-                  <p className="empty-state-text" style={{ fontSize: 12 }}>Füge Competitors hinzu und scrap ihre Profile.</p>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {trendingPosts.map(post => (
-                    <PostCard key={post.id} post={post} compact />
-                  ))}
-                </div>
-              )}
+        {/* Two Column Layout */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+          {/* Topics */}
+          <div>
+            <div className="section-header">
+              <span className="section-title">Themenvorschläge</span>
+              <button onClick={generateTopics} disabled={topicsLoading} className="btn btn-xs">
+                {topicsLoading ? <span className="spinner" style={{ width: 10, height: 10 }} /> : '+ Generieren'}
+              </button>
             </div>
-
-            {/* Eigene Top Posts */}
-            <div style={{ marginBottom: 16 }}>
-              <span className="section-label">Deine Top Posts</span>
-              {topOwnPosts.length === 0 ? (
-                <div className="empty-state" style={{ padding: '24px' }}>
-                  <span className="empty-state-title" style={{ fontSize: 14 }}>Noch keine Posts</span>
-                  <p className="empty-state-text" style={{ fontSize: 12 }}>Klick auf "Aktualisieren" oben um dein Profil zu scrapen.</p>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {topOwnPosts.map(post => (
-                    <PostCard key={post.id} post={post} />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Competitor Übersicht */}
-            {competitors.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span className="section-label" style={{ marginBottom: 0 }}>Competitors</span>
-                  <button onClick={() => navigate('/konkurrenten')} className="btn-ghost btn btn-sm" style={{ fontSize: 12 }}>
-                    Alle anzeigen
-                  </button>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {competitors.slice(0, 5).map(c => (
-                    <div key={c.id} style={{
-                      display: 'flex', alignItems: 'center', padding: '12px 0',
-                      borderBottom: '1px solid #1a1a1a'
-                    }}>
-                      <div style={{ flex: 1 }}>
-                        <p style={{ fontSize: 14, fontWeight: 600, color: '#e0e0e0' }}>@{c.username}</p>
-                        {c.niche && <p style={{ fontSize: 12, color: '#505050' }}>{c.niche}</p>}
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <p style={{ fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-mono)', color: '#fff' }}>
-                          {formatNumber(c.followers_count)}
-                        </p>
-                        <p style={{ fontSize: 11, color: '#505050' }}>
-                          {c.last_scraped_at ? timeAgo(c.last_scraped_at) : 'Nie gescrapt'}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Kein Profil — Onboarding Prompt */}
-            {!ownProfile && (
+            {topics.length === 0 ? (
               <div style={{
-                background: 'rgba(238,79,0,0.08)', border: '1px solid rgba(238,79,0,0.25)',
-                borderRadius: 12, padding: '20px', textAlign: 'center'
+                background: 'var(--bg-card)', border: '1px dashed var(--border-strong)',
+                borderRadius: 'var(--r-lg)', padding: '32px', textAlign: 'center'
               }}>
-                <p style={{ fontSize: 15, fontWeight: 600, color: '#fff', marginBottom: 8 }}>
-                  Profil noch nicht eingerichtet
+                <p style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>
+                  Analysiere erst dein Profil und Competitors.
                 </p>
-                <p style={{ fontSize: 13, color: '#808080', marginBottom: 16 }}>
-                  Geh zu Einstellungen und trag deinen Instagram-Handle ein um zu starten.
-                </p>
-                <button onClick={() => navigate('/konkurrenten')} className="btn btn-primary btn-sm">
-                  Profil einrichten
-                </button>
+                <button onClick={generateTopics} className="btn btn-sm btn-primary">Jetzt analysieren</button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {topics.map((t, i) => (
+                  <TopicCard key={t.id || i} topic={t} onSelect={handleTopicSelect} />
+                ))}
               </div>
             )}
-          </>
+          </div>
+
+          {/* Trending Posts */}
+          <div>
+            <div className="section-header">
+              <span className="section-title">Trending bei Competitors</span>
+              <span style={{ fontSize: 11, color: 'var(--text3)' }}>letzte 30 Tage</span>
+            </div>
+            {trendingPosts.length === 0 ? (
+              <div style={{
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
+                borderRadius: 'var(--r-lg)', padding: '32px', textAlign: 'center'
+              }}>
+                <p style={{ fontSize: 13, color: 'var(--text3)' }}>Keine Trending Posts. Füge Competitors hinzu.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {trendingPosts.map(post => (
+                  <PostCard key={post.id} post={post} compact />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Competitors Table */}
+        {competitors.length > 0 && (
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', overflow: 'hidden' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span className="section-title">Competitors</span>
+              <button onClick={() => navigate('/konkurrenten')} className="btn btn-xs btn-ghost">
+                Alle anzeigen →
+              </button>
+            </div>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Handle</th>
+                  <th>Nische</th>
+                  <th>Follower</th>
+                  <th>Letzter Scrape</th>
+                </tr>
+              </thead>
+              <tbody>
+                {competitors.slice(0, 6).map(c => (
+                  <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => navigate('/konkurrenten')}>
+                    <td style={{ fontWeight: 600, color: 'var(--text)' }}>@{c.username}</td>
+                    <td style={{ color: 'var(--text3)' }}>{c.niche || '—'}</td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600 }}>{formatNumber(c.followers_count)}</td>
+                    <td style={{ color: 'var(--text3)', fontSize: 12 }}>{timeAgo(c.last_scraped_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* No profile notice */}
+        {!ownProfile && (
+          <div style={{
+            background: 'var(--accent-dim)', border: '1px solid rgba(238,79,0,0.2)',
+            borderRadius: 'var(--r-lg)', padding: '24px', display: 'flex',
+            alignItems: 'center', justifyContent: 'space-between'
+          }}>
+            <div>
+              <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Profil noch nicht eingerichtet</p>
+              <p style={{ fontSize: 13, color: 'var(--text3)' }}>Trag deinen Instagram-Handle ein um zu starten.</p>
+            </div>
+            <button onClick={() => navigate('/konkurrenten')} className="btn btn-primary">Profil einrichten →</button>
+          </div>
         )}
       </div>
     </div>

@@ -13,6 +13,9 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY)
 }
 
+// Alias for backwards compatibility
+export const removeToken = clearToken
+
 export function isAuthenticated() {
   return !!getToken()
 }
