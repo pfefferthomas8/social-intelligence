@@ -33,10 +33,26 @@ export default function Konkurrenten() {
   const [competitorPosts, setCompetitorPosts] = useState([])
   const [postsLoading, setPostsLoading] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
-  const [activeJobs, setActiveJobs] = useState({})
+  const [activeJobs, setActiveJobs] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('si_active_jobs') || '{}') } catch { return {} }
+  })
   const [tab, setTab] = useState('competitors') // 'competitors' | 'own'
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => {
+    loadData()
+    // Scraping-State aus aktiven Jobs wiederherstellen
+    const savedJobs = JSON.parse(localStorage.getItem('si_active_jobs') || '{}')
+    if (Object.keys(savedJobs).length > 0) {
+      const restoredScraping = {}
+      Object.entries(savedJobs).forEach(([jobId, key]) => { restoredScraping[key] = jobId })
+      setScraping(restoredScraping)
+    }
+  }, [])
+
+  // Jobs in localStorage speichern damit Tab-Wechsel sie nicht verliert
+  useEffect(() => {
+    localStorage.setItem('si_active_jobs', JSON.stringify(activeJobs))
+  }, [activeJobs])
 
   // Poll active scrape jobs
   useEffect(() => {
@@ -136,7 +152,9 @@ export default function Konkurrenten() {
         body: JSON.stringify({ username, source, competitor_id: competitorId })
       })
       if (result.job_id) {
-        setActiveJobs(prev => ({ ...prev, [result.job_id]: key }))
+        const newJobs = { ...JSON.parse(localStorage.getItem('si_active_jobs') || '{}'), [result.job_id]: key }
+        localStorage.setItem('si_active_jobs', JSON.stringify(newJobs))
+        setActiveJobs(newJobs)
         setScraping(prev => ({ ...prev, [key]: result.job_id }))
       }
     } catch (e) {
