@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "social-intelligence",
+  "main": "./worker.js",
+  "compatibility_date": "2025-09-27",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  }
+}
