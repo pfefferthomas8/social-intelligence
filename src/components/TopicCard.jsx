@@ -1,71 +1,62 @@
 export default function TopicCard({ topic, onSelect }) {
-  const categoryColors = {
-    trending: { bg: 'rgba(238,79,0,0.1)', border: 'rgba(238,79,0,0.3)', color: '#ee4f00', label: 'Trending' },
-    gap: { bg: 'rgba(96,165,250,0.1)', border: 'rgba(96,165,250,0.3)', color: '#60a5fa', label: 'Content-Gap' },
-    evergreen: { bg: 'rgba(74,222,128,0.1)', border: 'rgba(74,222,128,0.3)', color: '#4ade80', label: 'Evergreen' },
-    personal: { bg: 'rgba(250,204,21,0.1)', border: 'rgba(250,204,21,0.3)', color: '#facc15', label: 'Dein Stil' },
+  const categoryConfig = {
+    trending: { color: '#ee4f00', bg: 'rgba(238,79,0,0.08)', label: 'Trending' },
+    gap: { color: '#60a5fa', bg: 'rgba(96,165,250,0.08)', label: 'Gap' },
+    evergreen: { color: '#4ade80', bg: 'rgba(74,222,128,0.08)', label: 'Evergreen' },
+    personal: { color: '#facc15', bg: 'rgba(250,204,21,0.08)', label: 'Persönlich' },
   }
-  const style = categoryColors[topic.category] || categoryColors.trending
+  const cfg = categoryConfig[topic.category] || categoryConfig.trending
 
   return (
     <div
       onClick={() => onSelect(topic)}
       style={{
-        background: style.bg,
-        border: `1px solid ${style.border}`,
-        borderRadius: 12,
-        padding: '14px 16px',
+        background: '#161616',
+        border: '1px solid #1e1e1e',
+        borderRadius: 10,
+        padding: '12px 14px',
         cursor: 'pointer',
-        transition: 'transform 0.15s ease, opacity 0.15s ease',
-        animation: 'fadeUp 0.2s ease forwards',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        transition: 'border-color 0.15s, background 0.15s',
       }}
-      onMouseDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
-      onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
-      onTouchStart={e => e.currentTarget.style.opacity = '0.7'}
-      onTouchEnd={e => e.currentTarget.style.opacity = '1'}
+      onTouchStart={e => { e.currentTarget.style.background = '#1a1a1a'; e.currentTarget.style.borderColor = '#2a2a2a' }}
+      onTouchEnd={e => { e.currentTarget.style.background = '#161616'; e.currentTarget.style.borderColor = '#1e1e1e' }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <span style={{
-              fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
-              textTransform: 'uppercase', color: style.color
-            }}>
-              {style.label}
-            </span>
-            {topic.potential_views && (
-              <span style={{ fontSize: 10, color: '#606060' }}>
-                ~{topic.potential_views} Views möglich
-              </span>
-            )}
-          </div>
-          <p style={{ fontSize: 14, fontWeight: 600, color: '#ffffff', marginBottom: 4, lineHeight: 1.3 }}>
-            {topic.title}
-          </p>
-          <p style={{ fontSize: 12, color: '#808080', lineHeight: 1.45 }}>
+      {/* Category dot */}
+      <div style={{
+        width: 8, height: 8, borderRadius: '50%',
+        background: cfg.color, flexShrink: 0, marginTop: 1
+      }} />
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+          <span style={{
+            fontSize: 9, fontWeight: 700, color: cfg.color,
+            textTransform: 'uppercase', letterSpacing: '0.08em'
+          }}>{cfg.label}</span>
+          {topic.potential_views && (
+            <span style={{ fontSize: 10, color: '#505050' }}>~{topic.potential_views}</span>
+          )}
+        </div>
+        <p style={{
+          fontSize: 13, fontWeight: 600, color: '#e8e8e8',
+          lineHeight: 1.3, marginBottom: 2,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+        }}>
+          {topic.title}
+        </p>
+        {topic.reason && (
+          <p style={{ fontSize: 11, color: '#606060', lineHeight: 1.4 }}>
             {topic.reason}
           </p>
-        </div>
-        <div style={{
-          flexShrink: 0, width: 32, height: 32,
-          background: 'rgba(255,255,255,0.05)',
-          borderRadius: 8,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: style.color, fontSize: 16
-        }}>
-          →
-        </div>
+        )}
       </div>
-      {topic.suggested_types && (
-        <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-          {topic.suggested_types.map(t => (
-            <span key={t} style={{
-              fontSize: 10, background: 'rgba(255,255,255,0.06)',
-              color: '#808080', borderRadius: 100, padding: '2px 8px', fontWeight: 500
-            }}>{t}</span>
-          ))}
-        </div>
-      )}
+
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, opacity: 0.3 }}>
+        <path d="M9 18l6-6-6-6" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
     </div>
   )
 }

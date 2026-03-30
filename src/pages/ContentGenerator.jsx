@@ -209,27 +209,30 @@ export default function ContentGenerator() {
           )
         ) : (
           /* Generator */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {/* Content Type Auswahl */}
             <div>
-              <p className="section-label">Content-Format</p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <p className="section-label">Format</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                 {CONTENT_TYPES.map(type => (
                   <button
                     key={type.key}
                     onClick={() => setContentType(type.key)}
                     style={{
                       background: contentType === type.key ? 'rgba(238,79,0,0.1)' : '#141414',
-                      border: `1px solid ${contentType === type.key ? 'rgba(238,79,0,0.4)' : '#1e1e1e'}`,
-                      borderRadius: 10, padding: '12px', cursor: 'pointer',
-                      textAlign: 'left', transition: 'all 0.15s', fontFamily: 'var(--font)'
+                      border: `1px solid ${contentType === type.key ? 'rgba(238,79,0,0.35)' : '#1e1e1e'}`,
+                      borderRadius: 10, padding: '10px 12px', cursor: 'pointer',
+                      textAlign: 'left', transition: 'all 0.15s', fontFamily: 'var(--font)',
+                      display: 'flex', alignItems: 'center', gap: 10
                     }}
                   >
-                    <div style={{ fontSize: 20, marginBottom: 4 }}>{type.icon}</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: contentType === type.key ? '#ee4f00' : '#c0c0c0', marginBottom: 2 }}>
-                      {type.label}
+                    <span style={{ fontSize: 18, flexShrink: 0 }}>{type.icon}</span>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: contentType === type.key ? '#ee4f00' : '#c0c0c0' }}>
+                        {type.label}
+                      </div>
+                      <div style={{ fontSize: 10, color: '#505050', lineHeight: 1.3 }}>{type.desc}</div>
                     </div>
-                    <div style={{ fontSize: 11, color: '#606060', lineHeight: 1.4 }}>{type.desc}</div>
                   </button>
                 ))}
               </div>
@@ -237,18 +240,18 @@ export default function ContentGenerator() {
 
             {/* Ton */}
             <div>
-              <p className="section-label">Ton & Stil</p>
+              <p className="section-label">Ton</p>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {TONE_OPTIONS.map(t => (
                   <button
                     key={t.key}
                     onClick={() => setTone(t.key)}
                     style={{
-                      padding: '7px 14px', borderRadius: 100,
+                      padding: '6px 12px', borderRadius: 100,
                       border: `1px solid ${tone === t.key ? '#3a3a3a' : '#1e1e1e'}`,
-                      cursor: 'pointer', fontFamily: 'var(--font)', fontSize: 12, fontWeight: 600,
-                      background: tone === t.key ? '#1c1c1c' : '#141414',
-                      color: tone === t.key ? '#fff' : '#606060',
+                      cursor: 'pointer', fontFamily: 'var(--font)', fontSize: 11, fontWeight: 600,
+                      background: tone === t.key ? '#222' : '#141414',
+                      color: tone === t.key ? '#fff' : '#555',
                       transition: 'all 0.15s'
                     }}
                   >{t.label}</button>
@@ -261,22 +264,22 @@ export default function ContentGenerator() {
               <p className="section-label">Thema / Idee</p>
               <textarea
                 className="input"
-                placeholder="z.B. &quot;Warum Cardio Muskeln NICHT killt — der Mythos erklärt&quot;"
+                placeholder="z.B. Warum Cardio Muskeln NICHT killt"
                 value={topic}
                 onChange={e => setTopic(e.target.value)}
-                style={{ minHeight: 80 }}
+                style={{ minHeight: 68 }}
               />
             </div>
 
             {/* Zusatzinfos */}
             <div>
-              <p className="section-label">Zusätzliche Infos (optional)</p>
+              <p className="section-label">Zusatzinfos (optional)</p>
               <textarea
                 className="input"
-                placeholder="z.B. Zielgruppe: Männer 30+, Fokus auf Hypertrophie, meide Abkürzungen..."
+                placeholder="Zielgruppe, Fokus, Besonderheiten…"
                 value={additionalInfo}
                 onChange={e => setAdditionalInfo(e.target.value)}
-                style={{ minHeight: 60 }}
+                style={{ minHeight: 52 }}
               />
             </div>
 
@@ -285,11 +288,11 @@ export default function ContentGenerator() {
               onClick={generate}
               disabled={!topic.trim() || generating}
               className="btn btn-primary"
-              style={{ width: '100%', padding: '15px', fontSize: 15, fontWeight: 700 }}
+              style={{ width: '100%', padding: '13px', fontSize: 14, fontWeight: 700 }}
             >
               {generating ? (
-                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span className="spinner" style={{ width: 18, height: 18 }} />
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="spinner" style={{ width: 16, height: 16 }} />
                   Wird generiert…
                 </span>
               ) : (

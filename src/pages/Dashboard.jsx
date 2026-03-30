@@ -178,32 +178,31 @@ export default function Dashboard() {
         ) : (
           <>
             {/* Stats-Reihe */}
-            <div className="grid-3" style={{ marginBottom: 20 }}>
+            <div className="grid-3" style={{ marginBottom: 16 }}>
               <div className="stat-card">
                 <span className="stat-value">{formatNumber(ownProfile?.followers_count)}</span>
                 <span className="stat-label">Follower</span>
               </div>
               <div className="stat-card">
-                <span className="stat-value" style={{ color: '#4ade80' }}>{engRate ? `${engRate}%` : '—'}</span>
-                <span className="stat-label">Ø Engagement</span>
+                <span className="stat-value" style={{ color: '#4ade80', fontSize: 18 }}>{engRate ? `${engRate}%` : '—'}</span>
+                <span className="stat-label">Engagement</span>
               </div>
               <div className="stat-card">
                 <span className="stat-value">{stats.totalPosts}</span>
-                <span className="stat-label">Posts in DB</span>
+                <span className="stat-label">Posts</span>
               </div>
             </div>
 
             {/* Themenvorschläge */}
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span className="section-label" style={{ marginBottom: 0 }}>Themenvorschläge</span>
                 <button
                   onClick={generateTopics}
                   disabled={topicsLoading}
                   className="btn btn-sm"
-                  style={{ fontSize: 12, padding: '6px 12px' }}
                 >
-                  {topicsLoading ? <span className="spinner" style={{ width: 12, height: 12 }} /> : '+ Neue generieren'}
+                  {topicsLoading ? <span className="spinner" style={{ width: 11, height: 11 }} /> : '+ Generieren'}
                 </button>
               </div>
 
@@ -229,10 +228,10 @@ export default function Dashboard() {
             </div>
 
             {/* Trending bei Competitors */}
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span className="section-label" style={{ marginBottom: 0 }}>Trending bei Competitors</span>
-                <span style={{ fontSize: 12, color: '#505050' }}>Letzte 30 Tage</span>
+                <span style={{ fontSize: 10, color: '#404040' }}>30 Tage</span>
               </div>
               {trendingPosts.length === 0 ? (
                 <div className="empty-state" style={{ padding: '24px' }}>
@@ -249,7 +248,7 @@ export default function Dashboard() {
             </div>
 
             {/* Eigene Top Posts */}
-            <div style={{ marginBottom: 24 }}>
+            <div style={{ marginBottom: 16 }}>
               <span className="section-label">Deine Top Posts</span>
               {topOwnPosts.length === 0 ? (
                 <div className="empty-state" style={{ padding: '24px' }}>
@@ -267,8 +266,8 @@ export default function Dashboard() {
 
             {/* Competitor Übersicht */}
             {competitors.length > 0 && (
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <span className="section-label" style={{ marginBottom: 0 }}>Competitors</span>
                   <button onClick={() => navigate('/konkurrenten')} className="btn-ghost btn btn-sm" style={{ fontSize: 12 }}>
                     Alle anzeigen
