@@ -110,7 +110,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', minWidth: 0 }}>
       {/* Header */}
       <div className="page-header">
         <div>
@@ -173,9 +173,9 @@ export default function Dashboard() {
         </div>
 
         {/* Two Column Layout */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24, minWidth: 0 }}>
           {/* Topics */}
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div className="section-header">
               <span className="section-title">Themenvorschläge</span>
               <button onClick={generateTopics} disabled={topicsLoading} className="btn btn-xs">
@@ -202,7 +202,7 @@ export default function Dashboard() {
           </div>
 
           {/* Trending Posts */}
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div className="section-header">
               <span className="section-title">Trending bei Competitors</span>
               <span style={{ fontSize: 11, color: 'var(--text3)' }}>letzte 30 Tage</span>
