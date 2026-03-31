@@ -80,25 +80,45 @@ async function getCompetitorId(username: string): Promise<string | null> {
 async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competitorId: string | null): Promise<boolean> {
   const videoUrl = (post.videoUrl || post.videoPlaybackUrl || null) as string | null
   const thumbUrl = (post.displayUrl || post.thumbnailUrl || null) as string | null
-  const postId = String(post.id || post.shortCode || '')
+  // shortCode bevorzugen — stabil und kein Integer-Precision-Problem
+  const postId = (post.shortCode || post.id) ? String(post.shortCode || post.id) : null
   if (!postId) return false
 
-  return dbUpsert('instagram_posts', {
-    source: isOwn ? 'own' : 'competitor',
-    competitor_id: competitorId,
-    instagram_post_id: postId,
-    post_type: detectPostType(post),
-    caption: (post.caption as string) || null,
-    likes_count: Number(post.likesCount) || 0,
-    comments_count: Number(post.commentsCount) || 0,
-    views_count: Number(post.videoViewCount) || Number(post.videoPlayCount) || 0,
-    video_url: videoUrl,
-    thumbnail_url: thumbUrl,
-    published_at: parseTimestamp(post.timestamp || post.takenAt),
-    url: (post.url as string) || (post.shortCode ? `https://www.instagram.com/p/${post.shortCode}/` : null),
-    transcript_status: videoUrl ? 'pending' : 'none',
-    visual_text_status: thumbUrl ? 'pending' : 'none'
-  }, 'instagram_post_id,source')
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/instagram_posts?on_conflict=instagram_post_id,source`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SERVICE_KEY}`,
+        'apikey': SERVICE_KEY,
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
+      },
+      body: JSON.stringify({
+        source: isOwn ? 'own' : 'competitor',
+        competitor_id: competitorId,
+        instagram_post_id: postId,
+        post_type: detectPostType(post),
+        caption: (post.caption as string) || null,
+        likes_count: Number(post.likesCount) || 0,
+        comments_count: Number(post.commentsCount) || 0,
+        views_count: Number(post.videoViewCount) || Number(post.videoPlayCount) || 0,
+        video_url: videoUrl,
+        thumbnail_url: thumbUrl,
+        published_at: parseTimestamp(post.timestamp || post.takenAt),
+        url: (post.url as string) || (post.shortCode ? `https://www.instagram.com/p/${post.shortCode}/` : null),
+        transcript_status: videoUrl ? 'pending' : 'none',
+        visual_text_status: thumbUrl ? 'pending' : 'none'
+      })
+    }
+  )
+
+  if (!res.ok) {
+    const errText = await res.text()
+    console.error(`upsert error ${res.status}:`, errText.substring(0, 200))
+    return false
+  }
+  return true
 }
 
 Deno.serve(async (req: Request) => {

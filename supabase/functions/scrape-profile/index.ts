@@ -49,26 +49,27 @@ Deno.serve(async (req: Request) => {
 
   const webhookUrl = `${SUPABASE_URL}/functions/v1/scrape-webhook`
 
+  // Webhooks als Base64 URL-Parameter — NICHT im Body (wird dort als Actor-Input ignoriert)
+  const webhooksParam = btoa(JSON.stringify([{
+    eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED', 'ACTOR.RUN.TIMED_OUT'],
+    requestUrl: webhookUrl,
+    headersTemplate: `{"Authorization":"Bearer ${DASHBOARD_TOKEN}"}`,
+    payloadTemplate: `{"job_id":"${job.id}","run_id":"{{resource.id}}","status":"{{eventType}}"}`
+  }]))
+
   // Apify Run starten
   const apifyRes = await fetch(
-    `https://api.apify.com/v2/acts/apify~instagram-profile-scraper/runs?token=${APIFY_KEY}`,
+    `https://api.apify.com/v2/acts/apify~instagram-profile-scraper/runs?token=${APIFY_KEY}&webhooks=${webhooksParam}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         usernames: [username],
-        resultsType: 'posts',
         resultsLimit: 50,
         proxyConfiguration: {
           useApifyProxy: true,
           apifyProxyGroups: ['RESIDENTIAL']
-        },
-        webhooks: [{
-          eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED', 'ACTOR.RUN.TIMED_OUT'],
-          requestUrl: webhookUrl,
-          headersTemplate: `{"Authorization":"Bearer ${DASHBOARD_TOKEN}"}`,
-          payloadTemplate: `{"job_id":"${job.id}","run_id":"{{resource.id}}","status":"{{eventType}}"}`
-        }]
+        }
       })
     }
   )
