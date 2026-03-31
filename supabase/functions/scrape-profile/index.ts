@@ -52,6 +52,10 @@ Deno.serve(async (req) => {
         usernames: [username],
         resultsType: 'posts',
         resultsLimit: 50,
+        proxyConfiguration: {
+          useApifyProxy: true,
+          apifyProxyGroups: ['RESIDENTIAL']
+        },
         webhooks: [{
           eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED', 'ACTOR.RUN.TIMED_OUT'],
           requestUrl: webhookUrl,
