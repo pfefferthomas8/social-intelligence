@@ -9,6 +9,7 @@ const Konkurrenten = lazy(() => import('./pages/Konkurrenten.jsx'))
 const Wissensdatenbank = lazy(() => import('./pages/Wissensdatenbank.jsx'))
 const ContentGenerator = lazy(() => import('./pages/ContentGenerator.jsx'))
 const ReelImport = lazy(() => import('./pages/ReelImport.jsx'))
+const Brain = lazy(() => import('./pages/Brain.jsx'))
 
 function LoadingScreen() {
   return (
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="/wissensdatenbank" element={<ProtectedRoute><Wissensdatenbank /></ProtectedRoute>} />
           <Route path="/generator" element={<ProtectedRoute><ContentGenerator /></ProtectedRoute>} />
           <Route path="/import" element={<ProtectedRoute><ReelImport /></ProtectedRoute>} />
+          <Route path="/brain" element={<ProtectedRoute><Brain /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to={isAuthenticated() ? '/dashboard' : '/login'} replace />} />
         </Routes>
       </AppLayout>

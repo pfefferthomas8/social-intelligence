@@ -3,6 +3,17 @@ import { clearToken } from '../lib/auth.js'
 
 const NAV_ITEMS = [
   {
+    path: '/brain',
+    label: 'Brain',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M12 2C8 2 5 5 5 8.5c0 1.5.5 2.8 1.3 3.8C5.5 13.2 5 14.5 5 16c0 3 2.5 5 5 5h4c2.5 0 5-2 5-5 0-1.5-.5-2.8-1.3-3.7.8-1 1.3-2.3 1.3-3.8C19 5 16 2 12 2z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/>
+        <path d="M9 9c0-1.1.9-2 2-2M12 7v1M8.5 13.5C9.5 14 10.7 14 12 14s2.5 0 3.5-.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <path d="M12 14v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
     path: '/dashboard',
     label: 'Dashboard',
     icon: (
