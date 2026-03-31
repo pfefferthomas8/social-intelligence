@@ -30,6 +30,8 @@ export default function Dashboard() {
   const [competitors, setCompetitors] = useState([])
   const [topics, setTopics] = useState([])
   const [stats, setStats] = useState({ totalPosts: 0, generatedContent: 0 })
+  const [pillars, setPillars] = useState({ haltung: 0, transformation: 0, mehrwert: 0, verkauf: 0 })
+  const [pillarLoading, setPillarLoading] = useState(false)
   const [topicsLoading, setTopicsLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [scrapeLoading, setScrapeLoading] = useState(false)
@@ -38,7 +40,7 @@ export default function Dashboard() {
 
   async function loadAll() {
     setLoading(true)
-    await Promise.all([loadProfile(), loadPosts(), loadCompetitors(), loadTopics(), loadStats()])
+    await Promise.all([loadProfile(), loadPosts(), loadCompetitors(), loadTopics(), loadStats(), loadPillars()])
     setLoading(false)
   }
 
@@ -71,6 +73,23 @@ export default function Dashboard() {
       supabase.from('generated_content').select('id', { count: 'exact', head: true })
     ])
     setStats({ totalPosts: postsRes.count || 0, generatedContent: contentRes.count || 0 })
+  }
+
+  async function loadPillars() {
+    const names = ['haltung', 'transformation', 'mehrwert', 'verkauf']
+    const results = await Promise.all(
+      names.map(p => supabase.from('instagram_posts').select('id', { count: 'exact', head: true }).eq('content_pillar', p))
+    )
+    setPillars(Object.fromEntries(names.map((n, i) => [n, results[i].count || 0])))
+  }
+
+  async function classifyPillars() {
+    setPillarLoading(true)
+    try {
+      await apiFetch('classify-pillars', { method: 'POST' })
+      await loadPillars()
+    } catch (e) { console.error(e) }
+    finally { setPillarLoading(false) }
   }
 
   async function generateTopics() {
@@ -171,6 +190,68 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+
+        {/* Content Säulen */}
+        {(() => {
+          const total = Object.values(pillars).reduce((a, b) => a + b, 0)
+          const PILLAR_CONFIG = [
+            { key: 'haltung', label: 'Haltung', sub: 'Mindset · Werte · Shift', color: '#ee4f00', desc: 'Denken ändern' },
+            { key: 'transformation', label: 'Transformation', sub: 'Story · Vorher/Nachher', color: '#3b82f6', desc: 'Ergebnisse zeigen' },
+            { key: 'mehrwert', label: 'Mehrwert', sub: 'Tipps · Wissen · Praxis', color: '#22c55e', desc: 'Helfen & lehren' },
+            { key: 'verkauf', label: 'Verkauf', sub: 'Coaching · App · USPs', color: '#a855f7', desc: 'Angebote pushen' },
+          ]
+          return (
+            <div style={{ marginBottom: 24 }}>
+              <div className="section-header" style={{ marginBottom: 14 }}>
+                <span className="section-title">Content Säulen</span>
+                <button onClick={classifyPillars} disabled={pillarLoading} className="btn btn-xs">
+                  {pillarLoading ? <span className="spinner" style={{ width: 10, height: 10 }} /> : '⚡ Klassifizieren'}
+                </button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                {PILLAR_CONFIG.map(p => {
+                  const count = pillars[p.key] || 0
+                  const pct = total > 0 ? Math.round(count / total * 100) : 0
+                  const isWeak = total > 10 && pct < 15
+                  return (
+                    <div key={p.key} style={{
+                      background: 'var(--bg-card)',
+                      border: `1px solid ${isWeak ? 'rgba(239,68,68,0.25)' : 'var(--border)'}`,
+                      borderRadius: 'var(--r-lg)', padding: '16px',
+                      position: 'relative', overflow: 'hidden',
+                    }}>
+                      {/* Farbige Akzentlinie oben */}
+                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: p.color, opacity: 0.7 }} />
+                      <div style={{ fontSize: 11, fontWeight: 700, color: p.color, letterSpacing: '0.04em', marginBottom: 2 }}>
+                        {p.label.toUpperCase()}
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 10 }}>{p.sub}</div>
+                      <div style={{ fontSize: 26, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text)', lineHeight: 1, marginBottom: 8 }}>
+                        {count}
+                        <span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 400, marginLeft: 4 }}>Posts</span>
+                      </div>
+                      {/* Progress Bar */}
+                      <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, marginBottom: 6 }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: p.color, borderRadius: 2, transition: 'width 0.6s ease', opacity: 0.8 }} />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 10, color: 'var(--text3)' }}>{pct}% des Inhalts</span>
+                        {isWeak && (
+                          <span style={{ fontSize: 9, fontWeight: 700, color: '#ef4444', letterSpacing: '0.05em' }}>AUFHOLEN</span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              {total === 0 && (
+                <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 10, textAlign: 'center' }}>
+                  Klick "Klassifizieren" um deine Posts den 4 Säulen zuzuordnen.
+                </p>
+              )}
+            </div>
+          )
+        })()}
 
         {/* Two Column Layout */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24, minWidth: 0 }}>

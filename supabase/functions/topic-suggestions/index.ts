@@ -84,15 +84,23 @@ Für jeden Vorschlag:
 - category: "trending", "gap", "evergreen", oder "personal"
 - potential_views: Schätzung für DACH-Markt (z.B. "30K-150K")
 - suggested_types: Array aus: "video_script", "carousel", "single_post", "b_roll"
+- content_pillar: Eine der 4 Content-Säulen:
+  "haltung" = Mindset/Werte/Denkweise/Perspektiv-Shift
+  "transformation" = Story/Vorher-Nachher/Kunden-Ergebnis
+  "mehrwert" = Tipps/Anleitungen/Wissen in kleinen Happen
+  "verkauf" = Coaching/App/Angebote/USPs
 
 Antworte NUR mit einem validen JSON-Array:
-[{"title":"...","reason":"...","category":"gap","potential_views":"30K-150K","suggested_types":["video_script","carousel"]}]`
+[{"title":"...","reason":"...","category":"gap","potential_views":"30K-150K","suggested_types":["video_script","carousel"],"content_pillar":"mehrwert"}]`
     : `Du bist ein Social-Media-Experte für Fitness-Coaches (Männer 30+).
 
 Thomas hat noch keine Competitor-Daten. Generiere 8 zeitlose Themenvorschläge für einen Fitness Coach der Männer 30+ anspricht. Fokus auf Kraft, Körperfett, Ernährung, Mindset, Lifestyle.
 
+Weise jeden Vorschlag einer Content-Säule zu:
+"haltung" = Mindset/Werte, "transformation" = Story/Ergebnisse, "mehrwert" = Tipps/Wissen, "verkauf" = Angebote
+
 Antworte NUR mit einem validen JSON-Array:
-[{"title":"...","reason":"...","category":"evergreen","potential_views":"20K-100K","suggested_types":["video_script","carousel"]}]`
+[{"title":"...","reason":"...","category":"evergreen","potential_views":"20K-100K","suggested_types":["video_script","carousel"],"content_pillar":"mehrwert"}]`
 
   const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -131,7 +139,8 @@ Antworte NUR mit einem validen JSON-Array:
     headers: dbHeaders(),
     body: JSON.stringify(topics.map((t: any) => ({
       title: t.title, reason: t.reason, category: t.category || 'trending',
-      potential_views: t.potential_views, suggested_types: t.suggested_types || [], used: false
+      potential_views: t.potential_views, suggested_types: t.suggested_types || [],
+      content_pillar: t.content_pillar || null, used: false
     })))
   })
   const saved = await saveRes.json()

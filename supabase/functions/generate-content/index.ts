@@ -149,15 +149,31 @@ Gib NUR den fertigen Content aus (kein "Schritt 1/2/3" im Output, keine Meta-Kom
   const content = claudeData.content?.[0]?.text
   if (!content) return new Response(JSON.stringify({ error: 'Leere Antwort von Claude.' }), { status: 500, headers: CORS })
 
+  // Content-Säule klassifizieren (Haiku — günstig, schnell)
+  let content_pillar: string | null = null
+  try {
+    const pillarRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5', max_tokens: 5,
+        messages: [{ role: 'user', content: `Thema: "${topic}". Kategorie (nur ein Wort): haltung | transformation | mehrwert | verkauf` }]
+      })
+    })
+    const pd = await pillarRes.json()
+    const raw = (pd.content?.[0]?.text || '').toLowerCase().trim()
+    if (['haltung', 'transformation', 'mehrwert', 'verkauf'].includes(raw)) content_pillar = raw
+  } catch { /* ignorieren */ }
+
   const saveRes = await fetch(`${SUPABASE_URL}/rest/v1/generated_content`, {
     method: 'POST',
     headers: dbHeaders(),
-    body: JSON.stringify({ topic, content_type, content })
+    body: JSON.stringify({ topic, content_type, content, content_pillar })
   })
   const saved = await saveRes.json()
   const savedItem = Array.isArray(saved) ? saved[0] : saved
 
-  return new Response(JSON.stringify({ content, id: savedItem?.id }), {
+  return new Response(JSON.stringify({ content, id: savedItem?.id, content_pillar }), {
     headers: { ...CORS, 'Content-Type': 'application/json' }
   })
 })

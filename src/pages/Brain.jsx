@@ -49,6 +49,10 @@ function edgeDuration(x1, y1, x2, y2, base = 1.6) {
 // ─── SVG: Einzelner Outer-Node ───────────────────────────────────────────────
 function OuterNode({ id, x, y, label, sublabel, color, isActive }) {
   const r = 22
+  const isHandle = label.startsWith('@')
+  // Handles: Initiale im Kreis, voller Name darunter
+  // Zahlen: direkt im Kreis (kurz genug)
+  const innerText = isHandle ? label[1].toUpperCase() : (label.length > 5 ? label.slice(0, 5) : label)
   return (
     <g>
       {/* Aktiv-Pulsring */}
@@ -62,27 +66,24 @@ function OuterNode({ id, x, y, label, sublabel, color, isActive }) {
       <circle cx={x} cy={y} r={r + 10} fill={color} opacity="0.07" />
       {/* Ring */}
       <circle cx={x} cy={y} r={r} fill="#0e0e14" stroke={color} strokeWidth="1.5" opacity={isActive ? 1 : 0.75} />
-      {/* Label (Wert/Name) */}
-      <text
-        x={x} y={y + 5}
-        textAnchor="middle"
-        fill={color}
-        fontSize="11"
-        fontWeight="700"
-        fontFamily="DM Mono, monospace"
-        letterSpacing="-0.5"
-      >
-        {label.length > 9 ? label.slice(0, 9) + '…' : label}
+      {/* Initiale oder Zahl im Kreis */}
+      <text x={x} y={y + 4} textAnchor="middle" fill={color} fontSize={isHandle ? '12' : '11'} fontWeight="700" fontFamily="DM Mono, monospace">
+        {innerText}
       </text>
+      {/* Handle (@name) unterhalb des Kreises */}
+      {isHandle && (
+        <text x={x} y={y + r + 13} textAnchor="middle" fill="rgba(255,255,255,0.75)" fontSize="9.5" fontFamily="DM Sans, sans-serif" fontWeight="600">
+          {label.length > 14 ? label.slice(0, 13) + '…' : label}
+        </text>
+      )}
       {/* Sublabel */}
       <text
-        x={x} y={y + r + 14}
+        x={x} y={isHandle ? y + r + 25 : y + r + 13}
         textAnchor="middle"
-        fill="rgba(255,255,255,0.35)"
-        fontSize="9"
+        fill="rgba(255,255,255,0.3)"
+        fontSize="8.5"
         fontFamily="DM Sans, sans-serif"
         fontWeight="500"
-        letterSpacing="0.3"
       >
         {sublabel}
       </text>
