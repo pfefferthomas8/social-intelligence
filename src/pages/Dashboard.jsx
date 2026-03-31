@@ -31,7 +31,6 @@ export default function Dashboard() {
   const [topics, setTopics] = useState([])
   const [stats, setStats] = useState({ totalPosts: 0, generatedContent: 0 })
   const [pillars, setPillars] = useState({ haltung: 0, transformation: 0, mehrwert: 0, verkauf: 0 })
-  const [pillarLoading, setPillarLoading] = useState(false)
   const [topicsLoading, setTopicsLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [scrapeLoading, setScrapeLoading] = useState(false)
@@ -96,15 +95,6 @@ export default function Dashboard() {
       names.map(p => supabase.from('instagram_posts').select('id', { count: 'exact', head: true }).eq('source', 'own').eq('content_pillar', p))
     )
     setPillars(Object.fromEntries(names.map((n, i) => [n, results[i].count || 0])))
-  }
-
-  async function classifyPillars() {
-    setPillarLoading(true)
-    try {
-      await apiFetch('classify-pillars', { method: 'POST' })
-      await loadPillars()
-    } catch (e) { console.error(e) }
-    finally { setPillarLoading(false) }
   }
 
   async function generateTopics() {
@@ -241,9 +231,7 @@ export default function Dashboard() {
             <div style={{ marginBottom: 24 }}>
               <div className="section-header" style={{ marginBottom: 14 }}>
                 <span className="section-title">Content Säulen</span>
-                <button onClick={classifyPillars} disabled={pillarLoading} className="btn btn-xs">
-                  {pillarLoading ? <span className="spinner" style={{ width: 10, height: 10 }} /> : '⚡ Klassifizieren'}
-                </button>
+                <span style={{ fontSize: 11, color: 'var(--text3)' }}>wird beim Scrape aktualisiert</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                 {PILLAR_CONFIG.map(p => {
