@@ -175,8 +175,10 @@ Deno.serve(async (req: Request) => {
 
     const isOwn = job.job_type === 'own_profile'
     const firstItem = items[0]
-    const isPostsMode = !firstItem.username && !firstItem.latestPosts && (firstItem.shortCode || firstItem.id)
-    console.log(`Mode: ${isPostsMode ? 'posts' : 'profile'}, items: ${items.length}, isOwn: ${isOwn}`)
+    // Posts-Modus: instagram-scraper gibt direkte Post-Items (haben shortCode + ownerUsername, KEIN latestPosts[])
+    // Profile-Modus: instagram-profile-scraper gibt Profil-Objekte mit latestPosts[]
+    const isPostsMode = !!(firstItem.shortCode || firstItem.id) && !firstItem.latestPosts && !!(firstItem.ownerUsername || firstItem.ownerId)
+    console.log(`Mode: ${isPostsMode ? 'posts (instagram-scraper)' : 'profile (profile-scraper)'}, items: ${items.length}, isOwn: ${isOwn}`)
 
     let savedCount = 0
 
