@@ -24,6 +24,11 @@ async function dbQuery(path: string): Promise<any[]> {
   return Array.isArray(data) ? data : []
 }
 
+function clean(text: unknown): string {
+  if (!text) return ''
+  return String(text).replace(/[\uD800-\uDFFF]/g, '').replace(/\0/g, '').substring(0, 300)
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS })
 
@@ -43,12 +48,12 @@ Deno.serve(async (req: Request) => {
   const trendingContext = trendingPosts
     .map((p: any) => {
       const username = p.competitor_profiles?.username || 'unknown'
-      const text = [p.caption, p.transcript].filter(Boolean).join(' ').substring(0, 200)
+      const text = clean([p.caption, p.transcript].filter(Boolean).join(' '))
       return `@${username} | ${p.post_type} | ${p.views_count || 0} Views: ${text}`
     }).join('\n').substring(0, 5000)
 
   const ownContext = ownPosts
-    .map((p: any) => [p.caption, p.transcript].filter(Boolean).join(' ').substring(0, 150))
+    .map((p: any) => clean([p.caption, p.transcript].filter(Boolean).join(' ')))
     .filter(Boolean).join('\n').substring(0, 2000)
 
   const usedTitles = usedTopics.map((t: any) => t.title).join(', ')

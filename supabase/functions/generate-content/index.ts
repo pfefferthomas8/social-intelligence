@@ -24,6 +24,11 @@ async function dbQuery(path: string): Promise<any[]> {
   return Array.isArray(data) ? data : []
 }
 
+function clean(text: unknown): string {
+  if (!text) return ''
+  return String(text).replace(/[\uD800-\uDFFF]/g, '').replace(/\0/g, '').substring(0, 300)
+}
+
 const FORMAT_INSTRUCTIONS: Record<string, string> = {
   video_script: `Erstelle ein vollständiges Video-Script mit:
 - HOOK (erste 3 Sekunden — stoppt den Scroll)
@@ -93,7 +98,7 @@ WICHTIGE REGELN:
   const styleAnalysis = ownPosts.length > 0
     ? `THOMAS' SCHREIBSTIL (aus seinen ${ownPosts.length} Top-Posts nach Engagement):
 ${ownPosts.slice(0, 10).map((p: any, i: number) => {
-  const text = [p.caption, p.transcript].filter(Boolean).join(' | ').substring(0, 250)
+  const text = clean([p.caption, p.transcript].filter(Boolean).join(' | '))
   return `[Post ${i+1} | ${(p.views_count || 0).toLocaleString()} Views]\n${text}`
 }).join('\n\n')}`
     : 'Thomas hat noch keine eigenen Posts gescrapt. Schreibe in einem direkten, faktenbasierten Stil für einen österreichischen Fitness-Coach.'
@@ -102,13 +107,13 @@ ${ownPosts.slice(0, 10).map((p: any, i: number) => {
     ? `ERFOLGREICHE COMPETITOR-POSTS — ANALYSIERE DAS ZUGRUNDELIEGENDE PRINZIP:
 ${topCompPosts.slice(0, 10).map((p: any) => {
   const username = p.competitor_profiles?.username || 'unknown'
-  const text = [p.caption, p.transcript].filter(Boolean).join(' ').substring(0, 300)
+  const text = clean([p.caption, p.transcript].filter(Boolean).join(' '))
   return `@${username} | ${(p.views_count || 0).toLocaleString()} Views:\n"${text}"`
 }).join('\n\n')}`
     : ''
 
   const customContext = customPosts
-    .map((p: any) => [p.caption, p.transcript].filter(Boolean).join(' | ').substring(0, 300))
+    .map((p: any) => clean([p.caption, p.transcript].filter(Boolean).join(' | ')))
     .filter(Boolean).join('\n---\n').substring(0, 1500)
 
   const systemPrompt = [SYSTEM_PROMPT_BASE, styleAnalysis, viralPrinciples,
