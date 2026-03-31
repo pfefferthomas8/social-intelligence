@@ -144,29 +144,30 @@ Deno.serve(async (req: Request) => {
     const job = await dbGet('scrape_jobs', `id=eq.${job_id}`)
     if (!job) return new Response('job not found', { status: 404 })
 
-    // Dataset von Apify holen
-    const datasetRes = await fetch(
-      `https://api.apify.com/v2/actor-runs/${run_id}/dataset/items?token=${APIFY_KEY}&limit=200`
-    )
-    const rawText = await datasetRes.text()
-
-    let items: Record<string, unknown>[]
-    try {
-      items = JSON.parse(rawText)
-    } catch {
-      await dbUpdate('scrape_jobs', `id=eq.${job_id}`, {
-        status: 'error',
-        error_msg: 'JSON parse failed: ' + rawText.substring(0, 200),
-        completed_at: new Date().toISOString()
-      })
-      return new Response(JSON.stringify({ ok: false, error: 'json parse failed' }), {
-        headers: { 'Content-Type': 'application/json' }
-      })
+    // Dataset von Apify holen — mit Retry (Race Condition: Apify meldet SUCCEEDED bevor Dataset ready ist)
+    async function fetchDataset(): Promise<Record<string, unknown>[] | null> {
+      const res = await fetch(
+        `https://api.apify.com/v2/actor-runs/${run_id}/dataset/items?token=${APIFY_KEY}&limit=200`
+      )
+      const text = await res.text()
+      try {
+        const parsed = JSON.parse(text)
+        return Array.isArray(parsed) ? parsed : null
+      } catch { return null }
     }
 
-    if (!Array.isArray(items) || items.length === 0) {
+    // Bis zu 3 Versuche mit 5s Pause
+    let items: Record<string, unknown>[] | null = null
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, 5000))
+      items = await fetchDataset()
+      if (items && items.length > 0) break
+      console.log(`Dataset attempt ${attempt + 1}: ${items ? 'empty array' : 'parse error'}`)
+    }
+
+    if (!items || items.length === 0) {
       await dbUpdate('scrape_jobs', `id=eq.${job_id}`, {
-        status: 'done', result_count: 0, error_msg: 'empty dataset', completed_at: new Date().toISOString()
+        status: 'done', result_count: 0, error_msg: 'empty dataset after retries', completed_at: new Date().toISOString()
       })
       return new Response(JSON.stringify({ ok: true, saved: 0 }), {
         headers: { 'Content-Type': 'application/json' }
@@ -183,8 +184,8 @@ Deno.serve(async (req: Request) => {
     let savedCount = 0
 
     if (isPostsMode) {
-      // Posts-Modus
-      const username = (firstItem.ownerUsername || job.target) as string
+      // Posts-Modus — job.target ist zuverlässiger als ownerUsername (exakt wie in DB gespeichert)
+      const username = (job.target || firstItem.ownerUsername) as string
       if (isOwn) {
         const own = await dbGet('own_profile', 'limit=1')
         if (own) await dbUpdate('own_profile', `id=eq.${own.id}`, { last_scraped_at: new Date().toISOString() })
@@ -231,8 +232,14 @@ Deno.serve(async (req: Request) => {
       status: 'done', result_count: savedCount, completed_at: new Date().toISOString()
     })
 
-    // Topics auto-refresh
     if (savedCount > 0) {
+      // Auto-Klassifizierung neuer Posts (fire & forget)
+      fetch(`${SUPABASE_URL}/functions/v1/classify-pillars`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DASHBOARD_TOKEN}` }
+      }).catch(() => {})
+
+      // Topics auto-refresh wenn letzte Generierung > 2h
       const lastTopic = await dbGet('topic_suggestions', 'order=created_at.desc')
       const topicAge = lastTopic ? Date.now() - new Date(lastTopic.created_at).getTime() : Infinity
       if (topicAge > 2 * 60 * 60 * 1000) {

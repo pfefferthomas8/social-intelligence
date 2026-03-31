@@ -77,8 +77,9 @@ export default function Dashboard() {
 
   async function loadPillars() {
     const names = ['haltung', 'transformation', 'mehrwert', 'verkauf']
+    // Nur eigene Posts — zeigt Thomas' persönliche Content-Verteilung
     const results = await Promise.all(
-      names.map(p => supabase.from('instagram_posts').select('id', { count: 'exact', head: true }).eq('content_pillar', p))
+      names.map(p => supabase.from('instagram_posts').select('id', { count: 'exact', head: true }).eq('source', 'own').eq('content_pillar', p))
     )
     setPillars(Object.fromEntries(names.map((n, i) => [n, results[i].count || 0])))
   }
