@@ -7,12 +7,13 @@ function formatNumber(n) {
   return String(n)
 }
 
-export default function PostCard({ post, compact }) {
+export default function PostCard({ post, compact, onClick }) {
   const sourceLabel = post.source === 'own' ? 'Eigener Post' : post.competitor_username ? `@${post.competitor_username}` : 'Import'
   const sourceColor = post.source === 'own' ? 'var(--green)' : post.source === 'custom' ? 'var(--blue)' : 'var(--text3)'
 
   return (
     <div
+      onClick={onClick}
       style={{
         background: 'var(--bg-card)',
         border: '1px solid var(--border)',
@@ -21,9 +22,10 @@ export default function PostCard({ post, compact }) {
         display: 'flex',
         gap: 12,
         transition: 'border-color 0.12s',
+        cursor: onClick ? 'pointer' : 'default',
       }}
-      onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-strong)'}
-      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; if (onClick) e.currentTarget.style.background = 'var(--bg-card-hover)' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-card)' }}
     >
       {/* Thumbnail */}
       {post.thumbnail_url && !compact && (
@@ -81,6 +83,14 @@ export default function PostCard({ post, compact }) {
           )}
           {post.transcript && (
             <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600 }}>Transkript</span>
+          )}
+          {onClick && (
+            <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>
+              In Generator
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+                <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+              </svg>
+            </span>
           )}
         </div>
       </div>

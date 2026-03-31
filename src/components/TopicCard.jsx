@@ -1,11 +1,19 @@
+const PILLAR_CONFIG = {
+  haltung:        { color: '#ee4f00', label: 'Haltung' },
+  transformation: { color: '#3b82f6', label: 'Transformation' },
+  mehrwert:       { color: '#22c55e', label: 'Mehrwert' },
+  verkauf:        { color: '#a855f7', label: 'Verkauf' },
+}
+
 export default function TopicCard({ topic, onSelect }) {
   const categoryConfig = {
-    trending: { color: '#ee4f00', label: 'Trending' },
-    gap: { color: '#3b82f6', label: 'Content Gap' },
+    trending:  { color: '#ee4f00', label: 'Trending' },
+    gap:       { color: '#3b82f6', label: 'Content Gap' },
     evergreen: { color: '#22c55e', label: 'Evergreen' },
-    personal: { color: '#eab308', label: 'Persönlich' },
+    personal:  { color: '#eab308', label: 'Persönlich' },
   }
   const cfg = categoryConfig[topic.category] || categoryConfig.trending
+  const pillar = topic.content_pillar ? PILLAR_CONFIG[topic.content_pillar] : null
 
   return (
     <div
@@ -24,14 +32,34 @@ export default function TopicCard({ topic, onSelect }) {
       onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.background = 'var(--bg-card-hover)' }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-card)' }}
     >
-      <div style={{ width: 6, height: 6, borderRadius: '50%', background: cfg.color, flexShrink: 0 }} />
+      {/* Pillar color bar */}
+      {pillar && (
+        <div style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, background: pillar.color, flexShrink: 0, opacity: 0.7 }} />
+      )}
+      {!pillar && (
+        <div style={{ width: 6, height: 6, borderRadius: '50%', background: cfg.color, flexShrink: 0 }} />
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 9, fontWeight: 700, color: cfg.color, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
             {cfg.label}
           </span>
+          {pillar && (
+            <span style={{
+              fontSize: 9, fontWeight: 700,
+              color: pillar.color,
+              background: `${pillar.color}18`,
+              border: `1px solid ${pillar.color}35`,
+              padding: '1px 6px',
+              borderRadius: 100,
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+            }}>
+              {pillar.label}
+            </span>
+          )}
           {topic.potential_views && (
-            <span style={{ fontSize: 10, color: 'var(--text3)' }}>~{topic.potential_views}</span>
+            <span style={{ fontSize: 10, color: 'var(--text3)', marginLeft: 'auto' }}>~{topic.potential_views}</span>
           )}
         </div>
         <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>

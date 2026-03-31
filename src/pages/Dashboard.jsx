@@ -63,8 +63,22 @@ export default function Dashboard() {
   }
 
   async function loadTopics() {
-    const { data } = await supabase.from('topic_suggestions').select('*').eq('used', false).order('created_at', { ascending: false }).limit(8)
-    setTopics(data || [])
+    const { data } = await supabase.from('topic_suggestions').select('*').eq('used', false).order('created_at', { ascending: false }).limit(40)
+    if (!data || data.length === 0) { setTopics([]); return }
+    // Sicherstellen: mind. 2 pro Säule, insgesamt 8 anzeigen
+    const pillars = ['haltung', 'transformation', 'mehrwert', 'verkauf']
+    const byPillar = Object.fromEntries(pillars.map(p => [p, data.filter(t => t.content_pillar === p)]))
+    const noPillar = data.filter(t => !t.content_pillar || !pillars.includes(t.content_pillar))
+    const result = []
+    // 2 pro Säule zuerst
+    for (const p of pillars) result.push(...byPillar[p].slice(0, 2))
+    // Auffüllen mit Rest bis 8
+    const used = new Set(result.map(t => t.id))
+    for (const t of [...data, ...noPillar]) {
+      if (result.length >= 8) break
+      if (!used.has(t.id)) { result.push(t); used.add(t.id) }
+    }
+    setTopics(result.slice(0, 8))
   }
 
   async function loadStats() {
@@ -114,7 +128,29 @@ export default function Dashboard() {
   }
 
   function handleTopicSelect(topic) {
-    navigate('/generator', { state: { topic: topic.title, topicId: topic.id, suggestedType: topic.suggested_types?.[0] } })
+    navigate('/generator', {
+      state: {
+        topic: topic.title,
+        topicId: topic.id,
+        suggestedType: topic.suggested_types?.[0],
+        additionalInfo: topic.reason || '',
+      }
+    })
+  }
+
+  function handleTrendingSelect(post) {
+    const handle = post.competitor_username ? `@${post.competitor_username}` : 'Competitor'
+    const views = post.views_count > 0 ? ` (${formatNumber(post.views_count)} Views)` : ''
+    const caption = (post.caption || '').substring(0, 400)
+    const transcript = (post.transcript || '').substring(0, 400)
+    const textContext = [caption, transcript].filter(Boolean).join(' | ')
+    navigate('/generator', {
+      state: {
+        topic: caption ? caption.split(/[\n.!?]/)[0].trim().substring(0, 80) : `Trending Post von ${handle}`,
+        additionalInfo: `Trending Post von ${handle}${views} — ${post.post_type || 'Post'}\n\nInhalt: ${textContext || '(kein Text)'}\n\nAnalysiere das zugrundeliegende Prinzip und erstelle daraus Thomas-spezifischen DACH-Content auf Deutsch.`,
+        suggestedType: post.post_type === 'reel' ? 'video_script' : post.post_type === 'carousel' ? 'carousel' : 'single_post',
+      }
+    })
   }
 
   const engRate = ownProfile && topOwnPosts.length > 0
@@ -299,7 +335,7 @@ export default function Dashboard() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {trendingPosts.map(post => (
-                  <PostCard key={post.id} post={post} compact />
+                  <PostCard key={post.id} post={post} compact onClick={() => handleTrendingSelect(post)} />
                 ))}
               </div>
             )}

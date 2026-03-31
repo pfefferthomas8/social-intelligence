@@ -241,20 +241,23 @@ export default function Brain() {
   const [competitors, setCompetitors] = useState([])
   const [activeJobs, setActiveJobs] = useState([])
   const [activity, setActivity] = useState([])
+  const [dna, setDna] = useState([])
   const [loading, setLoading] = useState(true)
 
+  useEffect(() => { loadAll() }, [])
   useEffect(() => {
-    loadAll()
-  }, [])
-
-  useEffect(() => {
-    const interval = setInterval(loadJobs, 5000)
+    const interval = setInterval(() => { loadJobs(); loadDna() }, 5000)
     return () => clearInterval(interval)
   }, [])
 
   async function loadAll() {
-    await Promise.all([loadStats(), loadProfiles(), loadJobs(), loadActivity()])
+    await Promise.all([loadStats(), loadProfiles(), loadJobs(), loadActivity(), loadDna()])
     setLoading(false)
+  }
+
+  async function loadDna() {
+    const { data } = await supabase.from('thomas_dna').select('*').order('confidence', { ascending: false })
+    setDna(data || [])
   }
 
   async function loadStats() {
@@ -652,6 +655,125 @@ export default function Brain() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* ── THOMAS DNA ─────────────────────────────────────────────────── */}
+        <div style={{ marginTop: 28 }}>
+          <div className="section-header" style={{ marginBottom: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span className="section-title">Thomas DNA</span>
+              {dna.length > 0 && (
+                <span style={{
+                  fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+                  color: '#ee4f00', background: 'rgba(238,79,0,0.1)',
+                  padding: '2px 8px', borderRadius: 100,
+                }}>
+                  {dna.length} ERKENNTNISSE
+                </span>
+              )}
+            </div>
+            <span style={{ fontSize: 11, color: 'var(--text3)' }}>
+              {dna.length > 0 ? 'Lernstand aus Profil-Analyse' : 'Wird nach erstem Profil-Scrape generiert'}
+            </span>
+          </div>
+
+          {dna.length === 0 ? (
+            <div style={{
+              padding: '32px 20px', textAlign: 'center',
+              background: 'var(--bg-card)', border: '1px dashed var(--border)',
+              borderRadius: 'var(--r-xl)',
+            }}>
+              <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.4 }}>🧬</div>
+              <p style={{ fontSize: 13, color: 'var(--text3)', margin: 0 }}>
+                Noch keine DNA-Daten. Scrape dein eigenes Profil um die Analyse zu starten.
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, minWidth: 0 }}>
+              {[
+                { key: 'hook_pattern', label: 'Hook-Muster', icon: '🎯', color: '#ee4f00' },
+                { key: 'style_rule', label: 'Stil-Regeln', icon: '✍️', color: '#3b82f6' },
+                { key: 'pillar_insight', label: 'Säulen-Insights', icon: '📊', color: '#22c55e' },
+                { key: 'audience_pattern', label: 'Publikum', icon: '👥', color: '#eab308' },
+                { key: 'competitor_gap', label: 'Lücken', icon: '🚀', color: '#a855f7' },
+                { key: 'growth_opportunity', label: 'Chancen', icon: '💡', color: '#f472b6' },
+              ].map(cat => {
+                const items = dna.filter(d => d.category === cat.key)
+                if (items.length === 0) return null
+                const avgConf = Math.round(items.reduce((s, d) => s + d.confidence, 0) / items.length)
+                return (
+                  <div key={cat.key} style={{
+                    background: 'var(--bg-card)',
+                    border: `1px solid var(--border)`,
+                    borderRadius: 'var(--r-xl)',
+                    padding: '16px',
+                    minWidth: 0,
+                    borderTop: `2px solid ${cat.color}`,
+                  }}>
+                    {/* Header */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <span style={{ fontSize: 15 }}>{cat.icon}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: cat.color, letterSpacing: '0.03em' }}>
+                          {cat.label.toUpperCase()}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 10, color: 'var(--text3)' }}>Ø {avgConf}%</span>
+                        {/* Confidence bar */}
+                        <div style={{ width: 40, height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+                          <div style={{ width: `${avgConf}%`, height: '100%', background: cat.color, borderRadius: 2 }} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Insights */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {items.slice(0, 2).map((item, i) => (
+                        <div key={i} style={{
+                          padding: '9px 11px',
+                          background: 'rgba(255,255,255,0.025)',
+                          border: '1px solid rgba(255,255,255,0.06)',
+                          borderRadius: 'var(--r)',
+                          position: 'relative',
+                          overflow: 'hidden',
+                        }}>
+                          {/* Confidence strip */}
+                          <div style={{
+                            position: 'absolute', left: 0, top: 0, bottom: 0,
+                            width: `${item.confidence}%`, maxWidth: '100%',
+                            background: `${cat.color}08`,
+                            borderLeft: `2px solid ${cat.color}40`,
+                          }} />
+                          <p style={{
+                            fontSize: 11.5, color: 'var(--text2)', lineHeight: 1.5,
+                            margin: 0, position: 'relative',
+                            overflow: 'hidden', display: '-webkit-box',
+                            WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
+                          }}>
+                            {item.insight}
+                          </p>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
+                            <div style={{ flex: 1, height: 2, background: 'var(--border)', borderRadius: 1, overflow: 'hidden' }}>
+                              <div style={{ width: `${item.confidence}%`, height: '100%', background: cat.color, opacity: 0.6 }} />
+                            </div>
+                            <span style={{ fontSize: 9, color: 'var(--text3)', whiteSpace: 'nowrap' }}>
+                              {item.confidence}% · {item.source_count} Posts
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                      {items.length > 2 && (
+                        <p style={{ fontSize: 11, color: 'var(--text3)', margin: 0, textAlign: 'center' }}>
+                          +{items.length - 2} weitere Erkenntnisse
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Bottom padding */}

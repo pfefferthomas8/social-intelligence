@@ -56,8 +56,9 @@ export default function ContentGenerator() {
 
   useEffect(() => { loadHistory() }, [])
   useEffect(() => {
-    if (location.state?.topic) { setTopic(location.state.topic) }
-    if (location.state?.suggestedType) { setContentType(location.state.suggestedType) }
+    if (location.state?.topic) setTopic(location.state.topic)
+    if (location.state?.suggestedType) setContentType(location.state.suggestedType)
+    if (location.state?.additionalInfo) setAdditionalInfo(location.state.additionalInfo)
   }, [location.state])
 
   async function loadHistory() {

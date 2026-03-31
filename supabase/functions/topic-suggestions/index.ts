@@ -60,6 +60,13 @@ Deno.serve(async (req: Request) => {
   const usedTitles = usedTopics.map((t: any) => t.title).join(', ')
   const hasData = trendingPosts.length > 0
 
+  const pillarInstructions = `PFLICHT: Genau 2 Themen pro Content-Säule — also je 2 für jede der 4 Säulen (= 8 total):
+  "haltung" = Mindset/Werte/Denkweise/Perspektiv-Shift (2 Themen)
+  "transformation" = Story/Vorher-Nachher/Kunden-Ergebnis (2 Themen)
+  "mehrwert" = Tipps/Anleitungen/Wissen in kleinen Happen (2 Themen)
+  "verkauf" = Coaching/App/Angebote/USPs (2 Themen)
+Diese Verteilung ist NICHT optional — alle 4 Säulen MÜSSEN vertreten sein.`
+
   const prompt = hasData
     ? `Du analysierst Instagram-Performance-Daten für Thomas Pfeffer, Fitness-Coach für Männer 30+ (DACH).
 
@@ -79,17 +86,15 @@ ANALYSE-AUFGABE:
 
 GENERIERE 8 konkrete Themenvorschläge auf Deutsch.
 
+${pillarInstructions}
+
 Für jeden Vorschlag:
 - title: Konkretes Thema als starke Aussage oder Frage (max 10 Wörter, auf Deutsch)
-- reason: Warum das gerade Potenzial hat (2-3 Sätze)
+- reason: Warum das gerade Potenzial hat (2-3 Sätze, konkret und hilfreich für die Content-Erstellung)
 - category: "trending", "gap", "evergreen", oder "personal"
 - potential_views: Schätzung für DACH-Markt (z.B. "30K-150K")
 - suggested_types: Array aus: "video_script", "carousel", "single_post", "b_roll"
-- content_pillar: Eine der 4 Content-Säulen:
-  "haltung" = Mindset/Werte/Denkweise/Perspektiv-Shift
-  "transformation" = Story/Vorher-Nachher/Kunden-Ergebnis
-  "mehrwert" = Tipps/Anleitungen/Wissen in kleinen Happen
-  "verkauf" = Coaching/App/Angebote/USPs
+- content_pillar: Eine der 4 Säulen (haltung/transformation/mehrwert/verkauf)
 
 Antworte NUR mit einem validen JSON-Array:
 [{"title":"...","reason":"...","category":"gap","potential_views":"30K-150K","suggested_types":["video_script","carousel"],"content_pillar":"mehrwert"}]`
@@ -97,8 +102,15 @@ Antworte NUR mit einem validen JSON-Array:
 
 Thomas hat noch keine Competitor-Daten. Generiere 8 zeitlose Themenvorschläge für einen Fitness Coach der Männer 30+ anspricht. Fokus auf Kraft, Körperfett, Ernährung, Mindset, Lifestyle.
 
-Weise jeden Vorschlag einer Content-Säule zu:
-"haltung" = Mindset/Werte, "transformation" = Story/Ergebnisse, "mehrwert" = Tipps/Wissen, "verkauf" = Angebote
+${pillarInstructions}
+
+Für jeden Vorschlag:
+- title: Konkretes Thema als starke Aussage oder Frage (max 10 Wörter, auf Deutsch)
+- reason: Warum das gerade Potenzial hat (2-3 Sätze, konkret und hilfreich für die Content-Erstellung)
+- category: "trending", "gap", "evergreen", oder "personal"
+- potential_views: Schätzung für DACH-Markt (z.B. "20K-100K")
+- suggested_types: Array aus: "video_script", "carousel", "single_post", "b_roll"
+- content_pillar: Eine der 4 Säulen (haltung/transformation/mehrwert/verkauf)
 
 Antworte NUR mit einem validen JSON-Array:
 [{"title":"...","reason":"...","category":"evergreen","potential_views":"20K-100K","suggested_types":["video_script","carousel"],"content_pillar":"mehrwert"}]`
