@@ -225,6 +225,11 @@ export default function ContentGenerator() {
                 <div style={{ display: 'flex', gap: 6 }}>
                   <CopyButton text={result.content} />
                   <button onClick={generate} className="btn btn-sm">↻ Neu generieren</button>
+                  <button onClick={() => setResult(null)} className="btn btn-sm" title="Schließen">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                      <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
+                  </button>
                 </div>
               </div>
               <div style={{
