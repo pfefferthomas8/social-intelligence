@@ -1,265 +1,236 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+// Supabase REST API direkt via fetch — kein Import nötig
 
-Deno.serve(async (req) => {
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
+const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+const DASHBOARD_TOKEN = Deno.env.get('DASHBOARD_TOKEN') || ''
+const APIFY_KEY = Deno.env.get('APIFY_API_KEY') || ''
+
+function dbHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${SERVICE_KEY}`,
+    'apikey': SERVICE_KEY,
+    'Prefer': 'return=representation'
+  }
+}
+
+async function dbGet(table: string, filter: string): Promise<any> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}&limit=1`, {
+    headers: dbHeaders()
+  })
+  const data = await res.json()
+  return Array.isArray(data) ? data[0] || null : null
+}
+
+async function dbUpdate(table: string, filter: string, body: Record<string, unknown>): Promise<void> {
+  await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
+    method: 'PATCH',
+    headers: dbHeaders(),
+    body: JSON.stringify(body)
+  })
+}
+
+async function dbInsert(table: string, body: Record<string, unknown>): Promise<any> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: { ...dbHeaders(), 'Prefer': 'return=representation,resolution=merge-duplicates' },
+    body: JSON.stringify(body)
+  })
+  const data = await res.json()
+  return Array.isArray(data) ? data[0] || null : data
+}
+
+async function dbUpsert(table: string, body: Record<string, unknown>, onConflict: string): Promise<boolean> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: {
+      ...dbHeaders(),
+      'Prefer': `return=minimal,resolution=merge-duplicates`,
+      'On-Conflict': onConflict
+    },
+    body: JSON.stringify(body)
+  })
+  return res.ok
+}
+
+function parseTimestamp(ts: unknown): string | null {
+  if (!ts) return null
+  try {
+    const n = Number(ts)
+    if (isNaN(n)) return new Date(String(ts)).toISOString()
+    const d = new Date(n > 1e12 ? n : n * 1000)
+    return isNaN(d.getTime()) ? null : d.toISOString()
+  } catch { return null }
+}
+
+function detectPostType(post: Record<string, unknown>): string {
+  if (post.productType === 'clips' || post.type === 'Reel') return 'reel'
+  if (post.isVideo && (Number(post.videoViewCount) > 0 || Number(post.videoPlayCount) > 0)) return 'reel'
+  if (post.type === 'Video' || post.isVideo) return 'video'
+  if (Array.isArray(post.childPosts) && post.childPosts.length > 0) return 'carousel'
+  if (post.type === 'Sidecar') return 'carousel'
+  return 'image'
+}
+
+async function getCompetitorId(username: string): Promise<string | null> {
+  const row = await dbGet('competitor_profiles', `username=eq.${encodeURIComponent(username)}`)
+  return row?.id || null
+}
+
+async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competitorId: string | null): Promise<boolean> {
+  const videoUrl = (post.videoUrl || post.videoPlaybackUrl || null) as string | null
+  const thumbUrl = (post.displayUrl || post.thumbnailUrl || null) as string | null
+  const postId = String(post.id || post.shortCode || '')
+  if (!postId) return false
+
+  return dbUpsert('instagram_posts', {
+    source: isOwn ? 'own' : 'competitor',
+    competitor_id: competitorId,
+    instagram_post_id: postId,
+    post_type: detectPostType(post),
+    caption: (post.caption as string) || null,
+    likes_count: Number(post.likesCount) || 0,
+    comments_count: Number(post.commentsCount) || 0,
+    views_count: Number(post.videoViewCount) || Number(post.videoPlayCount) || 0,
+    video_url: videoUrl,
+    thumbnail_url: thumbUrl,
+    published_at: parseTimestamp(post.timestamp || post.takenAt),
+    url: (post.url as string) || (post.shortCode ? `https://www.instagram.com/p/${post.shortCode}/` : null),
+    transcript_status: videoUrl ? 'pending' : 'none',
+    visual_text_status: thumbUrl ? 'pending' : 'none'
+  }, 'instagram_post_id,source')
+}
+
+Deno.serve(async (req: Request) => {
   try {
     const token = req.headers.get('Authorization')?.replace('Bearer ', '')
-    if (token !== Deno.env.get('DASHBOARD_TOKEN')) {
+    if (token !== DASHBOARD_TOKEN) {
       return new Response('Unauthorized', { status: 401 })
     }
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    )
-
     const payload = await req.json()
     const { job_id, run_id, status } = payload
-
     if (!job_id) return new Response('no job_id', { status: 400 })
 
-    const { data: job } = await supabase
-      .from('scrape_jobs')
-      .select('*')
-      .eq('id', job_id)
-      .maybeSingle()
-
-    if (!job) return new Response('job not found', { status: 404 })
-
+    // Fehler-Events
     if (status === 'ACTOR.RUN.FAILED' || status === 'ACTOR.RUN.TIMED_OUT') {
-      await supabase.from('scrape_jobs').update({
+      await dbUpdate('scrape_jobs', `id=eq.${job_id}`, {
         status: 'error', error_msg: status, completed_at: new Date().toISOString()
-      }).eq('id', job_id)
-      return new Response('error noted', { status: 200 })
+      })
+      return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } })
     }
 
-    const APIFY_KEY = Deno.env.get('APIFY_API_KEY')!
-    const datasetUrl = `https://api.apify.com/v2/actor-runs/${run_id}/dataset/items?token=${APIFY_KEY}&limit=200`
+    // Job laden
+    const job = await dbGet('scrape_jobs', `id=eq.${job_id}`)
+    if (!job) return new Response('job not found', { status: 404 })
 
-    const datasetRes = await fetch(datasetUrl)
-    const datasetText = await datasetRes.text()
+    // Dataset von Apify holen
+    const datasetRes = await fetch(
+      `https://api.apify.com/v2/actor-runs/${run_id}/dataset/items?token=${APIFY_KEY}&limit=200`
+    )
+    const rawText = await datasetRes.text()
 
-    let items: any[]
+    let items: Record<string, unknown>[]
     try {
-      items = JSON.parse(datasetText)
+      items = JSON.parse(rawText)
     } catch {
-      await supabase.from('scrape_jobs').update({
+      await dbUpdate('scrape_jobs', `id=eq.${job_id}`, {
         status: 'error',
-        error_msg: `JSON parse error: ${datasetText.substring(0, 200)}`,
+        error_msg: 'JSON parse failed: ' + rawText.substring(0, 200),
         completed_at: new Date().toISOString()
-      }).eq('id', job_id)
-      return new Response(JSON.stringify({ ok: false, error: 'json parse failed', raw: datasetText.substring(0, 200) }), {
+      })
+      return new Response(JSON.stringify({ ok: false, error: 'json parse failed' }), {
         headers: { 'Content-Type': 'application/json' }
       })
     }
 
     if (!Array.isArray(items) || items.length === 0) {
-      await supabase.from('scrape_jobs').update({
-        status: 'error',
-        error_msg: `empty/invalid dataset, status=${datasetRes.status}`,
-        completed_at: new Date().toISOString()
-      }).eq('id', job_id)
-      return new Response(JSON.stringify({ ok: true, saved: 0, reason: 'empty dataset' }), {
+      await dbUpdate('scrape_jobs', `id=eq.${job_id}`, {
+        status: 'done', result_count: 0, error_msg: 'empty dataset', completed_at: new Date().toISOString()
+      })
+      return new Response(JSON.stringify({ ok: true, saved: 0 }), {
         headers: { 'Content-Type': 'application/json' }
       })
     }
 
-    const firstItem = items[0]
-    console.log(`Dataset: ${items.length} items. First item keys: ${Object.keys(firstItem).join(', ')}`)
-
-    // Erkennen ob "posts"-Modus (jedes Item ist ein Post) oder "profile"-Modus (Item hat latestPosts[])
-    const isPostsMode = !!(firstItem.shortCode || firstItem.id) && !firstItem.latestPosts && !firstItem.username
-    console.log(`Mode: ${isPostsMode ? 'posts (flat)' : 'profile (nested)'}, items: ${items.length}`)
-
     const isOwn = job.job_type === 'own_profile'
+    const firstItem = items[0]
+    const isPostsMode = !firstItem.username && !firstItem.latestPosts && (firstItem.shortCode || firstItem.id)
+    console.log(`Mode: ${isPostsMode ? 'posts' : 'profile'}, items: ${items.length}, isOwn: ${isOwn}`)
+
     let savedCount = 0
 
     if (isPostsMode) {
-      // "posts"-Modus: Jedes Item ist direkt ein Post
-      // Profil-Username aus Job-Target oder erstem Item
-      const username = firstItem.ownerUsername || firstItem.ownerId || job.target
-
-      // Profil last_scraped_at updaten
+      // Posts-Modus
+      const username = (firstItem.ownerUsername || job.target) as string
       if (isOwn) {
-        const { data: existing } = await supabase.from('own_profile').select('id').limit(1).maybeSingle()
-        if (existing) {
-          await supabase.from('own_profile').update({ last_scraped_at: new Date().toISOString() }).eq('id', existing.id)
-        }
+        const own = await dbGet('own_profile', 'limit=1')
+        if (own) await dbUpdate('own_profile', `id=eq.${own.id}`, { last_scraped_at: new Date().toISOString() })
       } else {
-        await supabase.from('competitor_profiles')
-          .update({ last_scraped_at: new Date().toISOString() })
-          .eq('username', username || job.target)
+        await dbUpdate('competitor_profiles', `username=eq.${encodeURIComponent(username)}`, {
+          last_scraped_at: new Date().toISOString()
+        })
       }
-
-      const competitorId = isOwn ? null : await getCompetitorId(supabase, username || job.target)
-
+      const competitorId = await getCompetitorId(username)
       for (const post of items) {
-        const postId = post.id || post.shortCode || post.pk
-        if (!postId) continue
-        savedCount += await savePost(supabase, post, isOwn, competitorId)
+        if (await upsertPost(post, isOwn, competitorId)) savedCount++
       }
 
     } else {
-      // "profile"-Modus: Jedes Item ist ein Profil mit latestPosts[]
+      // Profile-Modus
       for (const item of items) {
-
-        // Profil speichern
-        if (item.username) {
-          const profileData = {
-            username: item.username,
-            display_name: item.fullName || null,
-            bio: item.biography || null,
-            followers_count: Number(item.followersCount) || 0,
-            following_count: Number(item.followingCount) || 0,
-            posts_count: Number(item.postsCount) || 0,
-            profile_pic_url: item.profilePicUrl || item.profilePicUrlHD || null,
-            last_scraped_at: new Date().toISOString()
-          }
-
-          if (isOwn) {
-            const { data: existing } = await supabase.from('own_profile').select('id').limit(1).maybeSingle()
-            if (existing) {
-              await supabase.from('own_profile').update(profileData).eq('id', existing.id)
-            } else {
-              await supabase.from('own_profile').insert(profileData)
-            }
-          } else {
-            await supabase.from('competitor_profiles').update(profileData).eq('username', item.username)
-          }
+        if (!item.username) continue
+        const username = item.username as string
+        const profileData = {
+          display_name: (item.fullName as string) || null,
+          bio: (item.biography as string) || null,
+          followers_count: Number(item.followersCount) || 0,
+          following_count: Number(item.followingCount) || 0,
+          posts_count: Number(item.postsCount) || 0,
+          profile_pic_url: (item.profilePicUrl as string) || null,
+          last_scraped_at: new Date().toISOString()
         }
-
-        // Posts speichern aus latestPosts[]
-        const posts: any[] = item.latestPosts || item.posts || []
-        if (!Array.isArray(posts) || posts.length === 0) continue
-
-        const competitorId = isOwn ? null : await getCompetitorId(supabase, item.username || job.target)
-
+        if (isOwn) {
+          const own = await dbGet('own_profile', 'limit=1')
+          if (own) await dbUpdate('own_profile', `id=eq.${own.id}`, profileData)
+          else await dbInsert('own_profile', { username, ...profileData })
+        } else {
+          await dbUpdate('competitor_profiles', `username=eq.${encodeURIComponent(username)}`, profileData)
+        }
+        const posts = (item.latestPosts || item.posts || []) as Record<string, unknown>[]
+        const competitorId = await getCompetitorId(username)
         for (const post of posts) {
-          const postId = post.id || post.shortCode || post.pk
-          if (!postId) continue
-          savedCount += await savePost(supabase, post, isOwn, competitorId)
+          if (await upsertPost(post, isOwn, competitorId)) savedCount++
         }
       }
     }
 
-    await supabase.from('scrape_jobs').update({
-      status: 'done',
-      result_count: savedCount,
-      completed_at: new Date().toISOString()
-    }).eq('id', job_id)
+    await dbUpdate('scrape_jobs', `id=eq.${job_id}`, {
+      status: 'done', result_count: savedCount, completed_at: new Date().toISOString()
+    })
 
-    // Auto-refresh topics wenn letzter Stand > 2h alt und neue Posts gespeichert
-    const { data: lastTopic } = await supabase
-      .from('topic_suggestions')
-      .select('created_at')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    const shouldRefreshTopics = !lastTopic ||
-      (Date.now() - new Date(lastTopic.created_at).getTime()) > 2 * 60 * 60 * 1000
-
-    if (shouldRefreshTopics && savedCount > 0) {
-      fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/topic-suggestions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('DASHBOARD_TOKEN')}`
-        },
-        body: JSON.stringify({})
-      }).catch(() => {})
+    // Topics auto-refresh
+    if (savedCount > 0) {
+      const lastTopic = await dbGet('topic_suggestions', 'order=created_at.desc')
+      const topicAge = lastTopic ? Date.now() - new Date(lastTopic.created_at).getTime() : Infinity
+      if (topicAge > 2 * 60 * 60 * 1000) {
+        fetch(`${SUPABASE_URL}/functions/v1/topic-suggestions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DASHBOARD_TOKEN}` },
+          body: JSON.stringify({})
+        }).catch(() => {})
+      }
     }
 
-    return new Response(JSON.stringify({ ok: true, saved: savedCount, items_in_dataset: items.length, mode: isPostsMode ? 'posts' : 'profile' }), {
+    return new Response(JSON.stringify({ ok: true, saved: savedCount, total: items.length }), {
       headers: { 'Content-Type': 'application/json' }
     })
 
-  } catch (err: any) {
-    console.error('scrape-webhook error:', err)
-    return new Response(JSON.stringify({ error: err.message || String(err) }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('error:', msg)
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 500, headers: { 'Content-Type': 'application/json' }
     })
   }
 })
-
-async function savePost(supabase: any, post: any, isOwn: boolean, competitorId: string | null): Promise<number> {
-  const postId = post.id || post.shortCode || post.pk
-  if (!postId) return 0
-
-  const videoUrl = post.videoUrl || post.videoPlaybackUrl || null
-  const thumbUrl = post.displayUrl || post.thumbnailUrl || post.imageUrl || null
-
-  const postData = {
-    source: isOwn ? 'own' : 'competitor',
-    competitor_id: competitorId,
-    instagram_post_id: String(postId),
-    post_type: detectPostType(post),
-    caption: post.caption || post.description || null,
-    likes_count: Number(post.likesCount) || Number(post.likes) || 0,
-    comments_count: Number(post.commentsCount) || Number(post.comments) || 0,
-    views_count: Number(post.videoViewCount) || Number(post.videoPlayCount) || Number(post.views) || 0,
-    video_url: videoUrl,
-    thumbnail_url: thumbUrl,
-    published_at: parseTimestamp(post.timestamp || post.takenAt),
-    url: post.url || (post.shortCode ? `https://www.instagram.com/p/${post.shortCode}/` : null),
-    transcript_status: videoUrl ? 'pending' : 'none',
-    visual_text_status: thumbUrl ? 'pending' : 'none'
-  }
-
-  const { data: saved, error: upsertError } = await supabase
-    .from('instagram_posts')
-    .upsert(postData, { onConflict: 'instagram_post_id,source', ignoreDuplicates: false })
-    .select('id, video_url, thumbnail_url, transcript_status, visual_text_status')
-    .maybeSingle()
-
-  if (!upsertError && saved) {
-    if (saved.video_url && saved.transcript_status === 'pending') {
-      triggerTranscription(saved.id, saved.video_url, supabase)
-    }
-    if (saved.thumbnail_url && saved.visual_text_status === 'pending') {
-      triggerVisualExtraction(saved.id, saved.thumbnail_url)
-    }
-    return 1
-  }
-
-  return 0
-}
-
-function parseTimestamp(ts: any): string | null {
-  if (!ts) return null
-  try {
-    const n = Number(ts)
-    if (isNaN(n)) return new Date(ts).toISOString() // ISO-String
-    const d = new Date(n > 1e12 ? n : n * 1000)   // Sekunden → ms
-    return isNaN(d.getTime()) ? null : d.toISOString()
-  } catch { return null }
-}
-
-function detectPostType(post: any): string {
-  if (post.productType === 'clips' || post.type === 'Reel') return 'reel'
-  if (post.isVideo && (post.videoViewCount > 0 || post.videoPlayCount > 0)) return 'reel'
-  if (post.type === 'Video' || post.isVideo) return 'video'
-  if (post.type === 'Sidecar' || post.childPosts?.length > 0) return 'carousel'
-  return 'image'
-}
-
-async function getCompetitorId(supabase: any, username: string): Promise<string | null> {
-  const { data } = await supabase.from('competitor_profiles').select('id').eq('username', username).maybeSingle()
-  return data?.id || null
-}
-
-function triggerTranscription(postId: string, videoUrl: string, supabase: any) {
-  fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/transcribe-video`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('DASHBOARD_TOKEN')}` },
-    body: JSON.stringify({ post_id: postId, video_url: videoUrl })
-  }).catch(() => {})
-}
-
-function triggerVisualExtraction(postId: string, thumbnailUrl: string) {
-  fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/extract-visual-text`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('DASHBOARD_TOKEN')}` },
-    body: JSON.stringify({ post_id: postId, thumbnail_url: thumbnailUrl })
-  }).catch(() => {})
-}
