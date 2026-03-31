@@ -8,6 +8,8 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 const DASHBOARD_TOKEN = Deno.env.get('DASHBOARD_TOKEN') || ''
 const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY') || ''
+// Modell zentral über Secret steuerbar — Update: Supabase Secret CLAUDE_MODEL ändern
+const CLAUDE_MODEL = Deno.env.get('CLAUDE_MODEL') || 'claude-sonnet-4-5'
 
 function dbHeaders() {
   return {
@@ -69,10 +71,11 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'topic + content_type required' }), { status: 400, headers: CORS })
   }
 
-  const [ownPosts, topCompPosts, customPosts] = await Promise.all([
+  const [ownPosts, topCompPosts, customPosts, thomasDna] = await Promise.all([
     dbQuery('instagram_posts?select=caption,transcript,post_type,likes_count,views_count&source=eq.own&caption=not.is.null&order=views_count.desc&limit=30'),
     dbQuery('instagram_posts?select=caption,transcript,post_type,likes_count,views_count,competitor_profiles(username)&source=eq.competitor&order=views_count.desc&limit=15'),
-    dbQuery('instagram_posts?select=caption,transcript,post_type&source=eq.custom&limit=10')
+    dbQuery('instagram_posts?select=caption,transcript,post_type&source=eq.custom&limit=10'),
+    dbQuery('thomas_dna?select=category,insight,confidence&order=confidence.desc&limit=20')
   ])
 
   const SYSTEM_PROMPT_BASE = `Du bist der exklusive Ghost-Writer von Thomas Pfeffer, einem Fitness-Coach für Männer 30+ in der DACH-Region.
@@ -116,7 +119,26 @@ ${topCompPosts.slice(0, 10).map((p: any) => {
     .map((p: any) => clean([p.caption, p.transcript].filter(Boolean).join(' | ')))
     .filter(Boolean).join('\n---\n').substring(0, 1500)
 
-  const systemPrompt = [SYSTEM_PROMPT_BASE, styleAnalysis, viralPrinciples,
+  // Thomas DNA — akkumuliertes Wissen über seinen Stil und sein Publikum
+  // Wächst mit jedem Scrape automatisch. Das ist das Herzstück des lernenden Systems.
+  const dnaContext = thomasDna.length > 0
+    ? `THOMAS' DNA — GELERNTE ERKENNTNISSE (Confidence-gewichtet, höchste zuerst):
+${thomasDna.map((d: any) => {
+  const categoryLabel: Record<string, string> = {
+    hook_pattern: '🎯 HOOK-MUSTER',
+    style_rule: '✍️ STIL-REGEL',
+    pillar_insight: '📊 SÄULEN-INSIGHT',
+    audience_pattern: '👥 PUBLIKUM',
+    competitor_gap: '🚀 LÜCKE',
+    growth_opportunity: '💡 CHANCE'
+  }
+  return `${categoryLabel[d.category] || d.category} [${d.confidence}% Konfidenz]: ${d.insight}`
+}).join('\n\n')}
+
+WICHTIG: Diese DNA ist aus echten Performance-Daten destilliert. Halte dich strikt daran — sie macht den Unterschied zwischen generischem Content und echtem Thomas-Content.`
+    : ''
+
+  const systemPrompt = [SYSTEM_PROMPT_BASE, dnaContext, styleAnalysis, viralPrinciples,
     customContext ? `ZUSÄTZLICHE REFERENZ-INHALTE:\n${customContext}` : ''
   ].filter(Boolean).join('\n\n---\n\n')
 
@@ -137,7 +159,7 @@ Gib NUR den fertigen Content aus (kein "Schritt 1/2/3" im Output, keine Meta-Kom
   const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 3000, messages: [{ role: 'user', content: userPrompt }], system: systemPrompt })
+    body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 3000, messages: [{ role: 'user', content: userPrompt }], system: systemPrompt })
   })
 
   if (!claudeRes.ok) {

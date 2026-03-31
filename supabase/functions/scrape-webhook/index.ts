@@ -239,6 +239,14 @@ Deno.serve(async (req: Request) => {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DASHBOARD_TOKEN}` }
       }).catch(() => {})
 
+      // Nach eigenem Profil-Scrape: Thomas DNA neu analysieren (fire & forget)
+      if (job.job_type === 'own_profile') {
+        fetch(`${SUPABASE_URL}/functions/v1/analyze-thomas`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DASHBOARD_TOKEN}` }
+        }).catch(() => {})
+      }
+
       // Topics auto-refresh wenn letzte Generierung > 2h
       const lastTopic = await dbGet('topic_suggestions', 'order=created_at.desc')
       const topicAge = lastTopic ? Date.now() - new Date(lastTopic.created_at).getTime() : Infinity
