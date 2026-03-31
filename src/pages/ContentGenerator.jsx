@@ -51,6 +51,7 @@ export default function ContentGenerator() {
   const [history, setHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(true)
   const [progress, setProgress] = useState(0)
+  const [deletingId, setDeletingId] = useState(null)
   const progressRef = useRef(null)
 
   useEffect(() => { loadHistory() }, [])
@@ -91,6 +92,21 @@ export default function ContentGenerator() {
       clearInterval(progressRef.current)
       setGenerating(false)
     }
+  }
+
+  async function deleteItem(e, id) {
+    e.stopPropagation()
+    setDeletingId(id)
+    await supabase.from('generated_content').delete().eq('id', id)
+    setHistory(prev => prev.filter(h => h.id !== id))
+    setDeletingId(null)
+  }
+
+  function openFromHistory(item) {
+    setTopic(item.topic)
+    setContentType(item.content_type)
+    setResult({ content: item.content })
+    setConfirmed(true)
   }
 
   const selectedType = CONTENT_TYPES.find(t => t.key === contentType)
@@ -268,7 +284,7 @@ export default function ContentGenerator() {
                       }}
                       onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-strong)'}
                       onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
-                      onClick={() => { setTopic(item.topic); setContentType(item.content_type) }}
+                      onClick={() => openFromHistory(item)}
                     >
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -280,11 +296,28 @@ export default function ContentGenerator() {
                               {new Date(item.created_at).toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </div>
-                          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text2)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}>
                             {item.topic}
                           </p>
                         </div>
-                        <CopyButton text={item.content} />
+                        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                          <CopyButton text={item.content} />
+                          <button
+                            onClick={e => deleteItem(e, item.id)}
+                            disabled={deletingId === item.id}
+                            className="btn btn-sm"
+                            style={{ color: 'var(--text3)', padding: '5px 8px' }}
+                            title="Löschen"
+                          >
+                            {deletingId === item.id ? (
+                              <span className="spinner" style={{ width: 11, height: 11 }} />
+                            ) : (
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
