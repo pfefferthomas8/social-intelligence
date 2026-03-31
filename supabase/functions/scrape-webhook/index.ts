@@ -233,6 +233,12 @@ Deno.serve(async (req: Request) => {
     })
 
     if (savedCount > 0) {
+      // Visuelle Texte aus Thumbnails extrahieren (fire & forget)
+      fetch(`${SUPABASE_URL}/functions/v1/process-visual-text`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DASHBOARD_TOKEN}` }
+      }).catch(() => {})
+
       // Auto-Klassifizierung neuer Posts (fire & forget)
       fetch(`${SUPABASE_URL}/functions/v1/classify-pillars`, {
         method: 'POST',

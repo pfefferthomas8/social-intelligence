@@ -42,8 +42,9 @@ Deno.serve(async (req: Request) => {
   }
 
   // Unklassifizierte Posts mit Caption holen (max 30 pro Lauf)
+  // visual_text mitladen — enthält extrahierte Text-Overlays aus Reels/B-Rolls
   const postsRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/instagram_posts?content_pillar=is.null&caption=not.is.null&select=id,caption,transcript,post_type&limit=30`,
+    `${SUPABASE_URL}/rest/v1/instagram_posts?content_pillar=is.null&caption=not.is.null&select=id,caption,transcript,visual_text,post_type&limit=30`,
     { headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY } }
   )
   const posts: any[] = await postsRes.json()
@@ -54,9 +55,9 @@ Deno.serve(async (req: Request) => {
     })
   }
 
-  // Index-basierter Prompt — Claude muss keine UUIDs reproduzieren
+  // Index-basierter Prompt — caption + transcript + visual_text (Text-Overlays)
   const postList = posts.map((p: any, i: number) => {
-    const text = clean([p.caption, p.transcript].filter(Boolean).join(' '))
+    const text = clean([p.caption, p.transcript, p.visual_text].filter(Boolean).join(' '))
     return `[${i}] ${p.post_type || 'post'}: ${text}`
   }).join('\n\n')
 
