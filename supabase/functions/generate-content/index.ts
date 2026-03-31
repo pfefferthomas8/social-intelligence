@@ -1,10 +1,27 @@
-
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
+const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+const DASHBOARD_TOKEN = Deno.env.get('DASHBOARD_TOKEN') || ''
+const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY') || ''
+
+function dbHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${SERVICE_KEY}`,
+    'apikey': SERVICE_KEY,
+    'Prefer': 'return=representation'
+  }
+}
+
+async function dbQuery(path: string): Promise<any[]> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: dbHeaders() })
+  const data = await res.json()
+  return Array.isArray(data) ? data : []
 }
 
 const FORMAT_INSTRUCTIONS: Record<string, string> = {
@@ -34,47 +51,24 @@ Format: "SLIDE 1: [Text]" usw.`,
 Format: Liste mit Nummerierung.`
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS })
 
   const token = req.headers.get('Authorization')?.replace('Bearer ', '')
-  if (token !== Deno.env.get('DASHBOARD_TOKEN')) {
+  if (token !== DASHBOARD_TOKEN) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS })
   }
-
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  )
 
   const { topic, content_type, additional_info } = await req.json()
   if (!topic || !content_type) {
     return new Response(JSON.stringify({ error: 'topic + content_type required' }), { status: 400, headers: CORS })
   }
 
-  // 1. Eigene Posts laden — Thomas' Stimme lernen (Top 10 nach Engagement)
-  const { data: ownPosts } = await supabase
-    .from('instagram_posts')
-    .select('caption, transcript, post_type, likes_count, views_count')
-    .eq('source', 'own')
-    .not('caption', 'is', null)
-    .order('views_count', { ascending: false })
-    .limit(30)
-
-  // 2. Top Competitor Posts laden — was performt gut
-  const { data: topCompPosts } = await supabase
-    .from('instagram_posts')
-    .select('caption, transcript, post_type, likes_count, views_count, competitor_profiles(username)')
-    .eq('source', 'competitor')
-    .order('views_count', { ascending: false })
-    .limit(15)
-
-  // 3. Custom Imports
-  const { data: customPosts } = await supabase
-    .from('instagram_posts')
-    .select('caption, transcript, post_type')
-    .eq('source', 'custom')
-    .limit(10)
+  const [ownPosts, topCompPosts, customPosts] = await Promise.all([
+    dbQuery('instagram_posts?select=caption,transcript,post_type,likes_count,views_count&source=eq.own&caption=not.is.null&order=views_count.desc&limit=30'),
+    dbQuery('instagram_posts?select=caption,transcript,post_type,likes_count,views_count,competitor_profiles(username)&source=eq.competitor&order=views_count.desc&limit=15'),
+    dbQuery('instagram_posts?select=caption,transcript,post_type&source=eq.custom&limit=10')
+  ])
 
   const SYSTEM_PROMPT_BASE = `Du bist der exklusive Ghost-Writer von Thomas Pfeffer, einem Fitness-Coach für Männer 30+ in der DACH-Region.
 
@@ -96,42 +90,28 @@ WICHTIGE REGELN:
 - Formuliere so wie ein gut informierter Freund spricht, nicht wie ein Verkäufer
 - Deutsche Sprache, außer gängige englische Fachbegriffe die Thomas selbst nutzt (z.B. "Gains", "Bulk", "Cut")`
 
-  // Analyse Thomas' Stil aus Top-Posts
-  const styleAnalysis = ownPosts && ownPosts.length > 0
+  const styleAnalysis = ownPosts.length > 0
     ? `THOMAS' SCHREIBSTIL (aus seinen ${ownPosts.length} Top-Posts nach Engagement):
-${(ownPosts || []).slice(0, 10).map((p, i) => {
+${ownPosts.slice(0, 10).map((p: any, i: number) => {
   const text = [p.caption, p.transcript].filter(Boolean).join(' | ').substring(0, 250)
-  return `[Post ${i+1} | ${(p.views_count || 0).toLocaleString()} Views | ${(p.likes_count || 0).toLocaleString()} Likes]\n${text}`
-}).join('\n\n')}
-
-Typische Merkmale von Thomas' Stil (extrahiert):
-- Satzlänge, Direktheit, Wortwahl aus den obigen Posts ableiten
-- Wie er Hooks formuliert
-- Wie er Argumente aufbaut`
+  return `[Post ${i+1} | ${(p.views_count || 0).toLocaleString()} Views]\n${text}`
+}).join('\n\n')}`
     : 'Thomas hat noch keine eigenen Posts gescrapt. Schreibe in einem direkten, faktenbasierten Stil für einen österreichischen Fitness-Coach.'
 
-  // Virale Prinzipien aus Competitor-Posts extrahieren
-  const viralPrinciples = topCompPosts && topCompPosts.length > 0
-    ? `ERFOLGREICHE COMPETITOR-POSTS (Englisch) — ANALYSIERE DAS ZUGRUNDELIEGENDE PRINZIP:
-${(topCompPosts || []).slice(0, 10).map(p => {
-  const username = (p as any).competitor_profiles?.username || 'unknown'
+  const viralPrinciples = topCompPosts.length > 0
+    ? `ERFOLGREICHE COMPETITOR-POSTS — ANALYSIERE DAS ZUGRUNDELIEGENDE PRINZIP:
+${topCompPosts.slice(0, 10).map((p: any) => {
+  const username = p.competitor_profiles?.username || 'unknown'
   const text = [p.caption, p.transcript].filter(Boolean).join(' ').substring(0, 300)
-  return `@${username} | ${(p.views_count || 0).toLocaleString()} Views:\n"${text}"\n→ KERNPRINZIP: [Warum funktionierte das? Welche Emotion/Überzeugung/Curiosity-Gap nutzt es?]`
-}).join('\n\n')}
-
-ADAPTATION-ANWEISUNG: Nutze die psychologischen Prinzipien aus diesen Posts für Thomas' Content — auf Deutsch, in Thomas' Stil, für die DACH-Zielgruppe.`
+  return `@${username} | ${(p.views_count || 0).toLocaleString()} Views:\n"${text}"`
+}).join('\n\n')}`
     : ''
 
-  const customContext = (customPosts || [])
-    .map(p => [p.caption, p.transcript].filter(Boolean).join(' | ').substring(0, 300))
-    .filter(Boolean)
-    .join('\n---\n')
-    .substring(0, 1500)
+  const customContext = customPosts
+    .map((p: any) => [p.caption, p.transcript].filter(Boolean).join(' | ').substring(0, 300))
+    .filter(Boolean).join('\n---\n').substring(0, 1500)
 
-  const systemPrompt = [
-    SYSTEM_PROMPT_BASE,
-    styleAnalysis,
-    viralPrinciples,
+  const systemPrompt = [SYSTEM_PROMPT_BASE, styleAnalysis, viralPrinciples,
     customContext ? `ZUSÄTZLICHE REFERENZ-INHALTE:\n${customContext}` : ''
   ].filter(Boolean).join('\n\n---\n\n')
 
@@ -149,20 +129,10 @@ ${FORMAT_INSTRUCTIONS[content_type] || 'Freie Form.'}
 
 Gib NUR den fertigen Content aus (kein "Schritt 1/2/3" im Output, keine Meta-Kommentare).`
 
-  // Claude API
   const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: {
-      'x-api-key': Deno.env.get('ANTHROPIC_API_KEY')!,
-      'anthropic-version': '2023-06-01',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-5',
-      max_tokens: 3000,
-      messages: [{ role: 'user', content: userPrompt }],
-      system: systemPrompt
-    })
+    headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 3000, messages: [{ role: 'user', content: userPrompt }], system: systemPrompt })
   })
 
   if (!claudeRes.ok) {
@@ -172,19 +142,17 @@ Gib NUR den fertigen Content aus (kein "Schritt 1/2/3" im Output, keine Meta-Kom
 
   const claudeData = await claudeRes.json()
   const content = claudeData.content?.[0]?.text
+  if (!content) return new Response(JSON.stringify({ error: 'Leere Antwort von Claude.' }), { status: 500, headers: CORS })
 
-  if (!content) {
-    return new Response(JSON.stringify({ error: 'Leere Antwort von Claude.' }), { status: 500, headers: CORS })
-  }
+  const saveRes = await fetch(`${SUPABASE_URL}/rest/v1/generated_content`, {
+    method: 'POST',
+    headers: dbHeaders(),
+    body: JSON.stringify({ topic, content_type, content })
+  })
+  const saved = await saveRes.json()
+  const savedItem = Array.isArray(saved) ? saved[0] : saved
 
-  // In DB speichern
-  const { data: saved } = await supabase
-    .from('generated_content')
-    .insert({ topic, content_type, content })
-    .select('*')
-    .single()
-
-  return new Response(JSON.stringify({ content, id: saved?.id }), {
+  return new Response(JSON.stringify({ content, id: savedItem?.id }), {
     headers: { ...CORS, 'Content-Type': 'application/json' }
   })
 })
