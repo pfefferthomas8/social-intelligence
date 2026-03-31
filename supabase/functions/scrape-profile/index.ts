@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         usernames: [username],
-        resultsLimit: 50,
+        resultsLimit: 100,
         webhooks: [{
           eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED', 'ACTOR.RUN.TIMED_OUT'],
           requestUrl: webhookUrl,

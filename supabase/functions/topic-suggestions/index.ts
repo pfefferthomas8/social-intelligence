@@ -66,28 +66,33 @@ Deno.serve(async (req) => {
   const hasData = trendingPosts && trendingPosts.length > 0
 
   const prompt = hasData
-    ? `Du analysierst Instagram-Daten für Thomas, einen Fitness Coach (Männer 30+).
+    ? `Du analysierst Instagram-Performance-Daten für Thomas Pfeffer, Fitness-Coach für Männer 30+ (DACH).
 
-TRENDING BEI COMPETITOR COACHES (letzte 21 Tage, nach Views sortiert):
+DIE WICHTIGSTEN VIRAL-POSTS DER LETZTEN 21 TAGE (englischsprachige Competitors):
 ${trendingContext}
 
-THOMAS' EIGENE POSTS (was er schon gemacht hat):
-${ownContext || 'Noch keine eigenen Posts.'}
+THOMAS' EIGENE POSTS (Was hat er schon behandelt, was hat funktioniert):
+${ownContext || 'Noch keine eigenen Posts gescrapt.'}
 
 BEREITS VORGESCHLAGENE THEMEN (nicht wiederholen):
 ${usedTitles || 'Keine.'}
 
-Analysiere die Daten und generiere 8 Themenvorschläge für Thomas.
+ANALYSE-AUFGABE:
+1. Was sind die übergeordneten THEMEN/MUSTER die bei den englischen Coaches gerade viral gehen?
+2. Welche davon gibt es im deutschsprachigen Raum noch NICHT oder kaum?
+3. Welche Themen passen zu Thomas' Profil (Männer 30+, Kraft, Ernährung, Lifestyle)?
+
+GENERIERE 8 konkrete Themenvorschläge auf Deutsch.
 
 Für jeden Vorschlag:
-- title: Konkretes Thema als Aussage oder Frage (max 12 Wörter, deutsch)
-- reason: Warum das gerade funktioniert (1-2 Sätze, basierend auf den Daten)
-- category: "trending" (explodiert gerade bei Competitors), "gap" (Competitors machen's, Thomas noch nicht), "evergreen" (immer relevant), oder "personal" (passt zu Thomas' Stil)
-- potential_views: Schätzung basierend auf ähnlichen Posts (z.B. "50K-200K")
+- title: Konkretes Thema als starke Aussage oder Frage (max 10 Wörter, auf Deutsch)
+- reason: Warum das gerade Potenzial hat — konkret mit Bezug auf die Competitor-Daten (2-3 Sätze)
+- category: "trending" (explodiert bei Competitors), "gap" (Competitors machen's, DACH-Coaches noch nicht), "evergreen", "personal"
+- potential_views: Schätzung für DACH-Markt (z.B. "30K-150K")
 - suggested_types: Welche Formate passen — Array aus: "video_script", "carousel", "single_post", "b_roll"
 
 Antworte NUR mit einem validen JSON-Array:
-[{"title":"...","reason":"...","category":"trending","potential_views":"50K-200K","suggested_types":["video_script","carousel"]}]`
+[{"title":"...","reason":"...","category":"gap","potential_views":"30K-150K","suggested_types":["video_script","carousel"]}]`
     : `Du bist ein Social-Media-Experte für Fitness-Coaches (Männer 30+).
 
 Thomas hat noch keine Competitor-Daten in seiner Datenbank. Generiere 8 zeitlose, bewährte Themenvorschläge für einen Fitness Coach der Männer 30+ anspricht. Fokus auf Kraft, Körperfett, Ernährung, Mindset, Lifestyle.

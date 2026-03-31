@@ -47,12 +47,12 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   )
 
-  const { topic, content_type, tone, additional_info } = await req.json()
+  const { topic, content_type, additional_info } = await req.json()
   if (!topic || !content_type) {
     return new Response(JSON.stringify({ error: 'topic + content_type required' }), { status: 400, headers: CORS })
   }
 
-  // 1. Eigene Posts laden — Thomas' Stimme lernen
+  // 1. Eigene Posts laden — Thomas' Stimme lernen (Top 10 nach Engagement)
   const { data: ownPosts } = await supabase
     .from('instagram_posts')
     .select('caption, transcript, post_type, likes_count, views_count')
@@ -76,22 +76,51 @@ Deno.serve(async (req) => {
     .eq('source', 'custom')
     .limit(10)
 
-  // Kontext bauen
-  const ownContext = (ownPosts || [])
-    .map(p => [p.caption, p.transcript].filter(Boolean).join(' | ').substring(0, 300))
-    .filter(Boolean)
-    .join('\n---\n')
-    .substring(0, 4000)
+  const SYSTEM_PROMPT_BASE = `Du bist der exklusive Ghost-Writer von Thomas Pfeffer, einem Fitness-Coach für Männer 30+ in der DACH-Region.
 
-  const competitorContext = (topCompPosts || [])
-    .map(p => {
-      const username = (p as any).competitor_profiles?.username || 'unknown'
-      const text = [p.caption, p.transcript].filter(Boolean).join(' | ').substring(0, 200)
-      return `@${username} (${p.views_count || 0} Views): ${text}`
-    })
-    .filter(Boolean)
-    .join('\n---\n')
-    .substring(0, 3000)
+AUFGABE:
+1. Analysiere Thomas' eigenen Schreibstil aus seinen Top-Posts
+2. Extrahiere die psychologischen Prinzipien hinter viralen Competitor-Posts (NICHT die Worte — die dahinterstehende Idee)
+3. Erstelle Content der sich zu 100% nach Thomas anfühlt, aber auf bewährten Viral-Prinzipien basiert
+
+THOMAS' PROFIL:
+- Zielgruppe: Männer 30+, wollen Muskeln aufbauen oder Fett verlieren
+- Markt: DACH (Österreich, Deutschland, Schweiz)
+- Kompetitor-Coaches sind meist englischsprachig und dem DACH-Markt 3-5 Jahre voraus
+- Thomas' Content soll diese Erkenntnisse als ERSTER in den deutschsprachigen Raum bringen
+
+WICHTIGE REGELN:
+- Schreibe EXAKT wie Thomas — sein Rhythmus, seine Direktheit, seine Ausdrucksweise
+- Englische Competitor-Posts NICHT übersetzen — das Prinzip dahinter auf Deutsch neu erfinden
+- Kein Fitness-Coach-Klischee ("Du schaffst das!", "Believe in yourself") — Thomas ist direkt und faktenbasiert
+- Formuliere so wie ein gut informierter Freund spricht, nicht wie ein Verkäufer
+- Deutsche Sprache, außer gängige englische Fachbegriffe die Thomas selbst nutzt (z.B. "Gains", "Bulk", "Cut")`
+
+  // Analyse Thomas' Stil aus Top-Posts
+  const styleAnalysis = ownPosts && ownPosts.length > 0
+    ? `THOMAS' SCHREIBSTIL (aus seinen ${ownPosts.length} Top-Posts nach Engagement):
+${(ownPosts || []).slice(0, 10).map((p, i) => {
+  const text = [p.caption, p.transcript].filter(Boolean).join(' | ').substring(0, 250)
+  return `[Post ${i+1} | ${(p.views_count || 0).toLocaleString()} Views | ${(p.likes_count || 0).toLocaleString()} Likes]\n${text}`
+}).join('\n\n')}
+
+Typische Merkmale von Thomas' Stil (extrahiert):
+- Satzlänge, Direktheit, Wortwahl aus den obigen Posts ableiten
+- Wie er Hooks formuliert
+- Wie er Argumente aufbaut`
+    : 'Thomas hat noch keine eigenen Posts gescrapt. Schreibe in einem direkten, faktenbasierten Stil für einen österreichischen Fitness-Coach.'
+
+  // Virale Prinzipien aus Competitor-Posts extrahieren
+  const viralPrinciples = topCompPosts && topCompPosts.length > 0
+    ? `ERFOLGREICHE COMPETITOR-POSTS (Englisch) — ANALYSIERE DAS ZUGRUNDELIEGENDE PRINZIP:
+${(topCompPosts || []).slice(0, 10).map(p => {
+  const username = (p as any).competitor_profiles?.username || 'unknown'
+  const text = [p.caption, p.transcript].filter(Boolean).join(' ').substring(0, 300)
+  return `@${username} | ${(p.views_count || 0).toLocaleString()} Views:\n"${text}"\n→ KERNPRINZIP: [Warum funktionierte das? Welche Emotion/Überzeugung/Curiosity-Gap nutzt es?]`
+}).join('\n\n')}
+
+ADAPTATION-ANWEISUNG: Nutze die psychologischen Prinzipien aus diesen Posts für Thomas' Content — auf Deutsch, in Thomas' Stil, für die DACH-Zielgruppe.`
+    : ''
 
   const customContext = (customPosts || [])
     .map(p => [p.caption, p.transcript].filter(Boolean).join(' | ').substring(0, 300))
@@ -99,40 +128,26 @@ Deno.serve(async (req) => {
     .join('\n---\n')
     .substring(0, 1500)
 
-  // Ton-Beschreibung
-  const toneDescriptions: Record<string, string> = {
-    direct: 'direkt, provokant, keine Umschweife, klare Meinung',
-    educational: 'lehrreich, strukturiert, gibt echten Mehrwert, erklärt komplexes einfach',
-    motivational: 'energetisch, mitreißend, baut Feuer auf, inspiriert zu handeln',
-    story: 'persönlich, erzählt eine Geschichte, verbindet Emotion mit Message'
-  }
+  const systemPrompt = [
+    SYSTEM_PROMPT_BASE,
+    styleAnalysis,
+    viralPrinciples,
+    customContext ? `ZUSÄTZLICHE REFERENZ-INHALTE:\n${customContext}` : ''
+  ].filter(Boolean).join('\n\n---\n\n')
 
-  const systemPrompt = `Du bist der Ghost-Writer und Social-Media-Stratege von Thomas, einem Fitness Coach für Männer 30+.
-
-THOMAS' SCHREIBSTIL (aus seinen eigenen Posts lernen):
-${ownContext || 'Noch keine eigenen Posts verfügbar.'}
-
-WAS BEI ERFOLGREICHEN COACHES GERADE GUT PERFORMT:
-${competitorContext || 'Noch keine Competitor-Daten verfügbar.'}
-
-${customContext ? `ZUSÄTZLICHE REFERENZ-INHALTE:\n${customContext}` : ''}
-
-REGELN:
-- Schreibe GENAU wie Thomas — sein Stil, seine Sprache, seine Ausdrucksweise
-- Nutze was bei Competitors funktioniert als Inspiration, nicht als Kopie
-- Ton: ${toneDescriptions[tone] || 'direkt und klar'}
-- Kein generisches Fitness-Coach-Blabla — Thomas hat eine klare Meinung
-- Deutsch, außer englische Fachbegriffe die Thomas nutzt
-- Kein "Als KI..." oder ähnliches — du bist Thomas`
-
-  const userPrompt = `Erstelle folgenden Content:
+  const userPrompt = `Erstelle jetzt diesen Content:
 
 THEMA: ${topic}
 FORMAT: ${content_type.replace('_', ' ').toUpperCase()}
-${additional_info ? `ZUSÄTZLICHE INFO: ${additional_info}` : ''}
+${additional_info ? `ZUSATZINFO: ${additional_info}` : ''}
 
-FORMATVORGABE:
-${FORMAT_INSTRUCTIONS[content_type] || 'Freie Form.'}`
+SCHRITT 1: Welche viralen Prinzipien aus den Competitor-Posts passen zu diesem Thema?
+SCHRITT 2: Wie würde Thomas dieses Thema mit seinem Stil behandeln?
+SCHRITT 3: Erstelle den finalen Content:
+
+${FORMAT_INSTRUCTIONS[content_type] || 'Freie Form.'}
+
+Gib NUR den fertigen Content aus (kein "Schritt 1/2/3" im Output, keine Meta-Kommentare).`
 
   // Claude API
   const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -144,7 +159,7 @@ ${FORMAT_INSTRUCTIONS[content_type] || 'Freie Form.'}`
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-5',
-      max_tokens: 2000,
+      max_tokens: 3000,
       messages: [{ role: 'user', content: userPrompt }],
       system: systemPrompt
     })
@@ -165,7 +180,7 @@ ${FORMAT_INSTRUCTIONS[content_type] || 'Freie Form.'}`
   // In DB speichern
   const { data: saved } = await supabase
     .from('generated_content')
-    .insert({ topic, content_type, tone, content })
+    .insert({ topic, content_type, content })
     .select('*')
     .single()
 

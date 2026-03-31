@@ -10,12 +10,6 @@ const CONTENT_TYPES = [
   { key: 'b_roll', label: 'B-Roll Hook', icon: '⚡', desc: 'Text-Overlays' },
 ]
 
-const TONE_OPTIONS = [
-  { key: 'direct', label: 'Direkt & provokant' },
-  { key: 'educational', label: 'Lehrreich' },
-  { key: 'motivational', label: 'Motivierend' },
-  { key: 'story', label: 'Story-basiert' },
-]
 
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false)
@@ -49,11 +43,11 @@ function CopyButton({ text }) {
 export default function ContentGenerator() {
   const location = useLocation()
   const [topic, setTopic] = useState(location.state?.topic || '')
-  const [contentType, setContentType] = useState('video_script')
-  const [tone, setTone] = useState('direct')
+  const [contentType, setContentType] = useState(location.state?.suggestedType || 'video_script')
   const [additionalInfo, setAdditionalInfo] = useState('')
   const [generating, setGenerating] = useState(false)
   const [result, setResult] = useState(null)
+  const [confirmed, setConfirmed] = useState(false)
   const [history, setHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(true)
   const [progress, setProgress] = useState(0)
@@ -62,6 +56,7 @@ export default function ContentGenerator() {
   useEffect(() => { loadHistory() }, [])
   useEffect(() => {
     if (location.state?.topic) { setTopic(location.state.topic) }
+    if (location.state?.suggestedType) { setContentType(location.state.suggestedType) }
   }, [location.state])
 
   async function loadHistory() {
@@ -84,10 +79,11 @@ export default function ContentGenerator() {
     try {
       const data = await apiFetch('generate-content', {
         method: 'POST',
-        body: JSON.stringify({ topic: topic.trim(), content_type: contentType, tone, additional_info: additionalInfo })
+        body: JSON.stringify({ topic: topic.trim(), content_type: contentType, additional_info: additionalInfo })
       })
       setProgress(100)
       setResult(data)
+      setConfirmed(false)
       await loadHistory()
     } catch (e) {
       alert('Fehler: ' + e.message)
@@ -143,22 +139,6 @@ export default function ContentGenerator() {
                     </div>
                     <div style={{ fontSize: 10, color: 'var(--text3)' }}>{type.desc}</div>
                   </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Tone */}
-          <div style={{ marginBottom: 20 }}>
-            <div className="section-label">Ton</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {TONE_OPTIONS.map(t => (
-                <button
-                  key={t.key}
-                  onClick={() => setTone(t.key)}
-                  className={`pill ${tone === t.key ? 'active' : ''}`}
-                >
-                  {t.label}
                 </button>
               ))}
             </div>
@@ -228,7 +208,7 @@ export default function ContentGenerator() {
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <CopyButton text={result.content} />
-                  <button onClick={generate} className="btn btn-sm">↻ Neu</button>
+                  <button onClick={generate} className="btn btn-sm">↻ Neu generieren</button>
                 </div>
               </div>
               <div style={{
@@ -239,6 +219,28 @@ export default function ContentGenerator() {
               }}>
                 {result.content}
               </div>
+              {confirmed ? (
+                <div style={{
+                  marginTop: 12, padding: '10px 16px',
+                  background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)',
+                  borderRadius: 'var(--r)', color: '#22c55e', fontSize: 13, fontWeight: 600
+                }}>
+                  Gespeichert — KI lernt aus dieser Auswahl
+                </div>
+              ) : (
+                <button
+                  onClick={async () => {
+                    if (location.state?.topicId) {
+                      await supabase.from('topic_suggestions').update({ used: true }).eq('id', location.state.topicId)
+                    }
+                    setConfirmed(true)
+                  }}
+                  className="btn btn-primary"
+                  style={{ marginTop: 12, width: '100%' }}
+                >
+                  Bestätigen & speichern
+                </button>
+              )}
             </div>
           ) : (
             <div>

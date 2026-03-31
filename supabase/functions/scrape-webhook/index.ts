@@ -163,6 +163,28 @@ Deno.serve(async (req) => {
       completed_at: new Date().toISOString()
     }).eq('id', job_id)
 
+    // Auto-refresh topics if last generation was > 2 hours ago
+    const { data: lastTopic } = await supabase
+      .from('topic_suggestions')
+      .select('created_at')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const shouldRefreshTopics = !lastTopic ||
+      (Date.now() - new Date(lastTopic.created_at).getTime()) > 2 * 60 * 60 * 1000
+
+    if (shouldRefreshTopics && savedCount > 0) {
+      fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/topic-suggestions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('DASHBOARD_TOKEN')}`
+        },
+        body: JSON.stringify({})
+      }).catch(() => {})
+    }
+
     return new Response(JSON.stringify({ ok: true, saved: savedCount, items_in_dataset: items.length }), {
       headers: { 'Content-Type': 'application/json' }
     })

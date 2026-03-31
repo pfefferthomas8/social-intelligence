@@ -94,7 +94,7 @@ export default function Dashboard() {
   }
 
   function handleTopicSelect(topic) {
-    navigate('/generator', { state: { topic: topic.title } })
+    navigate('/generator', { state: { topic: topic.title, topicId: topic.id, suggestedType: topic.suggested_types?.[0] } })
   }
 
   const engRate = ownProfile && topOwnPosts.length > 0
