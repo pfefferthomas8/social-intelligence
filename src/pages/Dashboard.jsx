@@ -36,6 +36,7 @@ export default function Dashboard() {
   const [scrapeLoading, setScrapeLoading] = useState(false)
   const [trendScout, setTrendScout] = useState([])
   const [trendLoading, setTrendLoading] = useState(false)
+  const [lastTrendRun, setLastTrendRun] = useState(null)
 
   useEffect(() => { loadAll() }, [])
 
@@ -110,13 +111,23 @@ export default function Dashboard() {
   }
 
   async function loadTrendScout() {
-    const { data } = await supabase
-      .from('trend_posts')
-      .select('*')
-      .in('recommendation', ['sofort', 'beobachten'])
-      .order('viral_score', { ascending: false })
-      .limit(12)
+    const [{ data }, { data: lastJob }] = await Promise.all([
+      supabase
+        .from('trend_posts')
+        .select('*')
+        .in('recommendation', ['sofort', 'beobachten'])
+        .order('viral_score', { ascending: false })
+        .limit(12),
+      supabase
+        .from('scrape_jobs')
+        .select('completed_at, started_at')
+        .eq('job_type', 'trend_discovery')
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    ])
     setTrendScout(data || [])
+    setLastTrendRun(lastJob?.completed_at || lastJob?.started_at || null)
   }
 
   async function runTrendDiscovery() {
@@ -333,6 +344,15 @@ export default function Dashboard() {
               }}>
                 KI-GEFILTERT
               </span>
+              {lastTrendRun && (
+                <span style={{ fontSize: 11, color: 'var(--text3)' }}>
+                  {(() => {
+                    const d = new Date(lastTrendRun)
+                    const pad = n => String(n).padStart(2, '0')
+                    return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())} Uhr`
+                  })()}
+                </span>
+              )}
             </div>
             <button onClick={runTrendDiscovery} disabled={trendLoading} className="btn btn-xs">
               {trendLoading
