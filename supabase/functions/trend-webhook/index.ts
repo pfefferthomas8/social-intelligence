@@ -225,11 +225,17 @@ Deno.serve(async (req: Request) => {
       } catch { return null }
     }
 
+    // Initialer Delay: Trend-Scrapes haben bis zu 180 Posts → Dataset-Flush dauert länger
+    // Race Condition: Apify feuert Webhook wenn Run SUCCEEDED, Dataset aber noch nicht vollständig geschrieben
+    await new Promise(r => setTimeout(r, 15000))
+
     let items: Record<string, unknown>[] | null = null
-    for (let attempt = 0; attempt < 3; attempt++) {
-      if (attempt > 0) await new Promise(r => setTimeout(r, 5000))
+    for (let attempt = 0; attempt < 5; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, 10000))
       items = await fetchDataset()
-      if (items && items.length > 0) break
+      // Echtdaten haben shortCode oder id — error-only Arrays ignorieren
+      const realItems = (items || []).filter((it: any) => it.shortCode || it.id)
+      if (realItems.length > 0) { items = realItems; break }
     }
 
     if (!items || items.length === 0) {
