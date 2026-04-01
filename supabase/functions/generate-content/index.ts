@@ -83,11 +83,12 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'topic + content_type required' }), { status: 400, headers: CORS })
   }
 
-  const [ownPosts, topCompPosts, customPosts, thomasDna] = await Promise.all([
+  const [ownPosts, topCompPosts, customPosts, thomasDna, trendPosts] = await Promise.all([
     dbQuery('instagram_posts?select=caption,transcript,post_type,likes_count,views_count&source=eq.own&caption=not.is.null&order=views_count.desc&limit=30'),
-    dbQuery('instagram_posts?select=caption,transcript,post_type,likes_count,views_count,competitor_profiles(username)&source=eq.competitor&order=views_count.desc&limit=15'),
+    dbQuery('instagram_posts?select=caption,transcript,post_type,likes_count,views_count&source=eq.competitor&order=views_count.desc&limit=20'),
     dbQuery('instagram_posts?select=caption,transcript,post_type&source=eq.custom&limit=10'),
-    dbQuery('thomas_dna?select=category,insight,confidence&order=confidence.desc&limit=20')
+    dbQuery('thomas_dna?select=category,insight,confidence&order=confidence.desc&limit=20'),
+    dbQuery('trend_posts?select=caption,visual_text,username,viral_score,recommendation&order=viral_score.desc&limit=10'),
   ])
 
   // ── DNA nach Kategorie gruppieren ──────────────────────────────────────────
@@ -98,91 +99,121 @@ Deno.serve(async (req: Request) => {
   }
   const dna = (cat: string) => (dnaByCategory[cat] || []).map((d: any) => `• ${d.insight}`).join('\n')
 
-  // ── SYSTEM PROMPT — DNA first, Competitor last ──────────────────────────────
-  // Reihenfolge ist entscheidend: Was zuerst steht, hat das höchste Gewicht.
-  // DNA → Thomas' eigene Posts → Competitor nur für Struktur, nie für Themen.
+  // ── Viral Trigger aus Competitor-Posts extrahieren ─────────────────────────
+  // Jeder erfolgreiche Post hat einen psychologischen Trigger dahinter.
+  // Diese Trigger sind universell — nur die Themen sind nicht übertragbar.
+  const compTriggerMap: Record<string, string> = {
+    'Bringing your own food': 'SOZIALE ERLAUBNIS — "Deine Disziplin ist nicht weird, sie ist Intelligenz"',
+    'average': 'SCHOCKIERENDE REALITÄT — Statistik die zeigt wie weit der Durchschnitt hinten liegt',
+    '1000 calor': 'EXTREMER BEWEIS — Ich zeige dir was möglich ist, wenn du es wirklich willst',
+    'didn\'t feel like': 'AUTHENTIZITÄT — Ich tu es auch wenn ich keine Lust habe',
+    'client': 'SOCIAL PROOF — Konkrete Transformation eines echten Menschen mit konkreten Zahlen',
+    'sleep': 'UNTERSCHÄTZTER HEBEL — Das tust du jeden Tag, aber weißt nicht wie viel Potenzial darin steckt',
+    'potato': 'ÜBERRASCHENDE WAHRHEIT — Was du für schlecht hältst ist eigentlich dein stärkster Verbündeter',
+    'secret': 'EXKLUSIVES WISSEN — Das wissen die wenigsten, obwohl es offensichtlich ist',
+    'nobody quits': 'RADIKALE KLARHEIT — Wer diesen Schritt macht, bereut ihn nie',
+    'pov': 'REFRAMING — Es ist nicht Genetik. Es ist Entscheidung.',
+  }
 
-  const systemPrompt = `Du bist der exklusive Ghost-Writer von Thomas Pfeffer. Jede Ausgabe muss zu 100% zu ihm und seiner Zielgruppe passen.
+  const compWithTriggers = topCompPosts.slice(0, 10).map((p: any) => {
+    const text = clean([p.caption, p.transcript].filter(Boolean).join(' '))
+    const lc = text.toLowerCase()
+    const matchedTrigger = Object.entries(compTriggerMap).find(([key]) => lc.includes(key.toLowerCase()))
+    const trigger = matchedTrigger ? matchedTrigger[1] : 'MUSTER: Konkrete Aussage + Kontrast + Lösung'
+    return `[${(p.views_count || 0).toLocaleString()} Views]\nTRIGGER: ${trigger}\nPOST: "${text}"`
+  }).join('\n\n')
 
-═══════════════════════════════════════════════════════
-THOMAS' ZIELGRUPPE — PRIMÄRE DIREKTIVE
-═══════════════════════════════════════════════════════
-Wer sie sind (aus echten Post-Daten gelernt):
-${dna('audience_pattern') || '• Männer 30–55, beruflich erfolgreich, wollen Körper und Alltag in den Griff bekommen'}
+  // ── Trend-Signale aufbereiten ──────────────────────────────────────────────
+  const trendSignals = trendPosts.length > 0
+    ? trendPosts.map((t: any) => {
+        const text = clean([t.caption, t.visual_text].filter(Boolean).join(' | '))
+        return `@${t.username} [Score ${Math.round(t.viral_score || 0)}] ${t.recommendation?.toUpperCase() || ''}: "${text}"`
+      }).join('\n')
+    : ''
 
-Diese Menschen wollen:
-- Effizienz trotz Zeitknappheit (kein 6x/Woche Training)
-- Wissenschaftliche Begründungen ("Warum", nicht nur "Was")
-- Status und Selbstkontrolle — nicht Ästhetik als Selbstzweck
-- Struktur und smarte Abkürzungen
+  // ── SYSTEM PROMPT ───────────────────────────────────────────────────────────
+  const systemPrompt = `Du bist die KI-Instanz die ausschließlich für Thomas Pfeffer arbeitet — Fitness-Coach, DACH-Markt, Männer 30+.
 
-═══════════════════════════════════════════════════════
-ABSOLUTE THEMEN-GRENZEN — NIEMALS AUSGEBEN
-═══════════════════════════════════════════════════════
-Diese Themen kommen unter keinen Umständen vor — auch nicht als Variation, auch nicht als Kontrast, auch nicht als "was andere machen":
-✗ Bodybuilding-Wettkämpfe, Bühnen-Prep, Contest, Peak Week, Wettkampftag
-✗ Profisport, Athleten-Ernährung, Wettkampf-Protokolle
-✗ Steroide, Doping, PEDs
-✗ Extreme Diäten (unter 1500 kcal), Crashdiäten, Hungerstrategien
-✗ Supplements als Hauptthema (Fatburner, Pre-Workout, Booster)
-✗ Lifestyle-Influencer-Content (Sixpack im Urlaub, Strandbody)
-✗ Jugend-Fitness (unter 25, Schule, Ausbildung)
-✗ Allgemeine Motivation ohne konkreten Inhalt ("Glaub an dich", "Du schaffst das")
-
-Wenn das eingegebene Thema in diese Kategorien fällt: Thema anpassen auf die KERNFRAGE dahinter, die für Männer 30+ relevant ist.
-
-═══════════════════════════════════════════════════════
-THOMAS' BEWÄHRTE HOOK-MUSTER (aus Performance-Daten)
-═══════════════════════════════════════════════════════
-${dna('hook_pattern') || '• Du-Ansprache + Paradoxon/Problem als Opener\n• Nummerierte Listen wenn Selbst-Diagnose möglich\n• Validierung vor Lösung'}
-
-═══════════════════════════════════════════════════════
-THOMAS' STIL-REGELN (aus Performance-Daten)
-═══════════════════════════════════════════════════════
-${dna('style_rule') || '• Kurze Sätze, kein Hype, kein Fitness-Klischee\n• Direkt, sachlich, wie ein gut informierter Freund\n• Emojis nur in Hashtags'}
+Deine Aufgabe: Alle verfügbaren Datenpunkte synthetisieren und den perfekten Content erstellen.
+Nicht einen Datenpunkt priorisieren — ALLE gleichzeitig aktivieren.
 
 ═══════════════════════════════════════════════════════
-THOMAS' BESTE CONTENT-SÄULEN (nach Views-Performance)
+[1] THOMAS' ZIELGRUPPE — wer sie wirklich sind
 ═══════════════════════════════════════════════════════
-${dna('pillar_insight') || '• Mehrwert-Posts mit physiologischen Erklärungen performen am stärksten'}
+${dna('audience_pattern') || '• Männer 30–55, beruflich erfolgreich, wollen Effizienz bei Training und Ernährung'}
 
-Offene Lücken die Thomas füllen kann:
-${dna('competitor_gap') || '• Authentizität durch eigene Routine zeigen'}
-
-${dna('growth_opportunity') ? `Bewährte Wachstums-Richtungen:\n${dna('growth_opportunity')}` : ''}
+Niemals für diese Zielgruppe erstellen:
+✗ Wettkampf/Bühne/Contest-Content — das ist nicht ihre Welt
+✗ Profisport-Inhalte — sie sind keine Athleten, sie sind Unternehmer mit Körper-Zielen
+✗ Extreme Methoden — sie wollen smarte Abkürzungen, nicht Hardcore
+✗ Supplement-Fokus — echte Lösungen, nicht Produkte
+✗ Leere Motivation — Fakten und Mechanismen, nicht "Glaub an dich"
 
 ═══════════════════════════════════════════════════════
-THOMAS' EIGENE TOP-POSTS — SEIN ECHTER STIL
+[2] THOMAS' BEWIESENE HOOK-FORMELN (aus Performance-Daten)
+═══════════════════════════════════════════════════════
+${dna('hook_pattern') || '• Du-Ansprache + Paradoxon\n• Validierung vor Lösung\n• Nummerierte Selbst-Diagnose'}
+
+═══════════════════════════════════════════════════════
+[3] THOMAS' STIL-DNA (aus Performance-Daten)
+═══════════════════════════════════════════════════════
+${dna('style_rule') || '• Kurze Sätze als Stilmittel\n• Negation + Wiederholung als Rhythmus\n• Sachlich, kein Hype'}
+
+═══════════════════════════════════════════════════════
+[4] CONTENT-STRATEGIE (was wirklich funktioniert)
+═══════════════════════════════════════════════════════
+${dna('pillar_insight') || '• Physiologische Erklärungen performen am stärksten'}
+
+Lücken die noch unbesetzt sind:
+${dna('competitor_gap') || '• Authentizität durch eigene Routine'}
+
+Wachstums-Richtungen mit höchstem Potenzial:
+${dna('growth_opportunity') || '• Kontroverse Eröffnungen mit Nuance in Satz 2-3'}
+
+═══════════════════════════════════════════════════════
+[5] THOMAS' EIGENE POSTS — REFERENZ FÜR SEINEN ECHTEN STIL
 ═══════════════════════════════════════════════════════
 ${ownPosts.length > 0
-  ? ownPosts.slice(0, 8).map((p: any, i: number) => {
+  ? ownPosts.slice(0, 8).map((p: any) => {
       const text = clean([p.caption, p.transcript].filter(Boolean).join(' | '))
-      return `[${(p.views_count || 0).toLocaleString()} Views]\n${text}`
+      return `[${(p.views_count || 0).toLocaleString()} Views] ${text}`
     }).join('\n\n')
-  : 'Noch keine eigenen Posts. Schreibe direkt, faktenbasiert, kurze Sätze.'}
+  : 'Noch keine Posts verfügbar — schreibe direkt, faktenbasiert, kurze Sätze.'}
 
 ═══════════════════════════════════════════════════════
-COMPETITOR-POSTS — NUR STRUKTUR EXTRAHIEREN, KEINE THEMEN ÜBERNEHMEN
+[6] VIRALE COMPETITOR-POSTS — PSYCHOLOGISCHE TRIGGER EXTRAHIEREN
 ═══════════════════════════════════════════════════════
-Lerne aus diesen Posts NUR: Satzlänge, Hook-Struktur, Rhythmus, Spannungsaufbau.
-Themen und Inhalte dieser Posts sind IRRELEVANT — Thomas' Zielgruppe und DNA bestimmen die Themen.
-${topCompPosts.length > 0
-  ? topCompPosts.slice(0, 6).map((p: any) => {
-      const text = clean([p.caption, p.transcript].filter(Boolean).join(' '))
-      return `[${(p.views_count || 0).toLocaleString()} Views] "${text}"`
-    }).join('\n\n')
+WICHTIG: Nicht die Themen dieser Posts verwenden — den dahinterliegenden TRIGGER.
+Jeder Trigger funktioniert auch in Thomas' Welt, wenn er mit Thomas' Themen + Stil kombiniert wird.
+
+${compWithTriggers || 'Keine Competitor-Posts verfügbar.'}
+
+${customPosts.length > 0
+  ? `\nEIGENE REFERENZ-UPLOADS:\n${customPosts.map((p: any) => clean([p.caption, p.transcript].filter(Boolean).join(' | '))).filter(Boolean).join('\n---\n').substring(0, 800)}`
   : ''}
-${customPosts.length > 0 ? `\nZUSÄTZLICHE REFERENZEN:\n${customPosts.map((p: any) => clean([p.caption, p.transcript].filter(Boolean).join(' | '))).filter(Boolean).join('\n---\n').substring(0, 800)}` : ''}`
+
+═══════════════════════════════════════════════════════
+[7] AKTUELLE TREND-SIGNALE — WAS GERADE IM MARKT FUNKTIONIERT
+═══════════════════════════════════════════════════════
+${trendSignals || 'Noch keine Trend-Daten verfügbar.'}
+
+═══════════════════════════════════════════════════════
+SYNTHESE-PRINZIP
+═══════════════════════════════════════════════════════
+Für jeden Content-Output:
+1. Wähle den stärksten TRIGGER aus [6] der zum Thema passt
+2. Überprüfe ob ein Trend-Signal aus [7] das Thema verstärkt
+3. Forme den Trigger durch Thomas' Hook-Formeln aus [2] und seinen Stil aus [3]
+4. Stelle sicher dass es zu seiner Zielgruppe aus [1] passt
+5. Das Ergebnis klingt nach Thomas — und schlägt wie ein viraler Post`
 
   const userPrompt = `THEMA: ${topic}
 FORMAT: ${content_type.replace(/_/g, ' ').toUpperCase()}
-${additional_info ? `KONTEXT: ${additional_info}` : ''}
-
-Prüfe zuerst: Passt dieses Thema zu Männern 30–55 mit vollem Alltag, die Fett verlieren oder Muskeln aufbauen wollen? Falls nicht, behandle die Kernfrage die dahintersteckt und für diese Zielgruppe relevant ist.
+${additional_info ? `ZUSATZINFO: ${additional_info}` : ''}
 
 ${FORMAT_INSTRUCTIONS[content_type] || 'Freie Form.'}
 
-Gib NUR den fertigen Content aus. Keine Erklärungen, keine Meta-Kommentare.`
+Gib NUR den fertigen Content aus — keine Analyse, keine Erklärungen, keine Meta-Kommentare.`
 
   const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
