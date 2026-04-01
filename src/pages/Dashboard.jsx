@@ -34,12 +34,14 @@ export default function Dashboard() {
   const [topicsLoading, setTopicsLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [scrapeLoading, setScrapeLoading] = useState(false)
+  const [trendScout, setTrendScout] = useState([])
+  const [trendLoading, setTrendLoading] = useState(false)
 
   useEffect(() => { loadAll() }, [])
 
   async function loadAll() {
     setLoading(true)
-    await Promise.all([loadProfile(), loadPosts(), loadCompetitors(), loadTopics(), loadStats(), loadPillars()])
+    await Promise.all([loadProfile(), loadPosts(), loadCompetitors(), loadTopics(), loadStats(), loadPillars(), loadTrendScout()])
     setLoading(false)
   }
 
@@ -105,6 +107,37 @@ export default function Dashboard() {
       else await loadTopics()
     } catch (e) { console.error(e) }
     finally { setTopicsLoading(false) }
+  }
+
+  async function loadTrendScout() {
+    const { data } = await supabase
+      .from('trend_posts')
+      .select('*')
+      .in('recommendation', ['sofort', 'beobachten'])
+      .order('viral_score', { ascending: false })
+      .limit(12)
+    setTrendScout(data || [])
+  }
+
+  async function runTrendDiscovery() {
+    setTrendLoading(true)
+    try {
+      await apiFetch('trend-discovery', { method: 'POST' })
+      setTimeout(loadTrendScout, 3000)
+    } catch (e) { alert('Trend Discovery Fehler: ' + e.message) }
+    finally { setTrendLoading(false) }
+  }
+
+  function handleTrendScoutSelect(post) {
+    const caption = (post.caption || '').substring(0, 300)
+    const firstLine = caption.split(/[\n.!?]/)[0].trim().substring(0, 80)
+    navigate('/generator', {
+      state: {
+        topic: firstLine || `Trending von @${post.username}`,
+        additionalInfo: `Viral Post von @${post.username} | ${formatNumber(post.views_count)} Views | Viral Score: ${post.viral_score}\n\nCaption: ${caption || '(kein Text)'}\n\n${post.claude_notes ? 'KI-Analyse: ' + post.claude_notes : ''}\n\nAnalysiere das Prinzip und erstelle Thomas-spezifischen DACH-Content auf Deutsch.`,
+        suggestedType: post.post_type === 'reel' ? 'video_script' : post.post_type === 'carousel' ? 'carousel' : 'single_post',
+      }
+    })
   }
 
   async function refreshOwnProfile() {
@@ -328,6 +361,151 @@ export default function Dashboard() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* ── TREND SCOUT ─────────────────────────────────────────────────── */}
+        <div style={{ marginBottom: 24 }}>
+          <div className="section-header" style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span className="section-title">Trend Scout</span>
+              <span style={{
+                fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+                color: '#ee4f00', background: 'rgba(238,79,0,0.1)',
+                padding: '2px 7px', borderRadius: 100,
+              }}>
+                KI-GEFILTERT
+              </span>
+            </div>
+            <button onClick={runTrendDiscovery} disabled={trendLoading} className="btn btn-xs">
+              {trendLoading
+                ? <><span className="spinner" style={{ width: 10, height: 10 }} /> Läuft…</>
+                : '⚡ Discovery starten'
+              }
+            </button>
+          </div>
+
+          {trendScout.length === 0 ? (
+            <div style={{
+              background: 'var(--bg-card)', border: '1px dashed var(--border-strong)',
+              borderRadius: 'var(--r-lg)', padding: '32px', textAlign: 'center',
+            }}>
+              <p style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>
+                Noch keine Trend-Daten. Starte die Discovery um Fitness-Trends aus 20 Hashtags zu analysieren.
+              </p>
+              <button onClick={runTrendDiscovery} disabled={trendLoading} className="btn btn-sm btn-primary">
+                {trendLoading ? 'Läuft…' : '⚡ Jetzt starten'}
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, minWidth: 0 }}>
+              {trendScout.map(post => {
+                const isHot = post.recommendation === 'sofort'
+                const pillarColors = { haltung: '#ee4f00', transformation: '#3b82f6', mehrwert: '#22c55e', verkauf: '#a855f7' }
+                const pillarColor = pillarColors[post.content_pillar] || 'var(--text3)'
+                return (
+                  <div
+                    key={post.id}
+                    onClick={() => handleTrendScoutSelect(post)}
+                    style={{
+                      background: 'var(--bg-card)',
+                      border: `1px solid ${isHot ? 'rgba(238,79,0,0.3)' : 'var(--border)'}`,
+                      borderRadius: 'var(--r-lg)',
+                      padding: '14px',
+                      cursor: 'pointer',
+                      minWidth: 0,
+                      borderTop: `2px solid ${isHot ? '#ee4f00' : 'var(--border)'}`,
+                      transition: 'all 0.12s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.background = 'var(--bg-card-hover)' }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = isHot ? 'rgba(238,79,0,0.3)' : 'var(--border)'; e.currentTarget.style.background = 'var(--bg-card)' }}
+                  >
+                    {/* Header */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                      {isHot && (
+                        <span style={{ fontSize: 9, fontWeight: 700, color: '#ee4f00', background: 'rgba(238,79,0,0.1)', padding: '1px 6px', borderRadius: 100, letterSpacing: '0.07em' }}>
+                          SOFORT
+                        </span>
+                      )}
+                      {post.dach_gap && (
+                        <span style={{ fontSize: 9, fontWeight: 700, color: '#22c55e', background: 'rgba(34,197,94,0.1)', padding: '1px 6px', borderRadius: 100, letterSpacing: '0.07em' }}>
+                          DACH-LÜCKE
+                        </span>
+                      )}
+                      {post.content_pillar && (
+                        <span style={{ fontSize: 9, fontWeight: 700, color: pillarColor, background: `${pillarColor}18`, padding: '1px 6px', borderRadius: 100, letterSpacing: '0.06em', marginLeft: 'auto' }}>
+                          {post.content_pillar.toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Account + Score */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text2)' }}>@{post.username}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>Score</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: isHot ? '#ee4f00' : 'var(--text)', fontFamily: 'var(--font-mono)' }}>
+                          {post.viral_score}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Caption */}
+                    {post.caption && (
+                      <p style={{
+                        fontSize: 11.5, color: 'var(--text2)', lineHeight: 1.45,
+                        overflow: 'hidden', display: '-webkit-box',
+                        WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                        marginBottom: 8,
+                      }}>
+                        {post.caption}
+                      </p>
+                    )}
+
+                    {/* Claude Notes */}
+                    {post.claude_notes && (
+                      <p style={{
+                        fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.4,
+                        overflow: 'hidden', display: '-webkit-box',
+                        WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                        marginBottom: 8, fontStyle: 'italic',
+                      }}>
+                        {post.claude_notes}
+                      </p>
+                    )}
+
+                    {/* Stats */}
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                      {post.views_count > 0 && (
+                        <span style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" strokeWidth="2"/>
+                            <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
+                          </svg>
+                          {formatNumber(post.views_count)}
+                        </span>
+                      )}
+                      {post.likes_count > 0 && (
+                        <span style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" stroke="currentColor" strokeWidth="2"/>
+                          </svg>
+                          {formatNumber(post.likes_count)}
+                        </span>
+                      )}
+                      {post.hook_strength && (
+                        <span style={{ fontSize: 10, color: 'var(--text3)', marginLeft: 'auto' }}>
+                          Hook {post.hook_strength}/10
+                        </span>
+                      )}
+                      <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 2, marginLeft: post.hook_strength ? 0 : 'auto' }}>
+                        In Generator →
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Competitors Table */}
