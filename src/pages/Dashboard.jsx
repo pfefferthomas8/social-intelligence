@@ -103,11 +103,14 @@ export default function Dashboard() {
   async function generateTopics() {
     setTopicsLoading(true)
     try {
-      const result = await apiFetch('topic-suggestions', { method: 'POST' })
-      if (result.topics) setTopics(result.topics)
-      else await loadTopics()
-    } catch (e) { console.error(e) }
-    finally { setTopicsLoading(false) }
+      await apiFetch('topic-suggestions', { method: 'POST' })
+      await loadTopics()
+    } catch (e) {
+      console.error(e)
+      alert('Fehler beim Generieren: ' + (e.message || e))
+    } finally {
+      setTopicsLoading(false)
+    }
   }
 
   async function loadTrendScout() {
