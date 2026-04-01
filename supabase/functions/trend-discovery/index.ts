@@ -17,12 +17,12 @@ const APIFY_KEY = Deno.env.get('APIFY_API_KEY') || ''
 const HASHTAGS = [
   // Deutsch
   'krafttraining', 'muskelaufbau', 'abnehmen', 'fitnessdeutschland',
-  'fitnesscoach', 'maennerfitness', 'koerpertransformation',
-  'personaltrainer', 'abnehmentipps', 'gesundleben',
+  'maennerfitness', 'koerpertransformation', 'personaltrainer',
+  'abnehmentipps', 'gesundleben', 'fitnesscoach',
   // Englisch (globale Trends, oft 3-5 Jahre voraus)
-  'fitnesscoach', 'strengthtraining', 'musclebuilding', 'fatlosstips',
+  'strengthtraining', 'musclebuilding', 'fatlosstips',
   'over30fitness', 'bodytransformation', 'fitover30', 'mensphysique',
-  'personaltrainerlife', 'fitnessmotivation',
+  'personaltrainerlife', 'fitnessmotivation', 'musclegain',
 ]
 
 function dbHeaders() {
