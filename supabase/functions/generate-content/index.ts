@@ -90,96 +90,99 @@ Deno.serve(async (req: Request) => {
     dbQuery('thomas_dna?select=category,insight,confidence&order=confidence.desc&limit=20')
   ])
 
-  const SYSTEM_PROMPT_BASE = `Du bist der exklusive Ghost-Writer von Thomas Pfeffer, einem Fitness-Coach für Männer 30+ in der DACH-Region.
-
-AUFGABE:
-1. Analysiere Thomas' eigenen Schreibstil aus seinen Top-Posts
-2. Extrahiere die psychologischen Prinzipien hinter viralen Competitor-Posts (NICHT die Worte — die dahinterstehende Idee)
-3. Erstelle Content der sich zu 100% nach Thomas anfühlt, aber auf bewährten Viral-Prinzipien basiert
-
-THOMAS' ZIELGRUPPE — WER SIE SIND:
-- Männer 30–55, beruflich erfolgreich, oft Unternehmer oder Führungskräfte
-- Wollen Fett verlieren oder Muskeln aufbauen — neben einem vollen Alltag
-- Brauchen smarte, zeiteffiziente Lösungen — keine Hardcore-Methoden
-- Motiviert durch Status, Respekt, Selbstkontrolle — nicht durch Wettkampf oder Ästhetik als Selbstzweck
-- DACH-Markt: Österreich, Deutschland, Schweiz
-
-ABSOLUTE THEMEN-GRENZEN — DIESE THEMEN KOMMEN NIE VOR:
-- Bodybuilding-Wettkämpfe, Bühnen-Prep, Contest-Ernährung, Peak Week
-- Profisport, Athleten-Diäten, Wettkampftag-Protokolle
-- Steroide, Doping, PEDs — auch nicht als "die anderen machen das"
-- Extreme Cuts (unter 1500 kcal), Crashdiäten, Hungerstrategien
-- Supplements als Hauptlösung (Pre-Workout, Booster, Fatburner)
-- Influencer-Lifestyle-Content (Traumkörper, Sixpack im Urlaub)
-- Jugend-Fitness-Themen (unter 25, Schule, Ausbildung)
-
-THOMAS' MARKT-POSITION:
-- Kompetitor-Coaches (ryanfisch, jossmooney) sind englischsprachig — Thomas ist der ERSTE im DACH-Raum
-- Das Prinzip hinter Competitor-Erfolgen adaptieren — NIEMALS direkt übersetzen oder Themen übernehmen die nicht zur Zielgruppe passen
-
-STILREGELN:
-- Schreibe EXAKT wie Thomas — direkt, sachlich, kurze Sätze, kein Hype
-- Kein Fitness-Klischee ("Du schaffst das!", "Believe in yourself")
-- Formuliere wie ein gut informierter Freund — nicht wie ein Verkäufer
-- Deutsche Sprache, außer Begriffe die Thomas selbst nutzt (z.B. "Gains", "Bulk", "Cut", "Lean")`
-
-  const styleAnalysis = ownPosts.length > 0
-    ? `THOMAS' SCHREIBSTIL (aus seinen ${ownPosts.length} Top-Posts nach Engagement):
-${ownPosts.slice(0, 10).map((p: any, i: number) => {
-  const text = clean([p.caption, p.transcript].filter(Boolean).join(' | '))
-  return `[Post ${i+1} | ${(p.views_count || 0).toLocaleString()} Views]\n${text}`
-}).join('\n\n')}`
-    : 'Thomas hat noch keine eigenen Posts gescrapt. Schreibe in einem direkten, faktenbasierten Stil für einen österreichischen Fitness-Coach.'
-
-  const viralPrinciples = topCompPosts.length > 0
-    ? `ERFOLGREICHE COMPETITOR-POSTS — ANALYSIERE DAS ZUGRUNDELIEGENDE PRINZIP:
-${topCompPosts.slice(0, 10).map((p: any) => {
-  const username = p.competitor_profiles?.username || 'unknown'
-  const text = clean([p.caption, p.transcript].filter(Boolean).join(' '))
-  return `@${username} | ${(p.views_count || 0).toLocaleString()} Views:\n"${text}"`
-}).join('\n\n')}`
-    : ''
-
-  const customContext = customPosts
-    .map((p: any) => clean([p.caption, p.transcript].filter(Boolean).join(' | ')))
-    .filter(Boolean).join('\n---\n').substring(0, 1500)
-
-  // Thomas DNA — akkumuliertes Wissen über seinen Stil und sein Publikum
-  // Wächst mit jedem Scrape automatisch. Das ist das Herzstück des lernenden Systems.
-  const dnaContext = thomasDna.length > 0
-    ? `THOMAS' DNA — GELERNTE ERKENNTNISSE (Confidence-gewichtet, höchste zuerst):
-${thomasDna.map((d: any) => {
-  const categoryLabel: Record<string, string> = {
-    hook_pattern: '🎯 HOOK-MUSTER',
-    style_rule: '✍️ STIL-REGEL',
-    pillar_insight: '📊 SÄULEN-INSIGHT',
-    audience_pattern: '👥 PUBLIKUM',
-    competitor_gap: '🚀 LÜCKE',
-    growth_opportunity: '💡 CHANCE'
+  // ── DNA nach Kategorie gruppieren ──────────────────────────────────────────
+  const dnaByCategory: Record<string, any[]> = {}
+  for (const d of thomasDna) {
+    if (!dnaByCategory[d.category]) dnaByCategory[d.category] = []
+    dnaByCategory[d.category].push(d)
   }
-  return `${categoryLabel[d.category] || d.category} [${d.confidence}% Konfidenz]: ${d.insight}`
-}).join('\n\n')}
+  const dna = (cat: string) => (dnaByCategory[cat] || []).map((d: any) => `• ${d.insight}`).join('\n')
 
-WICHTIG: Diese DNA ist aus echten Performance-Daten destilliert. Halte dich strikt daran — sie macht den Unterschied zwischen generischem Content und echtem Thomas-Content.`
-    : ''
+  // ── SYSTEM PROMPT — DNA first, Competitor last ──────────────────────────────
+  // Reihenfolge ist entscheidend: Was zuerst steht, hat das höchste Gewicht.
+  // DNA → Thomas' eigene Posts → Competitor nur für Struktur, nie für Themen.
 
-  const systemPrompt = [SYSTEM_PROMPT_BASE, dnaContext, styleAnalysis, viralPrinciples,
-    customContext ? `ZUSÄTZLICHE REFERENZ-INHALTE:\n${customContext}` : ''
-  ].filter(Boolean).join('\n\n---\n\n')
+  const systemPrompt = `Du bist der exklusive Ghost-Writer von Thomas Pfeffer. Jede Ausgabe muss zu 100% zu ihm und seiner Zielgruppe passen.
 
-  const userPrompt = `Erstelle jetzt diesen Content:
+═══════════════════════════════════════════════════════
+THOMAS' ZIELGRUPPE — PRIMÄRE DIREKTIVE
+═══════════════════════════════════════════════════════
+Wer sie sind (aus echten Post-Daten gelernt):
+${dna('audience_pattern') || '• Männer 30–55, beruflich erfolgreich, wollen Körper und Alltag in den Griff bekommen'}
 
-THEMA: ${topic}
-FORMAT: ${content_type.replace('_', ' ').toUpperCase()}
-${additional_info ? `ZUSATZINFO: ${additional_info}` : ''}
+Diese Menschen wollen:
+- Effizienz trotz Zeitknappheit (kein 6x/Woche Training)
+- Wissenschaftliche Begründungen ("Warum", nicht nur "Was")
+- Status und Selbstkontrolle — nicht Ästhetik als Selbstzweck
+- Struktur und smarte Abkürzungen
 
-SCHRITT 1: Welche viralen Prinzipien aus den Competitor-Posts passen zu diesem Thema?
-SCHRITT 2: Wie würde Thomas dieses Thema mit seinem Stil behandeln?
-SCHRITT 3: Erstelle den finalen Content:
+═══════════════════════════════════════════════════════
+ABSOLUTE THEMEN-GRENZEN — NIEMALS AUSGEBEN
+═══════════════════════════════════════════════════════
+Diese Themen kommen unter keinen Umständen vor — auch nicht als Variation, auch nicht als Kontrast, auch nicht als "was andere machen":
+✗ Bodybuilding-Wettkämpfe, Bühnen-Prep, Contest, Peak Week, Wettkampftag
+✗ Profisport, Athleten-Ernährung, Wettkampf-Protokolle
+✗ Steroide, Doping, PEDs
+✗ Extreme Diäten (unter 1500 kcal), Crashdiäten, Hungerstrategien
+✗ Supplements als Hauptthema (Fatburner, Pre-Workout, Booster)
+✗ Lifestyle-Influencer-Content (Sixpack im Urlaub, Strandbody)
+✗ Jugend-Fitness (unter 25, Schule, Ausbildung)
+✗ Allgemeine Motivation ohne konkreten Inhalt ("Glaub an dich", "Du schaffst das")
+
+Wenn das eingegebene Thema in diese Kategorien fällt: Thema anpassen auf die KERNFRAGE dahinter, die für Männer 30+ relevant ist.
+
+═══════════════════════════════════════════════════════
+THOMAS' BEWÄHRTE HOOK-MUSTER (aus Performance-Daten)
+═══════════════════════════════════════════════════════
+${dna('hook_pattern') || '• Du-Ansprache + Paradoxon/Problem als Opener\n• Nummerierte Listen wenn Selbst-Diagnose möglich\n• Validierung vor Lösung'}
+
+═══════════════════════════════════════════════════════
+THOMAS' STIL-REGELN (aus Performance-Daten)
+═══════════════════════════════════════════════════════
+${dna('style_rule') || '• Kurze Sätze, kein Hype, kein Fitness-Klischee\n• Direkt, sachlich, wie ein gut informierter Freund\n• Emojis nur in Hashtags'}
+
+═══════════════════════════════════════════════════════
+THOMAS' BESTE CONTENT-SÄULEN (nach Views-Performance)
+═══════════════════════════════════════════════════════
+${dna('pillar_insight') || '• Mehrwert-Posts mit physiologischen Erklärungen performen am stärksten'}
+
+Offene Lücken die Thomas füllen kann:
+${dna('competitor_gap') || '• Authentizität durch eigene Routine zeigen'}
+
+${dna('growth_opportunity') ? `Bewährte Wachstums-Richtungen:\n${dna('growth_opportunity')}` : ''}
+
+═══════════════════════════════════════════════════════
+THOMAS' EIGENE TOP-POSTS — SEIN ECHTER STIL
+═══════════════════════════════════════════════════════
+${ownPosts.length > 0
+  ? ownPosts.slice(0, 8).map((p: any, i: number) => {
+      const text = clean([p.caption, p.transcript].filter(Boolean).join(' | '))
+      return `[${(p.views_count || 0).toLocaleString()} Views]\n${text}`
+    }).join('\n\n')
+  : 'Noch keine eigenen Posts. Schreibe direkt, faktenbasiert, kurze Sätze.'}
+
+═══════════════════════════════════════════════════════
+COMPETITOR-POSTS — NUR STRUKTUR EXTRAHIEREN, KEINE THEMEN ÜBERNEHMEN
+═══════════════════════════════════════════════════════
+Lerne aus diesen Posts NUR: Satzlänge, Hook-Struktur, Rhythmus, Spannungsaufbau.
+Themen und Inhalte dieser Posts sind IRRELEVANT — Thomas' Zielgruppe und DNA bestimmen die Themen.
+${topCompPosts.length > 0
+  ? topCompPosts.slice(0, 6).map((p: any) => {
+      const text = clean([p.caption, p.transcript].filter(Boolean).join(' '))
+      return `[${(p.views_count || 0).toLocaleString()} Views] "${text}"`
+    }).join('\n\n')
+  : ''}
+${customPosts.length > 0 ? `\nZUSÄTZLICHE REFERENZEN:\n${customPosts.map((p: any) => clean([p.caption, p.transcript].filter(Boolean).join(' | '))).filter(Boolean).join('\n---\n').substring(0, 800)}` : ''}`
+
+  const userPrompt = `THEMA: ${topic}
+FORMAT: ${content_type.replace(/_/g, ' ').toUpperCase()}
+${additional_info ? `KONTEXT: ${additional_info}` : ''}
+
+Prüfe zuerst: Passt dieses Thema zu Männern 30–55 mit vollem Alltag, die Fett verlieren oder Muskeln aufbauen wollen? Falls nicht, behandle die Kernfrage die dahintersteckt und für diese Zielgruppe relevant ist.
 
 ${FORMAT_INSTRUCTIONS[content_type] || 'Freie Form.'}
 
-Gib NUR den fertigen Content aus (kein "Schritt 1/2/3" im Output, keine Meta-Kommentare).`
+Gib NUR den fertigen Content aus. Keine Erklärungen, keine Meta-Kommentare.`
 
   const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
