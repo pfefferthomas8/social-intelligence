@@ -41,7 +41,7 @@ Deno.serve(async (req: Request) => {
 
   // Trend-Accounts laden — älteste Scrapes zuerst (Rotation)
   const accountsRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/trend_accounts?is_active=eq.true&select=username,last_scraped_at&order=last_scraped_at.asc.nullsfirst&limit=8`,
+    `${SUPABASE_URL}/rest/v1/trend_accounts?is_active=eq.true&select=username,last_scraped_at&order=last_scraped_at.asc.nullsfirst&limit=12`,
     { headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY } }
   )
   const accounts: any[] = await accountsRes.json()
@@ -101,7 +101,7 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         directUrls,
         resultsType: 'posts',
-        resultsLimit: 20,   // 20 Posts pro Account × 8 Accounts = max 160 Kandidaten
+        resultsLimit: 15,   // 15 Posts pro Account × 12 Accounts = max 180 Kandidaten
         proxyConfiguration: {
           useApifyProxy: true,
           apifyProxyGroups: ['RESIDENTIAL']
@@ -132,6 +132,6 @@ Deno.serve(async (req: Request) => {
     job_id: job.id,
     run_id: runId,
     accounts: usernames,
-    message: `Trend Discovery gestartet — ${usernames.length} Accounts werden gescrapt: ${usernames.join(', ')}`
+    message: `Trend Discovery gestartet — ${usernames.length}/50 Accounts werden gescrapt: ${usernames.join(', ')}`
   }), { headers: { ...CORS, 'Content-Type': 'application/json' } })
 })

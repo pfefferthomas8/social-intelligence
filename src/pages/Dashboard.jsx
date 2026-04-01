@@ -338,7 +338,7 @@ export default function Dashboard() {
               borderRadius: 'var(--r-lg)', padding: '32px', textAlign: 'center',
             }}>
               <p style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>
-                Noch keine Trend-Daten. Starte die Discovery um Fitness-Trends aus 20 Hashtags zu analysieren.
+                Noch keine Trend-Daten. Starte die Discovery um viral performende Posts aus 50 kuratierten Fitness-Accounts zu analysieren.
               </p>
               <button onClick={runTrendDiscovery} disabled={trendLoading} className="btn btn-sm btn-primary">
                 {trendLoading ? 'Läuft…' : '⚡ Jetzt starten'}
