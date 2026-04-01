@@ -1,6 +1,7 @@
-// Trend Discovery — scrapet Fitness-Hashtags auf Instagram
-// Kombiniert DE + EN Hashtags → findet viral gehende Posts von unbekannten Creators
-// Wird wöchentlich getriggert + nach Ersteinrichtung manuell anstoßbar
+// Trend Discovery — scrapt kuratierte Fitness-Accounts nach viral performenden Posts
+// Nutzt denselben bewährten instagram-scraper wie Competitor-Scrapes (funktioniert 100%)
+// Strategie: 8 Accounts pro Run, rotierend nach ältestem Scrape
+// Webhook → trend-webhook → Viral Score + Claude-Analyse → trend_posts
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -12,18 +13,6 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 const DASHBOARD_TOKEN = Deno.env.get('DASHBOARD_TOKEN') || ''
 const APIFY_KEY = Deno.env.get('APIFY_API_KEY') || ''
-
-// Hashtags — DE + EN Fitness, Männer 30+, Kraft, Körper, Mindset
-const HASHTAGS = [
-  // Deutsch
-  'krafttraining', 'muskelaufbau', 'abnehmen', 'fitnessdeutschland',
-  'maennerfitness', 'koerpertransformation', 'personaltrainer',
-  'abnehmentipps', 'gesundleben', 'fitnesscoach',
-  // Englisch (globale Trends, oft 3-5 Jahre voraus)
-  'strengthtraining', 'musclebuilding', 'fatlosstips',
-  'over30fitness', 'bodytransformation', 'fitover30', 'mensphysique',
-  'personaltrainerlife', 'fitnessmotivation', 'musclegain',
-]
 
 function dbHeaders() {
   return {
@@ -42,7 +31,7 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...CORS, 'Content-Type': 'application/json' } })
   }
 
-  // Competitor-Usernames laden → vom Trend-Scrape ausschließen (die haben wir schon)
+  // Competitor-Usernames laden → vom Trend-Scrape ausschließen (werden separat getrackt)
   const compRes = await fetch(
     `${SUPABASE_URL}/rest/v1/competitor_profiles?select=username&is_active=eq.true`,
     { headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY } }
@@ -50,15 +39,34 @@ Deno.serve(async (req: Request) => {
   const competitors: any[] = await compRes.json()
   const knownHandles = new Set((competitors || []).map((c: any) => c.username.toLowerCase()))
 
+  // Trend-Accounts laden — älteste Scrapes zuerst (Rotation)
+  const accountsRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/trend_accounts?is_active=eq.true&select=username,last_scraped_at&order=last_scraped_at.asc.nullsfirst&limit=8`,
+    { headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY } }
+  )
+  const accounts: any[] = await accountsRes.json()
+
+  if (!Array.isArray(accounts) || accounts.length === 0) {
+    return new Response(JSON.stringify({ error: 'Keine Trend-Accounts konfiguriert' }), { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } })
+  }
+
+  // Bereits bekannte Competitors aus der Liste filtern
+  const toScrape = accounts.filter((a: any) => !knownHandles.has(a.username.toLowerCase()))
+  if (toScrape.length === 0) {
+    return new Response(JSON.stringify({ error: 'Alle Accounts bereits als Competitors erfasst' }), { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } })
+  }
+
+  const usernames = toScrape.map((a: any) => a.username)
+  const directUrls = usernames.map((u: string) => `https://www.instagram.com/${u}/`)
+
   // Job anlegen
   const jobRes = await fetch(`${SUPABASE_URL}/rest/v1/scrape_jobs`, {
     method: 'POST',
     headers: dbHeaders(),
     body: JSON.stringify({
       job_type: 'trend_discovery',
-      target: `hashtags:${HASHTAGS.slice(0, 5).join(',')}`,
+      target: usernames.join(','),
       status: 'pending',
-      error_msg: JSON.stringify({ excluded_handles: [...knownHandles] })
     })
   })
   const jobData = await jobRes.json()
@@ -67,7 +75,16 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'Job konnte nicht angelegt werden' }), { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } })
   }
 
-  // Webhook-Config als Base64
+  // last_scraped_at für alle Accounts sofort aktualisieren (verhindert Doppelscrape)
+  await Promise.all(usernames.map((u: string) =>
+    fetch(`${SUPABASE_URL}/rest/v1/trend_accounts?username=eq.${u}`, {
+      method: 'PATCH',
+      headers: { ...dbHeaders(), 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ last_scraped_at: new Date().toISOString() })
+    })
+  ))
+
+  // Webhook-Config
   const webhooksParam = btoa(JSON.stringify([{
     eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED', 'ACTOR.RUN.TIMED_OUT'],
     requestUrl: `${SUPABASE_URL}/functions/v1/trend-webhook`,
@@ -75,18 +92,16 @@ Deno.serve(async (req: Request) => {
     payloadTemplate: `{"job_id":"${job.id}","run_id":"{{resource.id}}","status":"{{eventType}}"}`
   }]))
 
-  // Apify Run starten
-  // instagram-scraper mit searchType='hashtag' — derselbe bewährte Actor wie für Profile
-  // Sucht nach top/recent Posts pro Hashtag — algorithmisch gerankt by Instagram
+  // instagram-scraper — identisch mit scrape-profile (bewährt, funktioniert)
   const apifyRes = await fetch(
     `https://api.apify.com/v2/acts/apify~instagram-scraper/runs?token=${APIFY_KEY}&webhooks=${webhooksParam}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        searchType: 'hashtag',
-        searchQueries: HASHTAGS,     // Hashtag-Namen ohne #
-        resultsLimit: 30,            // 30 Posts pro Hashtag = max 600 Kandidaten
+        directUrls,
+        resultsType: 'posts',
+        resultsLimit: 20,   // 20 Posts pro Account × 8 Accounts = max 160 Kandidaten
         proxyConfiguration: {
           useApifyProxy: true,
           apifyProxyGroups: ['RESIDENTIAL']
@@ -116,7 +131,7 @@ Deno.serve(async (req: Request) => {
     ok: true,
     job_id: job.id,
     run_id: runId,
-    hashtags: HASHTAGS.length,
-    message: `Trend Discovery gestartet — ${HASHTAGS.length} Hashtags werden gescrapt.`
+    accounts: usernames,
+    message: `Trend Discovery gestartet — ${usernames.length} Accounts werden gescrapt: ${usernames.join(', ')}`
   }), { headers: { ...CORS, 'Content-Type': 'application/json' } })
 })
