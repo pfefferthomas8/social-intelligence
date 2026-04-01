@@ -236,7 +236,7 @@ function ActivityDot({ type }) {
 
 // ─── Brain Page ───────────────────────────────────────────────────────────────
 export default function Brain() {
-  const [stats, setStats] = useState({ posts: 0, topics: 0, content: 0, ownPosts: 0, competitorPosts: 0 })
+  const [stats, setStats] = useState({ posts: 0, topics: 0, content: 0, ownPosts: 0, competitorPosts: 0, trendPosts: 0, trendAccounts: 0, dnaCount: 0 })
   const [ownProfile, setOwnProfile] = useState(null)
   const [competitors, setCompetitors] = useState([])
   const [activeJobs, setActiveJobs] = useState([])
@@ -261,12 +261,15 @@ export default function Brain() {
   }
 
   async function loadStats() {
-    const [total, own, comp, topics, content] = await Promise.all([
+    const [total, own, comp, topics, content, trendP, trendA, dnaC] = await Promise.all([
       supabase.from('instagram_posts').select('id', { count: 'exact', head: true }),
       supabase.from('instagram_posts').select('id', { count: 'exact', head: true }).eq('source', 'own'),
       supabase.from('instagram_posts').select('id', { count: 'exact', head: true }).eq('source', 'competitor'),
       supabase.from('topic_suggestions').select('id', { count: 'exact', head: true }),
       supabase.from('generated_content').select('id', { count: 'exact', head: true }),
+      supabase.from('trend_posts').select('id', { count: 'exact', head: true }),
+      supabase.from('trend_accounts').select('id', { count: 'exact', head: true }),
+      supabase.from('thomas_dna').select('id', { count: 'exact', head: true }),
     ])
     setStats({
       posts: total.count || 0,
@@ -274,6 +277,9 @@ export default function Brain() {
       competitorPosts: comp.count || 0,
       topics: topics.count || 0,
       content: content.count || 0,
+      trendPosts: trendP.count || 0,
+      trendAccounts: trendA.count || 0,
+      dnaCount: dnaC.count || 0,
     })
   }
 
@@ -352,6 +358,14 @@ export default function Brain() {
       sublabel: 'Generierter Content',
       color: '#a855f7',
       isActive: false,
+    },
+    {
+      id: 'trend',
+      x: 72, y: 178,
+      label: String(stats.trendPosts),
+      sublabel: 'Trend Posts',
+      color: '#f472b6',
+      isActive: activeJobTargets.includes('trend_discovery'),
     },
     ...competitors.map((c, i) => ({
       id: `comp-${c.id}`,
@@ -453,19 +467,19 @@ export default function Brain() {
             <div className="stat-sub">{stats.ownPosts} eigene · {stats.competitorPosts} Competitor</div>
           </div>
           <div className="stat-card">
-            <div className="stat-label">Themenvorschläge</div>
-            <div className="stat-value" style={{ color: '#eab308' }}>{stats.topics}</div>
-            <div className="stat-sub">aus Pattern-Analyse</div>
+            <div className="stat-label">Trend Scout</div>
+            <div className="stat-value" style={{ color: '#f472b6' }}>{stats.trendPosts}</div>
+            <div className="stat-sub">{stats.trendAccounts} Accounts beobachtet</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Thomas DNA</div>
+            <div className="stat-value" style={{ color: '#ee4f00' }}>{stats.dnaCount}</div>
+            <div className="stat-sub">wöchentlich aktualisiert</div>
           </div>
           <div className="stat-card">
             <div className="stat-label">Content generiert</div>
             <div className="stat-value" style={{ color: '#a855f7' }}>{stats.content}</div>
             <div className="stat-sub">Scripts, Karussells, Posts</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-label">Datenquellen</div>
-            <div className="stat-value">{1 + competitors.length}</div>
-            <div className="stat-sub">1 eigenes · {competitors.length} Competitors</div>
           </div>
         </div>
 
@@ -476,7 +490,7 @@ export default function Brain() {
           <div style={{ minWidth: 0 }}>
             <div className="section-header" style={{ marginBottom: 14 }}>
               <span className="section-title">Lernquellen</span>
-              <span style={{ fontSize: 11, color: 'var(--text3)' }}>{1 + competitors.length} Profile</span>
+              <span style={{ fontSize: 11, color: 'var(--text3)' }}>{1 + competitors.length} Profile · {stats.trendAccounts} Trend Accounts</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 
@@ -551,6 +565,38 @@ export default function Brain() {
               })}
             </div>
 
+            {/* Trend Scout */}
+            {stats.trendAccounts > 0 && (
+              <div style={{
+                marginTop: 8,
+                background: 'var(--bg-card)',
+                border: '1px solid rgba(244,114,182,0.2)',
+                borderRadius: 'var(--r)', padding: '12px 14px',
+                display: 'flex', alignItems: 'center', gap: 12,
+              }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%',
+                  background: 'rgba(244,114,182,0.1)', border: '1.5px solid rgba(244,114,182,0.35)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M3 17l6-6 4 4 8-9" stroke="#f472b6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <circle cx="19" cy="5" r="2" fill="#f472b6" />
+                  </svg>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#f472b6' }}>Trend Scout</div>
+                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>
+                    {stats.trendAccounts} Accounts · {stats.trendPosts} Trend-Posts erkannt
+                  </div>
+                </div>
+                <div style={{ fontSize: 10, color: 'rgba(244,114,182,0.7)', fontWeight: 700, background: 'rgba(244,114,182,0.1)', padding: '2px 7px', borderRadius: 100 }}>
+                  AKTIV
+                </div>
+              </div>
+            )}
+
             {/* Was das Brain versteht */}
             <div style={{ marginTop: 20 }}>
               <div className="section-header" style={{ marginBottom: 12 }}>
@@ -561,7 +607,8 @@ export default function Brain() {
                   { label: 'Hook-Formate & Opener', detail: 'aus Captions & Transcripts', color: '#ee4f00' },
                   { label: 'Engagement-Muster', detail: 'Likes, Views, Comments', color: '#22c55e' },
                   { label: 'Content-Lücken', detail: 'was Competitors nicht posten', color: '#3b82f6' },
-                  { label: 'Trending Themen', detail: 'letzte 30 Tage', color: '#eab308' },
+                  { label: 'Trend Scout', detail: `${stats.trendAccounts} Fitness-Accounts · Viral Score`, color: '#f472b6' },
+                  { label: 'Thomas DNA', detail: '6 Kategorien · wöchentlich neu', color: '#ee4f00' },
                   { label: 'Bild & Reel Inhalte', detail: 'via OCR & Transkription', color: '#a855f7' },
                 ].map((item, i) => (
                   <div key={i} style={{
@@ -673,7 +720,9 @@ export default function Brain() {
               )}
             </div>
             <span style={{ fontSize: 11, color: 'var(--text3)' }}>
-              {dna.length > 0 ? 'Lernstand aus Profil-Analyse' : 'Wird nach erstem Profil-Scrape generiert'}
+              {dna.length > 0
+                ? `${dna.length} Erkenntnisse · wöchentlich nach Profil-Scrape aktualisiert`
+                : 'Wird nach erstem Profil-Scrape generiert'}
             </span>
           </div>
 
