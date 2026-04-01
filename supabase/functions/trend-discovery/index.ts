@@ -67,9 +67,6 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'Job konnte nicht angelegt werden' }), { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } })
   }
 
-  // Hashtag-URLs für Apify aufbauen
-  const directUrls = HASHTAGS.map(h => `https://www.instagram.com/explore/tags/${h}/`)
-
   // Webhook-Config als Base64
   const webhooksParam = btoa(JSON.stringify([{
     eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED', 'ACTOR.RUN.TIMED_OUT'],
@@ -79,17 +76,17 @@ Deno.serve(async (req: Request) => {
   }]))
 
   // Apify Run starten
-  // instagram-scraper: für Hashtag-URLs, liefert Posts mit Metriken
+  // instagram-hashtag-scraper: dedizierter Actor für Hashtag-Posts
+  // Gibt direkt die top/recent Posts eines Hashtags zurück — algorithmisch gerankt
+  // = Posts die gerade performen, nicht alle Posts eines Profils
   const apifyRes = await fetch(
-    `https://api.apify.com/v2/acts/apify~instagram-scraper/runs?token=${APIFY_KEY}&webhooks=${webhooksParam}`,
+    `https://api.apify.com/v2/acts/apify~instagram-hashtag-scraper/runs?token=${APIFY_KEY}&webhooks=${webhooksParam}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        directUrls,
-        resultsType: 'posts',
-        resultsLimit: 30,           // 30 Posts pro Hashtag = max 600 Kandidaten
-        onlyPostsNewerThan: '21 days', // Nur frische Posts
+        hashtags: HASHTAGS,          // direkte Hashtag-Liste, keine URLs
+        resultsLimit: 25,            // 25 Posts pro Hashtag = max 500 Kandidaten
         proxyConfiguration: {
           useApifyProxy: true,
           apifyProxyGroups: ['RESIDENTIAL']

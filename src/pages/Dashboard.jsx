@@ -311,58 +311,6 @@ export default function Dashboard() {
           )
         })()}
 
-        {/* Two Column Layout */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24, minWidth: 0 }}>
-          {/* Topics */}
-          <div style={{ minWidth: 0 }}>
-            <div className="section-header">
-              <span className="section-title">Themenvorschläge</span>
-              <button onClick={generateTopics} disabled={topicsLoading} className="btn btn-xs">
-                {topicsLoading ? <span className="spinner" style={{ width: 10, height: 10 }} /> : '+ Generieren'}
-              </button>
-            </div>
-            {topics.length === 0 ? (
-              <div style={{
-                background: 'var(--bg-card)', border: '1px dashed var(--border-strong)',
-                borderRadius: 'var(--r-lg)', padding: '32px', textAlign: 'center'
-              }}>
-                <p style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>
-                  Analysiere erst dein Profil und Competitors.
-                </p>
-                <button onClick={generateTopics} className="btn btn-sm btn-primary">Jetzt analysieren</button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {topics.map((t, i) => (
-                  <TopicCard key={t.id || i} topic={t} onSelect={handleTopicSelect} />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Trending Posts */}
-          <div style={{ minWidth: 0 }}>
-            <div className="section-header">
-              <span className="section-title">Trending bei Competitors</span>
-              <span style={{ fontSize: 11, color: 'var(--text3)' }}>letzte 30 Tage</span>
-            </div>
-            {trendingPosts.length === 0 ? (
-              <div style={{
-                background: 'var(--bg-card)', border: '1px solid var(--border)',
-                borderRadius: 'var(--r-lg)', padding: '32px', textAlign: 'center'
-              }}>
-                <p style={{ fontSize: 13, color: 'var(--text3)' }}>Keine Trending Posts. Füge Competitors hinzu.</p>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {trendingPosts.map(post => (
-                  <PostCard key={post.id} post={post} compact onClick={() => handleTrendingSelect(post)} />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* ── TREND SCOUT ─────────────────────────────────────────────────── */}
         <div style={{ marginBottom: 24 }}>
           <div className="section-header" style={{ marginBottom: 14 }}>
@@ -506,6 +454,58 @@ export default function Dashboard() {
               })}
             </div>
           )}
+        </div>
+
+        {/* Two Column Layout: Themenvorschläge + Trending bei Competitors */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24, minWidth: 0 }}>
+          {/* Topics */}
+          <div style={{ minWidth: 0 }}>
+            <div className="section-header">
+              <span className="section-title">Themenvorschläge</span>
+              <button onClick={generateTopics} disabled={topicsLoading} className="btn btn-xs">
+                {topicsLoading ? <span className="spinner" style={{ width: 10, height: 10 }} /> : '+ Generieren'}
+              </button>
+            </div>
+            {topics.length === 0 ? (
+              <div style={{
+                background: 'var(--bg-card)', border: '1px dashed var(--border-strong)',
+                borderRadius: 'var(--r-lg)', padding: '32px', textAlign: 'center'
+              }}>
+                <p style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>
+                  Analysiere erst dein Profil und Competitors.
+                </p>
+                <button onClick={generateTopics} className="btn btn-sm btn-primary">Jetzt analysieren</button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {topics.map((t, i) => (
+                  <TopicCard key={t.id || i} topic={t} onSelect={handleTopicSelect} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Trending bei Competitors */}
+          <div style={{ minWidth: 0 }}>
+            <div className="section-header">
+              <span className="section-title">Trending bei Competitors</span>
+              <span style={{ fontSize: 11, color: 'var(--text3)' }}>letzte 30 Tage</span>
+            </div>
+            {trendingPosts.length === 0 ? (
+              <div style={{
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
+                borderRadius: 'var(--r-lg)', padding: '32px', textAlign: 'center'
+              }}>
+                <p style={{ fontSize: 13, color: 'var(--text3)' }}>Keine Trending Posts. Füge Competitors hinzu.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {trendingPosts.map(post => (
+                  <PostCard key={post.id} post={post} compact onClick={() => handleTrendingSelect(post)} />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Competitors Table */}
