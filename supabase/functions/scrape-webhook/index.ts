@@ -166,9 +166,17 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!items || items.length === 0) {
+      const now = new Date().toISOString()
       await dbUpdate('scrape_jobs', `id=eq.${job_id}`, {
-        status: 'done', result_count: 0, error_msg: 'empty dataset after retries', completed_at: new Date().toISOString()
+        status: 'done', result_count: 0, error_msg: 'empty dataset after retries', completed_at: now
       })
+      // last_scraped_at auch bei leerem Ergebnis setzen — damit UI nicht "Nie" zeigt
+      if (job.job_type === 'own_profile') {
+        const own = await dbGet('own_profile', 'limit=1')
+        if (own) await dbUpdate('own_profile', `id=eq.${own.id}`, { last_scraped_at: now })
+      } else if (job.job_type === 'competitor' && job.target) {
+        await dbUpdate('competitor_profiles', `username=eq.${encodeURIComponent(job.target)}`, { last_scraped_at: now })
+      }
       return new Response(JSON.stringify({ ok: true, saved: 0 }), {
         headers: { 'Content-Type': 'application/json' }
       })
