@@ -79,14 +79,53 @@ function calcViralScore(post: Record<string, unknown>): number {
   return Math.round(base * freshness)
 }
 
+// ─── Visual Text Extraktion aus Thumbnail ────────────────────────────────────
+async function extractVisualText(thumbnailUrl: string, anthropicKey: string): Promise<string | null> {
+  try {
+    const imgRes = await fetch(thumbnailUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15' },
+      signal: AbortSignal.timeout(8000)
+    })
+    if (!imgRes.ok) return null
+    const contentType = imgRes.headers.get('content-type') || 'image/jpeg'
+    const mediaType = contentType.split(';')[0].trim()
+    const buffer = await imgRes.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+    let binary = ''
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
+    const b64 = btoa(binary)
+
+    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 300,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
+            { type: 'text', text: 'Extrahiere ALLE sichtbaren Texte aus diesem Instagram-Frame (Untertitel, Text-Overlays, B-Roll Texte, eingeblendete Sätze). Ignoriere Instagram-UI. Kein Text → antworte nur: KEIN TEXT. Nur extrahierten Text, keine Erklärungen.' }
+          ]
+        }]
+      })
+    })
+    if (!claudeRes.ok) return null
+    const data = await claudeRes.json()
+    const raw = data.content?.[0]?.text?.trim() || ''
+    return raw && raw !== 'KEIN TEXT' ? raw.substring(0, 500) : null
+  } catch { return null }
+}
+
 // ─── Claude Batch-Analyse ──────────────────────────────────────────────────────
 async function analyzeWithClaude(posts: any[]): Promise<Record<string, any>> {
   if (posts.length === 0) return {}
 
   const postList = posts.map((p: any, i: number) => {
     const caption = clean(p.caption || '')
+    const visualText = p.visual_text ? `\nText im Video: ${p.visual_text.substring(0, 150)}` : ''
     return `[${i}] @${p.username} | ${p.post_type} | ${p.views_count?.toLocaleString() || 0} Views | Score ${p.viral_score}
-Caption: ${caption || '(kein Text)'}`
+Caption: ${caption || '(kein Text)'}${visualText}`
   }).join('\n\n')
 
   const prompt = `Du analysierst viral gehende Instagram-Posts aus der englischsprachigen Fitness-Szene für Thomas Pfeffer (österreichischer Fitness-Coach, Männer 30+, Kraft + Körperfett).
@@ -247,8 +286,18 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ ok: true, saved: 0, total: items.length }), { headers: { 'Content-Type': 'application/json' } })
     }
 
-    // Für Claude-Analyse aufbereiten
-    const forAnalysis = topCandidates.map((p: any) => ({
+    // ── VISUAL TEXT EXTRAKTION (parallel, vor Claude-Analyse) ────────────────
+    // Liest Text-Overlays aus Thumbnails → gibt Claude mehr Kontext (B-Roll Hooks etc.)
+    const visualTexts = await Promise.all(
+      topCandidates.map(async (p: any) => {
+        const thumbUrl = p.displayUrl || p.thumbnailUrl
+        if (!thumbUrl) return null
+        return extractVisualText(thumbUrl, ANTHROPIC_KEY)
+      })
+    )
+
+    // Für Claude-Analyse aufbereiten — inkl. visual_text
+    const forAnalysis = topCandidates.map((p: any, i: number) => ({
       username: p.ownerUsername || '',
       post_type: p._postType,
       views_count: Number(p.videoViewCount) || Number(p.videoPlayCount) || 0,
@@ -256,6 +305,7 @@ Deno.serve(async (req: Request) => {
       comments_count: Number(p.commentsCount) || 0,
       viral_score: p._viralScore,
       caption: (p.caption || '').substring(0, 300),
+      visual_text: visualTexts[i] || null,
     }))
 
     // ── CLAUDE ANALYSE ────────────────────────────────────────────────────────
@@ -283,6 +333,8 @@ Deno.serve(async (req: Request) => {
         viral_score: post._viralScore,
         published_at: post._published,
         discovered_at: new Date().toISOString(),
+        visual_text: visualTexts[i] || null,
+        visual_text_status: 'done',
         hook_strength: analysis.hook_strength || null,
         dach_gap: analysis.dach_gap ?? null,
         thomas_fit: analysis.thomas_fit ?? null,

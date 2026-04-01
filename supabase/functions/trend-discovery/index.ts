@@ -76,17 +76,17 @@ Deno.serve(async (req: Request) => {
   }]))
 
   // Apify Run starten
-  // instagram-hashtag-scraper: dedizierter Actor für Hashtag-Posts
-  // Gibt direkt die top/recent Posts eines Hashtags zurück — algorithmisch gerankt
-  // = Posts die gerade performen, nicht alle Posts eines Profils
+  // instagram-scraper mit searchType='hashtag' — derselbe bewährte Actor wie für Profile
+  // Sucht nach top/recent Posts pro Hashtag — algorithmisch gerankt by Instagram
   const apifyRes = await fetch(
-    `https://api.apify.com/v2/acts/apify~instagram-hashtag-scraper/runs?token=${APIFY_KEY}&webhooks=${webhooksParam}`,
+    `https://api.apify.com/v2/acts/apify~instagram-scraper/runs?token=${APIFY_KEY}&webhooks=${webhooksParam}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        hashtags: HASHTAGS,          // direkte Hashtag-Liste, keine URLs
-        resultsLimit: 25,            // 25 Posts pro Hashtag = max 500 Kandidaten
+        searchType: 'hashtag',
+        searchQueries: HASHTAGS,     // Hashtag-Namen ohne #
+        resultsLimit: 30,            // 30 Posts pro Hashtag = max 600 Kandidaten
         proxyConfiguration: {
           useApifyProxy: true,
           apifyProxyGroups: ['RESIDENTIAL']
