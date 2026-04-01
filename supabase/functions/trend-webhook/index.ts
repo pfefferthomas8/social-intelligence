@@ -281,8 +281,8 @@ Deno.serve(async (req: Request) => {
       return true
     })
 
-    // Top 40 für Analyse (Claude analysiert davon die besten)
-    const topCandidates = unique.slice(0, 40)
+    // Top 15 für Analyse — 40 war zu teuer (Haiku Vision × 40 pro Run)
+    const topCandidates = unique.slice(0, 15)
 
     if (topCandidates.length === 0) {
       await fetch(`${SUPABASE_URL}/rest/v1/scrape_jobs?id=eq.${job_id}`, {

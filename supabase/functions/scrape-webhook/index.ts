@@ -261,10 +261,10 @@ Deno.serve(async (req: Request) => {
         }).catch(() => {})
       }
 
-      // Topics auto-refresh wenn letzte Generierung > 2h
+      // Topics auto-refresh: max 1x pro Tag (nicht nach jedem Scrape-Job)
       const lastTopic = await dbGet('topic_suggestions', 'order=created_at.desc')
       const topicAge = lastTopic ? Date.now() - new Date(lastTopic.created_at).getTime() : Infinity
-      if (topicAge > 2 * 60 * 60 * 1000) {
+      if (topicAge > 24 * 60 * 60 * 1000) {
         fetch(`${SUPABASE_URL}/functions/v1/topic-suggestions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DASHBOARD_TOKEN}` },

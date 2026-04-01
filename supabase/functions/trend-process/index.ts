@@ -277,7 +277,7 @@ Deno.serve(async (req: Request) => {
     return true
   })
 
-  const topCandidates = unique.slice(0, 40)
+  const topCandidates = unique.slice(0, 15)
 
   if (topCandidates.length === 0) {
     if (targetJob?.id) {

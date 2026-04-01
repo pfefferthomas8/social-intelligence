@@ -137,15 +137,12 @@ export default function Dashboard() {
     setTrendLoading(true)
     try {
       await apiFetch('trend-discovery', { method: 'POST' })
-      // Apify-Dataset braucht ~4 Minuten nach Run-Ende bis es vollständig verfügbar ist
-      // Nach 5 Minuten trend-process aufrufen (verarbeitet Dataset unabhängig vom Webhook-Timing)
+      // trend-webhook verarbeitet automatisch nach Apify-Abschluss (~5-8 Min)
+      // Kein manueller trend-process mehr — verhindert doppelte Claude-Calls
       setTimeout(async () => {
-        try {
-          await apiFetch('trend-process', { method: 'POST', body: JSON.stringify({}) })
-          await loadTrendScout()
-        } catch (e) { console.warn('trend-process auto-retry failed:', e) }
+        await loadTrendScout()
         setTrendLoading(false)
-      }, 5 * 60 * 1000) // 5 Minuten warten
+      }, 6 * 60 * 1000)
     } catch (e) {
       alert('Trend Discovery Fehler: ' + e.message)
       setTrendLoading(false)
