@@ -51,11 +51,23 @@ Format: "SLIDE 1: [Text]" usw.`,
 - CTA am Ende: einfach, direkt, eine Handlung
 - Max 300 Wörter. Kein Hashtag-Spam. Authentisch.`,
 
-  b_roll: `Erstelle 5-8 kurze B-Roll Text-Overlays (je max 8 Wörter):
-- Jedes ist ein eigenständiger Satz/Aussage
-- Perfekt für schnelle Schnitte über B-Roll Footage
-- Abwechselnd: Statement, Frage, Zahl, provokante These
-Format: Liste mit Nummerierung.`
+  b_roll: `Erstelle 4 verschiedene B-Roll Ideen für dasselbe Thema.
+
+Ein B-Roll ist ein 7-Sekunden-Video das eine Person bei einer Tätigkeit zeigt (z.B. im Gym, beim Kochen, beim Aufwachen). Darauf liegt ein starkes Text-Overlay das die Aufmerksamkeit stoppt. Die Infos kommen in der Caption.
+
+Für jede B-Roll Idee, gib EXAKT dieses Format aus:
+
+B-ROLL [Nummer]:
+SZENE: [Was ist zu sehen? 7 Sekunden. Konkret und visuell. Z.B. "Person zieht sich beim Aufwachen hoch und schaut in die Kamera"]
+HOOK: [Haupttext-Overlay — max 6-7 Wörter, stoppt den Scroll, provoziert oder überrascht]
+SUBHEADLINE: [Optionaler zweiter Text darunter — ergänzt den Hook, max 5 Wörter]
+CAPTION: [Starke Caption für den Post: Hook-Satz der zum Lesen zwingt, dann 2-3 Absätze mit dem Mehrwert/Detail, dann ein klarer CTA. Ca. 150-200 Wörter.]
+
+Regeln:
+- HOOK muss ohne Kontext sofort verstanden werden und Neugier wecken
+- SZENE muss realistisch filmbar sein — keine aufwändige Produktion
+- CAPTION holt den eigentlichen Inhalt rein — Hook zieht die Aufmerksamkeit, Caption liefert den Wert
+- Variiere die 4 Ideen: unterschiedliche Hooks (Frage, These, Zahl, Provokation) und Szenen`
 }
 
 Deno.serve(async (req: Request) => {

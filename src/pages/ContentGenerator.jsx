@@ -7,8 +7,153 @@ const CONTENT_TYPES = [
   { key: 'video_script', label: 'Video Script', icon: '🎬', desc: 'Hook, Body & CTA' },
   { key: 'carousel', label: 'Karussell', icon: '📋', desc: 'Slide-für-Slide' },
   { key: 'single_post', label: 'Single Post', icon: '📝', desc: 'Caption für Einzelbild' },
-  { key: 'b_roll', label: 'B-Roll Hook', icon: '⚡', desc: 'Text-Overlays' },
+  { key: 'b_roll', label: 'B-Roll', icon: '⚡', desc: 'Hook + Caption' },
 ]
+
+// Parsed eine B-Roll Idee aus dem Claude-Output
+function parseBRolls(text) {
+  const blocks = text.split(/B-ROLL\s+\d+:/i).filter(b => b.trim())
+  return blocks.map(block => {
+    const get = (key) => {
+      const regex = new RegExp(`${key}:\\s*(.+?)(?=\\n[A-Z]+:|$)`, 'si')
+      const m = block.match(regex)
+      return m ? m[1].trim() : ''
+    }
+    return {
+      szene: get('SZENE'),
+      hook: get('HOOK'),
+      subheadline: get('SUBHEADLINE'),
+      caption: get('CAPTION'),
+    }
+  }).filter(b => b.hook)
+}
+
+function BRollCard({ roll, index, fullContent }) {
+  const [captionOpen, setCaptionOpen] = useState(false)
+  const [copiedHook, setCopiedHook] = useState(false)
+  const [copiedCaption, setCopiedCaption] = useState(false)
+
+  function copyText(text, setter) {
+    navigator.clipboard.writeText(text)
+    setter(true)
+    setTimeout(() => setter(false), 2000)
+  }
+
+  return (
+    <div style={{
+      background: 'var(--bg-card)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--r-lg)',
+      overflow: 'hidden',
+      marginBottom: 14,
+    }}>
+      {/* Header mit Nummer + Szene */}
+      <div style={{
+        padding: '12px 16px',
+        background: 'rgba(238,79,0,0.06)',
+        borderBottom: '1px solid var(--border)',
+        display: 'flex', alignItems: 'flex-start', gap: 10,
+      }}>
+        <span style={{
+          fontSize: 10, fontWeight: 800, letterSpacing: '0.1em',
+          color: '#ee4f00', background: 'rgba(238,79,0,0.12)',
+          padding: '2px 8px', borderRadius: 100, flexShrink: 0, marginTop: 1,
+        }}>
+          B-ROLL {index + 1}
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
+            <span style={{ color: 'rgba(255,255,255,0.35)', marginRight: 4 }}>SZENE</span>
+            {roll.szene}
+          </div>
+        </div>
+      </div>
+
+      {/* Hook Overlay Preview */}
+      <div style={{ padding: '18px 16px 14px' }}>
+        <div style={{
+          background: '#000',
+          borderRadius: 10,
+          padding: '28px 20px',
+          textAlign: 'center',
+          position: 'relative',
+          marginBottom: 12,
+          minHeight: 90,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: 6,
+        }}>
+          {/* Simuliertes Video-Frame */}
+          <div style={{
+            position: 'absolute', inset: 0, borderRadius: 10,
+            background: 'linear-gradient(135deg, #111 0%, #0a0a0a 100%)',
+            opacity: 0.9,
+          }} />
+          <p style={{
+            fontSize: 19, fontWeight: 900, color: '#fff',
+            margin: 0, lineHeight: 1.2, position: 'relative',
+            textShadow: '0 2px 8px rgba(0,0,0,0.8)',
+            letterSpacing: '-0.01em',
+          }}>
+            {roll.hook}
+          </p>
+          {roll.subheadline && (
+            <p style={{
+              fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.75)',
+              margin: 0, position: 'relative',
+              textShadow: '0 1px 4px rgba(0,0,0,0.8)',
+            }}>
+              {roll.subheadline}
+            </p>
+          )}
+          {/* 7s Badge */}
+          <div style={{
+            position: 'absolute', top: 8, right: 10,
+            fontSize: 9, color: 'rgba(255,255,255,0.3)', fontFamily: 'DM Mono, monospace',
+          }}>
+            7s
+          </div>
+        </div>
+
+        {/* Hook kopieren */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+          <button
+            onClick={() => copyText(roll.subheadline ? `${roll.hook}\n${roll.subheadline}` : roll.hook, setCopiedHook)}
+            className="btn btn-sm"
+            style={{ flex: 1, justifyContent: 'center' }}
+          >
+            {copiedHook ? <span style={{ color: '#22c55e' }}>✓ Kopiert</span> : '⚡ Hook kopieren'}
+          </button>
+          <button
+            onClick={() => setCaptionOpen(o => !o)}
+            className="btn btn-sm"
+            style={{ flex: 1, justifyContent: 'center' }}
+          >
+            {captionOpen ? '▲ Caption' : '▼ Caption anzeigen'}
+          </button>
+        </div>
+
+        {/* Caption aufklappbar */}
+        {captionOpen && (
+          <div style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.07)',
+            borderRadius: 8, padding: '14px',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.08em' }}>CAPTION</span>
+              <button onClick={() => copyText(roll.caption, setCopiedCaption)} className="btn btn-sm">
+                {copiedCaption ? <span style={{ color: '#22c55e' }}>✓ Kopiert</span> : 'Kopieren'}
+              </button>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.75, margin: 0, whiteSpace: 'pre-wrap' }}>
+              {roll.caption}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 
 function CopyButton({ text }) {
@@ -219,13 +364,13 @@ export default function ContentGenerator() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
-                    {CONTENT_TYPES.find(t => t.key === contentType)?.icon} Ergebnis
+                    {CONTENT_TYPES.find(t => t.key === result.content_type || t.key === contentType)?.icon} Ergebnis
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{topic}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <CopyButton text={result.content} />
-                  <button onClick={generate} className="btn btn-sm">↻ Neu generieren</button>
+                  {contentType !== 'b_roll' && <CopyButton text={result.content} />}
+                  <button onClick={generate} className="btn btn-sm">↻ Neu</button>
                   <button onClick={() => setResult(null)} className="btn btn-sm" title="Schließen">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
                       <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
@@ -233,6 +378,15 @@ export default function ContentGenerator() {
                   </button>
                 </div>
               </div>
+
+              {/* B-Roll: spezielle Karten-Ansicht */}
+              {contentType === 'b_roll' ? (
+                <div>
+                  {parseBRolls(result.content).map((roll, i) => (
+                    <BRollCard key={i} roll={roll} index={i} fullContent={result.content} />
+                  ))}
+                </div>
+              ) : (
               <div style={{
                 background: 'var(--bg-card)', border: '1px solid var(--border)',
                 borderRadius: 'var(--r-lg)', padding: '20px',
@@ -241,6 +395,7 @@ export default function ContentGenerator() {
               }}>
                 {result.content}
               </div>
+              )}
               {confirmed ? (
                 <div style={{
                   marginTop: 12, padding: '10px 16px',
