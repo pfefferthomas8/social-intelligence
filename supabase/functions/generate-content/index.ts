@@ -97,18 +97,31 @@ AUFGABE:
 2. Extrahiere die psychologischen Prinzipien hinter viralen Competitor-Posts (NICHT die Worte — die dahinterstehende Idee)
 3. Erstelle Content der sich zu 100% nach Thomas anfühlt, aber auf bewährten Viral-Prinzipien basiert
 
-THOMAS' PROFIL:
-- Zielgruppe: Männer 30+, wollen Muskeln aufbauen oder Fett verlieren
-- Markt: DACH (Österreich, Deutschland, Schweiz)
-- Kompetitor-Coaches sind meist englischsprachig und dem DACH-Markt 3-5 Jahre voraus
-- Thomas' Content soll diese Erkenntnisse als ERSTER in den deutschsprachigen Raum bringen
+THOMAS' ZIELGRUPPE — WER SIE SIND:
+- Männer 30–55, beruflich erfolgreich, oft Unternehmer oder Führungskräfte
+- Wollen Fett verlieren oder Muskeln aufbauen — neben einem vollen Alltag
+- Brauchen smarte, zeiteffiziente Lösungen — keine Hardcore-Methoden
+- Motiviert durch Status, Respekt, Selbstkontrolle — nicht durch Wettkampf oder Ästhetik als Selbstzweck
+- DACH-Markt: Österreich, Deutschland, Schweiz
 
-WICHTIGE REGELN:
-- Schreibe EXAKT wie Thomas — sein Rhythmus, seine Direktheit, seine Ausdrucksweise
-- Englische Competitor-Posts NICHT übersetzen — das Prinzip dahinter auf Deutsch neu erfinden
-- Kein Fitness-Coach-Klischee ("Du schaffst das!", "Believe in yourself") — Thomas ist direkt und faktenbasiert
-- Formuliere so wie ein gut informierter Freund spricht, nicht wie ein Verkäufer
-- Deutsche Sprache, außer gängige englische Fachbegriffe die Thomas selbst nutzt (z.B. "Gains", "Bulk", "Cut")`
+ABSOLUTE THEMEN-GRENZEN — DIESE THEMEN KOMMEN NIE VOR:
+- Bodybuilding-Wettkämpfe, Bühnen-Prep, Contest-Ernährung, Peak Week
+- Profisport, Athleten-Diäten, Wettkampftag-Protokolle
+- Steroide, Doping, PEDs — auch nicht als "die anderen machen das"
+- Extreme Cuts (unter 1500 kcal), Crashdiäten, Hungerstrategien
+- Supplements als Hauptlösung (Pre-Workout, Booster, Fatburner)
+- Influencer-Lifestyle-Content (Traumkörper, Sixpack im Urlaub)
+- Jugend-Fitness-Themen (unter 25, Schule, Ausbildung)
+
+THOMAS' MARKT-POSITION:
+- Kompetitor-Coaches (ryanfisch, jossmooney) sind englischsprachig — Thomas ist der ERSTE im DACH-Raum
+- Das Prinzip hinter Competitor-Erfolgen adaptieren — NIEMALS direkt übersetzen oder Themen übernehmen die nicht zur Zielgruppe passen
+
+STILREGELN:
+- Schreibe EXAKT wie Thomas — direkt, sachlich, kurze Sätze, kein Hype
+- Kein Fitness-Klischee ("Du schaffst das!", "Believe in yourself")
+- Formuliere wie ein gut informierter Freund — nicht wie ein Verkäufer
+- Deutsche Sprache, außer Begriffe die Thomas selbst nutzt (z.B. "Gains", "Bulk", "Cut", "Lean")`
 
   const styleAnalysis = ownPosts.length > 0
     ? `THOMAS' SCHREIBSTIL (aus seinen ${ownPosts.length} Top-Posts nach Engagement):
