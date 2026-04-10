@@ -267,6 +267,11 @@ export default function DMCenter() {
                   selected={selectedConv?.id === conv.id}
                   onClick={() => setSelectedConv(conv)}
                   onToggleClaude={() => toggleConvClaude(conv.id, conv.claude_enabled)}
+                  onArchive={async () => {
+                    await supabase.from('dm_conversations').update({ lead_heat: 'archived' }).eq('id', conv.id)
+                    if (selectedConv?.id === conv.id) setSelectedConv(null)
+                    loadConversations()
+                  }}
                 />
               ))
             )
@@ -566,7 +571,7 @@ export default function DMCenter() {
 
 // ─── Sub-Components ───
 
-function ConvItem({ conv, selected, onClick, onToggleClaude }) {
+function ConvItem({ conv, selected, onClick, onToggleClaude, onArchive }) {
   return (
     <div
       onClick={onClick}
@@ -577,6 +582,24 @@ function ConvItem({ conv, selected, onClick, onToggleClaude }) {
         position: 'relative',
       }}
     >
+      {/* Kein Lead Button — hover */}
+      <button
+        onClick={e => { e.stopPropagation(); onArchive() }}
+        title="Kein Lead — ausblenden"
+        style={{
+          position: 'absolute', top: 8, right: 8,
+          background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+          borderRadius: 4, padding: '1px 6px', fontSize: 10,
+          color: 'var(--text3)', cursor: 'pointer', fontFamily: 'var(--font)',
+          opacity: 0, transition: 'opacity 0.15s',
+        }}
+        onMouseEnter={e => e.currentTarget.style.opacity = 1}
+        onMouseLeave={e => e.currentTarget.style.opacity = 0}
+        onFocus={e => e.currentTarget.style.opacity = 1}
+        onBlur={e => e.currentTarget.style.opacity = 0}
+      >
+        kein Lead ✕
+      </button>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ position: 'relative' }}>
           <Avatar name={conv.display_name} pic={conv.profile_pic_url} size={36} />
