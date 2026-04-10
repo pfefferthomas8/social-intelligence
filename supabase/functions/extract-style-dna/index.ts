@@ -14,16 +14,18 @@ serve(async (req) => {
   }
 
   try {
-    const { messages_sample } = await req.json()
+    const body = await req.json().catch(() => ({}))
+    let sampleMessages: string[] = body.messages_sample || []
+    let sourceUsed = ''
 
-    // messages_sample = Array of strings (Thomas's sent messages from ManyChat export)
-    // or we use existing dm_messages from our DB (sent_by = 'thomas')
+    // Prio 1: Manually provided messages
+    if (sampleMessages.length >= 5) {
+      sourceUsed = 'manual'
+    }
 
-    let sampleMessages = messages_sample || []
-
-    if (sampleMessages.length === 0) {
-      // Pull from our own DB — Thomas's sent messages
-      const { data } = await supabase
+    // Prio 2: Thomas's sent DMs from our DB
+    if (sampleMessages.length < 5) {
+      const { data: dmMessages } = await supabase
         .from('dm_messages')
         .select('content')
         .eq('sent_by', 'thomas')
@@ -31,13 +33,45 @@ serve(async (req) => {
         .order('created_at', { ascending: false })
         .limit(100)
 
-      sampleMessages = data?.map(m => m.content) || []
+      if (dmMessages && dmMessages.length >= 5) {
+        sampleMessages = dmMessages.map(m => m.content)
+        sourceUsed = 'dm_messages'
+      }
     }
 
+    // Prio 3: Thomas's own Instagram posts/captions
     if (sampleMessages.length < 5) {
+      const { data: posts } = await supabase
+        .from('instagram_posts')
+        .select('caption, transcript')
+        .eq('source', 'own')
+        .not('caption', 'is', null)
+        .order('likes_count', { ascending: false })
+        .limit(50)
+
+      if (posts && posts.length > 0) {
+        const captions = posts
+          .map(p => p.caption || p.transcript || '')
+          .filter(c => c.length > 20)
+        sampleMessages = [...sampleMessages, ...captions]
+        sourceUsed = sampleMessages.length >= 5 ? 'instagram_posts' : 'instagram_posts_partial'
+      }
+    }
+
+    if (sampleMessages.length < 3) {
+      // Fallback: use hardcoded base style for Thomas
+      const fallbackDna = `Thomas schreibt sehr direkt und authentisch. Kurze, klare Sätze — maximal 2-3 Sätze pro Nachricht. Kein Marketing-Speak, keine leeren Phrasen. Er redet Männer auf Augenhöhe an, nicht von oben herab. Er stellt gezielte Fragen um die Situation zu verstehen, nie mehrere Fragen auf einmal. Bei Interesse zeigt er echtes Engagement, ohne sofort zu pitchen. Er nutzt gelegentlich Emojis aber sparsam (🔥 💪 wenn es passt). Seine Sprache ist österreichisch-deutsch, keine Anglizismen außer Fitness-Begriffe (Training, Coaching, Reps). Er schreibt wie er spricht — locker aber professionell. Er sagt nie "als Coach würde ich empfehlen" sondern eher "schreib mir kurz was dein Ziel ist" oder "was hast du bisher probiert?"`
+
+      await supabase.from('dm_config')
+        .update({ value: fallbackDna, updated_at: new Date().toISOString() })
+        .eq('key', 'style_dna')
+
       return new Response(JSON.stringify({
-        error: 'Zu wenige Nachrichten für Style-Analyse. Mindestens 5 eigene Nachrichten nötig.'
-      }), { status: 400, headers: { 'Content-Type': 'application/json' } })
+        ok: true,
+        style_dna: fallbackDna,
+        source: 'fallback',
+        message: 'Basis-Stil eingesetzt. Wird präziser wenn erste DMs über das System laufen.'
+      }), { headers: { 'Content-Type': 'application/json' } })
     }
 
     const sample = sampleMessages.slice(0, 80).join('\n---\n')
@@ -47,34 +81,36 @@ serve(async (req) => {
       max_tokens: 600,
       messages: [{
         role: 'user',
-        content: `Analysiere diese echten Instagram DM-Nachrichten von Thomas Pfeffer (Fitness Coach, DACH-Markt). Extrahiere sein genaues Schreibstil-Profil.
+        content: `Analysiere diese Texte von Thomas Pfeffer (Fitness Coach, DACH-Markt, Österreich). Quelle: ${sourceUsed === 'instagram_posts' ? 'Instagram Posts/Captions' : 'DM-Nachrichten'}.
 
-NACHRICHTEN:
+TEXTE:
 ${sample}
 
-Erstelle ein kompaktes Style-DNA Profil (max. 300 Wörter) mit:
-1. Satzbau & Länge (kurz/lang, Struktur)
-2. Tonalität (locker/formal, Nähe zum Lead)
-3. Typische Phrasen & Formulierungen die er verwendet
-4. Emoji-Nutzung (ob, welche, wie oft)
+Erstelle ein kompaktes Style-DNA Profil (max. 250 Wörter) als direkte Schreibanweisung für eine KI die Thomas imitieren soll. Fokus auf:
+1. Satzbau & Länge (wie kurz/lang, Struktur)
+2. Tonalität & Nähe zum Leser
+3. Typische Phrasen & Formulierungen die er nutzt
+4. Emoji-Nutzung (welche, wie oft)
 5. Wie er Fragen stellt
-6. Wie er auf Interesse reagiert
-7. Was er NIE schreibt / vermeidet
+6. Was er NICHT schreibt / vermeidet
+7. Regionale Eigenheiten (österreichisches Deutsch?)
 
-Format: Fließtext, direkt als Schreibanweisung formuliert ("Thomas schreibt...").`
+Formuliere alles als Anweisung: "Thomas schreibt..." / "Er verwendet..." / "Er vermeidet..."`
       }],
     })
 
     const styleDna = response.content[0].type === 'text' ? response.content[0].text : ''
 
-    // Save to config
     await supabase.from('dm_config')
       .update({ value: styleDna, updated_at: new Date().toISOString() })
       .eq('key', 'style_dna')
 
-    return new Response(JSON.stringify({ ok: true, style_dna: styleDna }), {
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return new Response(JSON.stringify({
+      ok: true,
+      style_dna: styleDna,
+      source: sourceUsed,
+      samples_used: sampleMessages.length
+    }), { headers: { 'Content-Type': 'application/json' } })
 
   } catch (err) {
     console.error('extract-style-dna error:', err)

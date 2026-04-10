@@ -33,6 +33,7 @@ export default function DMCenter() {
   const [sending, setSending] = useState(false)
   const [customReply, setCustomReply] = useState('')
   const [styleDnaLoading, setStyleDnaLoading] = useState(false)
+  const [savedKey, setSavedKey] = useState(null)
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
@@ -89,6 +90,8 @@ export default function DMCenter() {
   async function updateConfig(key, value) {
     await supabase.from('dm_config').update({ value, updated_at: new Date().toISOString() }).eq('key', key)
     setConfig(prev => ({ ...prev, [key]: value }))
+    setSavedKey(key)
+    setTimeout(() => setSavedKey(null), 2000)
   }
 
   async function toggleGlobalClaude() {
@@ -141,6 +144,12 @@ export default function DMCenter() {
     await supabase.from('dm_conversations').update({ lead_heat: 'archived' }).eq('id', selectedConv.id)
     setSelectedConv(null)
     loadConversations()
+  }
+
+  async function toggleBlocked(convId, current) {
+    await supabase.from('dm_conversations').update({ claude_blocked: !current }).eq('id', convId)
+    setConversations(prev => prev.map(c => c.id === convId ? { ...c, claude_blocked: !current } : c))
+    if (selectedConv?.id === convId) setSelectedConv(prev => ({ ...prev, claude_blocked: !current }))
   }
 
   async function runStyleDna() {
@@ -234,6 +243,16 @@ export default function DMCenter() {
         </div>
 
         {/* List or Settings */}
+        {savedKey && (
+          <div style={{
+            margin: '0 12px 8px', padding: '6px 10px', borderRadius: 'var(--r-sm)',
+            background: 'var(--green-dim)', border: '1px solid rgba(34,197,94,0.2)',
+            fontSize: 11, color: 'var(--green)', textAlign: 'center',
+          }}>
+            ✓ Gespeichert
+          </div>
+        )}
+
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {activeTab === 'inbox' ? (
             filtered.length === 0 ? (
@@ -252,7 +271,7 @@ export default function DMCenter() {
               ))
             )
           ) : (
-            <SettingsPanel config={config} onUpdate={updateConfig} onStyleDna={runStyleDna} styleDnaLoading={styleDnaLoading} />
+            <SettingsPanel config={config} onUpdate={updateConfig} onStyleDna={runStyleDna} styleDnaLoading={styleDnaLoading} savedKey={savedKey} />
           )}
         </div>
       </div>
@@ -422,11 +441,17 @@ export default function DMCenter() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               <HeatBadge heat={selectedConv.lead_heat} />
+              <GenderBadge gender={selectedConv.gender} />
               <span style={{ fontSize: 11, color: 'var(--text2)', padding: '2px 8px', background: 'var(--bg-card)', borderRadius: 4 }}>
                 {STAGE_LABELS[selectedConv.stage] || 'Qualifizierung'}
               </span>
+              {selectedConv.claude_blocked && (
+                <span style={{ fontSize: 11, color: '#ef4444', padding: '2px 8px', background: 'rgba(239,68,68,0.1)', borderRadius: 4, border: '1px solid rgba(239,68,68,0.3)' }}>
+                  Claude gesperrt
+                </span>
+              )}
             </div>
           </div>
 
@@ -495,6 +520,33 @@ export default function DMCenter() {
             />
           </div>
 
+          {/* Gender / Claude Block */}
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, letterSpacing: '0.05em', marginBottom: 8 }}>
+              GESCHLECHT / CLAUDE
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 500 }}>Erkannt: <GenderBadge gender={selectedConv.gender} inline /></div>
+                <div style={{ fontSize: 11, color: 'var(--text2)' }}>Claude automatisch gesperrt für Frauen</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: selectedConv.claude_blocked ? '#ef4444' : 'var(--text)' }}>
+                  {selectedConv.claude_blocked ? '🚫 Claude gesperrt' : '✓ Claude erlaubt'}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text2)' }}>Manuell überschreiben</div>
+              </div>
+              <Toggle
+                value={!selectedConv.claude_blocked}
+                onChange={() => toggleBlocked(selectedConv.id, selectedConv.claude_blocked)}
+              />
+            </div>
+          </div>
+
+          <div style={{ height: 1, background: 'var(--border)' }} />
+
           {/* Archive */}
           <button
             onClick={archiveConv}
@@ -554,18 +606,24 @@ function ConvItem({ conv, selected, onClick, onToggleClaude }) {
             <span style={{ fontSize: 10, color: HEAT_COLORS[conv.lead_heat] }}>
               {conv.lead_score}pts
             </span>
-            <span style={{ fontSize: 10, color: 'var(--text3)' }}>
-              {STAGE_LABELS[conv.stage] || 'Qualifizierung'}
-            </span>
+            {conv.gender === 'female' && (
+              <span style={{ fontSize: 10, color: '#ec4899' }}>♀</span>
+            )}
+            {conv.gender === 'male' && (
+              <span style={{ fontSize: 10, color: '#3b82f6' }}>♂</span>
+            )}
+            {conv.claude_blocked && (
+              <span style={{ fontSize: 10, color: '#ef4444' }}>🚫</span>
+            )}
             <span
               onClick={e => { e.stopPropagation(); onToggleClaude() }}
               style={{
                 marginLeft: 'auto', fontSize: 10,
-                color: conv.claude_enabled ? 'var(--accent)' : 'var(--text3)',
+                color: conv.claude_blocked ? '#ef4444' : conv.claude_enabled ? 'var(--accent)' : 'var(--text3)',
                 cursor: 'pointer',
               }}
             >
-              {conv.claude_enabled ? '● Claude' : '○ Claude'}
+              {conv.claude_blocked ? '🚫 gesperrt' : conv.claude_enabled ? '● Claude' : '○ Claude'}
             </span>
           </div>
         </div>
@@ -739,6 +797,25 @@ function SettingsPanel({ config, onUpdate, onStyleDna, styleDnaLoading }) {
         />
       </div>
     </div>
+  )
+}
+
+function GenderBadge({ gender, inline = false }) {
+  const map = {
+    male: { label: '♂ Mann', color: '#3b82f6' },
+    female: { label: '♀ Frau', color: '#ec4899' },
+    unknown: { label: '? Unbekannt', color: '#555' },
+  }
+  const g = map[gender] || map.unknown
+  if (inline) return <span style={{ color: g.color, fontSize: 12 }}>{g.label}</span>
+  return (
+    <span style={{
+      fontSize: 11, padding: '2px 8px', borderRadius: 4,
+      background: `${g.color}18`, color: g.color,
+      border: `1px solid ${g.color}40`,
+    }}>
+      {g.label}
+    </span>
   )
 }
 
