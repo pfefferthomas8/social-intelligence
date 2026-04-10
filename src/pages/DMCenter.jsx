@@ -1,10 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-)
+import { supabase } from '../lib/supabase.js'
 
 const HEAT_COLORS = {
   hot: '#ee4f00',
@@ -151,10 +146,10 @@ export default function DMCenter() {
   async function runStyleDna() {
     setStyleDnaLoading(true)
     try {
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-style-dna`, {
+      const res = await fetch(`https://shrsluxbrazqscgiwfpu.supabase.co/functions/v1/extract-style-dna`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNocnNsdXhicmF6cXNjZ2l3ZnB1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4ODk4MjEsImV4cCI6MjA5MDQ2NTgyMX0.8hQITokKKhVCfdVTHoGiyUzsHggfD7i13IFumsOfnuo`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({}),
