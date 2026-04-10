@@ -1,133 +1,148 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
 
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL')!,
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-)
-const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! })
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
+const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY') || ''
+const CLAUDE_MODEL = Deno.env.get('CLAUDE_MODEL') || 'claude-sonnet-4-5'
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*' } })
+function dbHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${SERVICE_KEY}`,
+    'apikey': SERVICE_KEY,
+    'Prefer': 'return=representation',
   }
+}
+
+async function dbGet(path: string): Promise<any> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: dbHeaders() })
+  return res.json()
+}
+
+async function dbPatch(path: string, body: any): Promise<void> {
+  await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    method: 'PATCH',
+    headers: { ...dbHeaders(), 'Prefer': 'return=minimal' },
+    body: JSON.stringify(body),
+  })
+}
+
+async function dbPost(path: string, body: any): Promise<void> {
+  await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    method: 'POST',
+    headers: { ...dbHeaders(), 'Prefer': 'return=minimal' },
+    body: JSON.stringify(body),
+  })
+}
+
+async function callClaude(system: string, messages: any[], maxTokens = 300): Promise<string> {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': ANTHROPIC_KEY,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: maxTokens, system, messages }),
+  })
+  const data = await res.json()
+  return data.content?.[0]?.text || ''
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
     const { conversation_id, autonomy_mode, trigger_message } = await req.json()
 
-    // Load conversation + last 20 messages
-    const { data: conv } = await supabase
-      .from('dm_conversations')
-      .select('*')
-      .eq('id', conversation_id)
-      .single()
+    // Load conversation
+    const convArr = await dbGet(`dm_conversations?id=eq.${conversation_id}&limit=1`)
+    const conv = Array.isArray(convArr) ? convArr[0] : null
+    if (!conv) throw new Error('Conversation not found')
 
-    const { data: messages } = await supabase
-      .from('dm_messages')
-      .select('*')
-      .eq('conversation_id', conversation_id)
-      .order('created_at', { ascending: true })
-      .limit(20)
+    // Load last 20 messages
+    const msgs = await dbGet(`dm_messages?conversation_id=eq.${conversation_id}&order=created_at.asc&limit=20`)
+    const messages: any[] = Array.isArray(msgs) ? msgs : []
 
     // Load config
-    const { data: configRows } = await supabase
-      .from('dm_config')
-      .select('key, value')
-
+    const configRows = await dbGet('dm_config?select=key,value')
     const config: Record<string, string> = {}
-    configRows?.forEach(c => { config[c.key] = c.value })
+    if (Array.isArray(configRows)) configRows.forEach((c: any) => { config[c.key] = c.value })
 
-    const styleDna = config['style_dna'] || ''
+    const styleDna = config['style_dna'] || 'Locker, direkt, authentisch. Kurze Sätze. Kein Marketing-Speak.'
     const primaryUrl = config['primary_product_url'] || 'https://www.thomas-pfeffer.com'
     const secondaryUrl = config['secondary_product_url'] || 'https://www.form-training.at'
 
-    // Build conversation history for Claude
-    const chatHistory = messages?.map(m => ({
+    // Build chat history
+    const chatHistory = messages.map((m: any) => ({
       role: m.direction === 'inbound' ? 'user' : 'assistant',
       content: m.content,
-    })) || []
+    }))
 
-    // System prompt
-    const systemPrompt = `Du bist Thomas Pfeffer, ein erfolgreicher Fitness Coach aus dem DACH-Raum. Du antwortest auf Instagram DMs von potenziellen Kunden.
+    const systemPrompt = `Du bist Thomas Pfeffer, Fitness Coach aus Österreich. Du antwortest auf Instagram DMs von potenziellen männlichen Kunden.
 
-DEINE SCHREIBWEISE (basierend auf echten Chats):
-${styleDna || 'Locker, direkt, authentisch. Kurze Sätze. Kein Marketing-Speak. Du bist Profi aber bodenständig.'}
+DEIN EXAKTER SCHREIBSTIL (aus echten Chats analysiert):
+${styleDna}
 
 DEINE PRODUKTE:
-- Hauptprodukt: 1:1 Coaching (${primaryUrl}) — das ist IMMER dein primäres Ziel
-- Sekundär: Form Training App (${secondaryUrl}) — nur wenn Coaching wirklich nicht passt (Budget, Situation)
+- Hauptprodukt: 1:1 Online Coaching → ${primaryUrl} (IMMER primäres Ziel)
+- Fallback: Form Training App → ${secondaryUrl} (nur wenn Coaching wirklich nicht passt)
 
-VERKAUFSPHILOSOPHIE:
-- Socratic Selling: Stelle gezielte Fragen damit der Lead selbst erkennt dass er Hilfe braucht
-- Niemals pushen oder aufdränglich wirken
-- Erst Vertrauen aufbauen, dann Offer
-- Maximal 1-2 Fragen pro Nachricht
-- Halte Nachrichten kurz — Instagram ist kein Email
-- Einwände behandeln ohne zu drängen
-- Den Link zu thomas-pfeffer.com erst schicken wenn der Moment reif ist (nicht zu früh)
-- App nur pitchen wenn es wirklich Sinn macht (wenig Budget + hohe Motivation, keine Zeit für Intensivcoaching)
+VERKAUFSPHILOSOPHIE — Socratic Selling:
+- Stelle gezielte Fragen damit der Lead selbst erkennt dass er Hilfe braucht
+- Nie pushen oder aufdränglich wirken — der Lead soll sich selbst überzeugen
+- Erst Vertrauen aufbauen durch echtes Interesse an seiner Situation
+- Max. 1 Frage pro Nachricht
+- Nachrichten kurz halten — max. 2-3 Sätze
+- Link erst schicken wenn der Moment wirklich reif ist
+- App nur wenn Budget/Zeit klar dagegen spricht
 
-LEAD STATUS:
-- Username: ${conv?.instagram_username}
-- Aktuelle Stage: ${conv?.stage || 'qualification'}
-- Lead Score: ${conv?.lead_score || 0}/100
-- Heat: ${conv?.lead_heat || 'cold'}
+LEAD INFO:
+- Stage: ${conv.stage || 'qualification'}
+- Score: ${conv.lead_score || 0}/100
 
-WICHTIG:
-- Antworte IMMER auf Deutsch (oder in der Sprache die der Lead verwendet)
-- Sei Thomas — kein Roboter, kein Copy-Paste
-- Kein "Als KI..." oder ähnliches
-- Deine Antwort ist eine echte Instagram DM`
+ABSOLUT WICHTIG:
+- Sei Thomas — schreib exakt wie er, nicht wie ein Bot
+- Kein "Als Coach..." oder formelle Sprache
+- Antworte auf Deutsch`
 
-    // Get Claude's response
-    const response = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
-      max_tokens: 300,
-      system: systemPrompt,
-      messages: chatHistory.length > 0 ? chatHistory : [
-        { role: 'user', content: trigger_message }
-      ],
-    })
+    const suggestion = await callClaude(
+      systemPrompt,
+      chatHistory.length > 0 ? chatHistory : [{ role: 'user', content: trigger_message }],
+      300
+    )
 
-    const suggestion = response.content[0].type === 'text' ? response.content[0].text : ''
+    const reasoning = await callClaude(
+      'Du bist Sales-Stratege. Erkläre in 1-2 Sätzen warum diese DM-Antwort strategisch richtig ist.',
+      [{ role: 'user', content: `Chat:\n${chatHistory.slice(-4).map((m: any) => `${m.role}: ${m.content}`).join('\n')}\n\nAntwort: ${suggestion}` }],
+      120
+    )
 
-    // Get Claude's reasoning separately
-    const reasoningResponse = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
-      max_tokens: 150,
-      system: 'Du bist ein Sales-Stratege. Erkläre in 1-2 Sätzen auf Deutsch warum diese Antwort die richtige Strategie ist.',
-      messages: [
-        { role: 'user', content: `Chat-Verlauf: ${chatHistory.slice(-4).map(m => `${m.role}: ${m.content}`).join('\n')}\n\nMeine vorgeschlagene Antwort: ${suggestion}` }
-      ],
-    })
-
-    const reasoning = reasoningResponse.content[0].type === 'text' ? reasoningResponse.content[0].text : ''
-
-    // Save suggestion to latest inbound message
-    const lastInbound = messages?.filter(m => m.direction === 'inbound').pop()
+    // Save suggestion to last inbound message
+    const lastInbound = messages.filter((m: any) => m.direction === 'inbound').pop()
     if (lastInbound) {
-      await supabase.from('dm_messages').update({
+      await dbPatch(`dm_messages?id=eq.${lastInbound.id}`, {
         claude_suggestion: suggestion,
         claude_reasoning: reasoning,
-      }).eq('id', lastInbound.id)
+      })
     }
 
-    // Update conversation stage based on content
-    const newStage = detectStage(trigger_message, conv?.stage)
-    if (newStage !== conv?.stage) {
-      await supabase.from('dm_conversations').update({ stage: newStage }).eq('id', conversation_id)
+    // Update stage
+    const newStage = detectStage(trigger_message, conv.stage)
+    if (newStage !== conv.stage) {
+      await dbPatch(`dm_conversations?id=eq.${conversation_id}`, { stage: newStage })
     }
 
-    // Autonomy Mode A = suggest only, B = suggest + notify, C = auto-send
+    // Mode C: auto-send
     if (autonomy_mode === 'C') {
-      // Auto-send via ManyChat API
       const manychatKey = config['manychat_api_key']
-      if (manychatKey && conv?.manychat_contact_id) {
+      if (manychatKey && conv.manychat_contact_id) {
         await sendViaManyChat(manychatKey, conv.manychat_contact_id, suggestion)
-
-        // Log as outbound
-        await supabase.from('dm_messages').insert({
+        await dbPost('dm_messages', {
           conversation_id,
           direction: 'outbound',
           content: suggestion,
@@ -138,14 +153,14 @@ WICHTIG:
     }
 
     return new Response(JSON.stringify({ ok: true, suggestion, reasoning }), {
-      headers: { 'Content-Type': 'application/json' }
+      headers: { ...CORS, 'Content-Type': 'application/json' }
     })
 
-  } catch (err) {
+  } catch (err: any) {
     console.error('dm-reply error:', err)
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { ...CORS, 'Content-Type': 'application/json' }
     })
   }
 })
@@ -153,30 +168,19 @@ WICHTIG:
 async function sendViaManyChat(apiKey: string, subscriberId: string, text: string) {
   return fetch('https://api.manychat.com/fb/sending/sendContent', {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       subscriber_id: subscriberId,
-      data: {
-        version: 'v2',
-        content: {
-          messages: [{ type: 'text', text }],
-        },
-      },
+      data: { version: 'v2', content: { messages: [{ type: 'text', text }] } },
       message_tag: 'ACCOUNT_UPDATE',
     }),
   })
 }
 
 function detectStage(message: string, currentStage: string): string {
-  const lower = message.toLowerCase()
-
-  if (/preis|kosten|was kostet|wie viel|invest/i.test(lower)) return 'offer'
-  if (/wann|start|anfangen|wie geht|nächste schritt/i.test(lower)) return 'closing'
-  if (/interesse|würde gerne|klingt gut|cool|mega/i.test(lower)) return 'interest'
-  if (/aber|trotzdem|nicht sicher|überlegen|teuer/i.test(lower)) return 'objection'
-
+  if (/preis|kosten|was kostet|wie viel|invest/i.test(message)) return 'offer'
+  if (/wann|start|anfangen|wie geht|nächste schritt/i.test(message)) return 'closing'
+  if (/interesse|würde gerne|klingt gut|cool|mega/i.test(message)) return 'interest'
+  if (/aber|trotzdem|nicht sicher|überlegen|teuer/i.test(message)) return 'objection'
   return currentStage || 'qualification'
 }

@@ -1,122 +1,128 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.27.0'
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
 
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL')!,
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-)
-const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! })
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
+const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY') || ''
+const CLAUDE_MODEL = Deno.env.get('CLAUDE_MODEL') || 'claude-sonnet-4-5'
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*' } })
+function dbHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${SERVICE_KEY}`,
+    'apikey': SERVICE_KEY,
   }
+}
+
+async function callClaude(prompt: string, maxTokens = 800): Promise<string> {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': ANTHROPIC_KEY,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: maxTokens,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  })
+  const data = await res.json()
+  return data.content?.[0]?.text || ''
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
     const body = await req.json().catch(() => ({}))
     let sampleMessages: string[] = body.messages_sample || []
     let sourceUsed = ''
 
-    // Prio 1: Manually provided messages
     if (sampleMessages.length >= 5) {
       sourceUsed = 'manual'
     }
 
-    // Prio 2: Thomas's sent DMs from our DB
+    // Prio 2: Thomas's sent DMs from DB
     if (sampleMessages.length < 5) {
-      const { data: dmMessages } = await supabase
-        .from('dm_messages')
-        .select('content')
-        .eq('sent_by', 'thomas')
-        .eq('direction', 'outbound')
-        .order('created_at', { ascending: false })
-        .limit(100)
-
-      if (dmMessages && dmMessages.length >= 5) {
-        sampleMessages = dmMessages.map(m => m.content)
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/dm_messages?sent_by=eq.thomas&direction=eq.outbound&select=content&order=created_at.desc&limit=100`, { headers: dbHeaders() })
+      const dmMessages = await res.json()
+      if (Array.isArray(dmMessages) && dmMessages.length >= 5) {
+        sampleMessages = dmMessages.map((m: any) => m.content)
         sourceUsed = 'dm_messages'
       }
     }
 
-    // Prio 3: Thomas's own Instagram posts/captions
+    // Prio 3: Own Instagram posts
     if (sampleMessages.length < 5) {
-      const { data: posts } = await supabase
-        .from('instagram_posts')
-        .select('caption, transcript')
-        .eq('source', 'own')
-        .not('caption', 'is', null)
-        .order('likes_count', { ascending: false })
-        .limit(50)
-
-      if (posts && posts.length > 0) {
-        const captions = posts
-          .map(p => p.caption || p.transcript || '')
-          .filter(c => c.length > 20)
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/instagram_posts?source=eq.own&caption=not.is.null&select=caption,transcript&order=likes_count.desc&limit=50`, { headers: dbHeaders() })
+      const posts = await res.json()
+      if (Array.isArray(posts) && posts.length > 0) {
+        const captions = posts.map((p: any) => p.caption || p.transcript || '').filter((c: string) => c.length > 20)
         sampleMessages = [...sampleMessages, ...captions]
-        sourceUsed = sampleMessages.length >= 5 ? 'instagram_posts' : 'instagram_posts_partial'
+        sourceUsed = 'instagram_posts'
       }
     }
 
+    // Prio 4: Fallback
     if (sampleMessages.length < 3) {
-      // Fallback: use hardcoded base style for Thomas
-      const fallbackDna = `Thomas schreibt sehr direkt und authentisch. Kurze, klare Sätze — maximal 2-3 Sätze pro Nachricht. Kein Marketing-Speak, keine leeren Phrasen. Er redet Männer auf Augenhöhe an, nicht von oben herab. Er stellt gezielte Fragen um die Situation zu verstehen, nie mehrere Fragen auf einmal. Bei Interesse zeigt er echtes Engagement, ohne sofort zu pitchen. Er nutzt gelegentlich Emojis aber sparsam (🔥 💪 wenn es passt). Seine Sprache ist österreichisch-deutsch, keine Anglizismen außer Fitness-Begriffe (Training, Coaching, Reps). Er schreibt wie er spricht — locker aber professionell. Er sagt nie "als Coach würde ich empfehlen" sondern eher "schreib mir kurz was dein Ziel ist" oder "was hast du bisher probiert?"`
+      const fallbackDna = `Thomas schreibt sehr direkt und authentisch. Kurze Sätze, maximal 2-3 pro Nachricht. Kein Marketing-Speak. Er redet auf Augenhöhe, stellt gezielte Einzelfragen. Nutzt Emojis regelmäßig (😊 🙏🏼 💪🏽 😅 😂 😏 🤩 🙌🏻). Österreichisch-deutsch, locker aber professionell.`
 
-      await supabase.from('dm_config')
-        .update({ value: fallbackDna, updated_at: new Date().toISOString() })
-        .eq('key', 'style_dna')
+      await fetch(`${SUPABASE_URL}/rest/v1/dm_config?key=eq.style_dna`, {
+        method: 'PATCH',
+        headers: { ...dbHeaders(), 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ value: fallbackDna, updated_at: new Date().toISOString() }),
+      })
 
-      return new Response(JSON.stringify({
-        ok: true,
-        style_dna: fallbackDna,
-        source: 'fallback',
-        message: 'Basis-Stil eingesetzt. Wird präziser wenn erste DMs über das System laufen.'
-      }), { headers: { 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify({ ok: true, style_dna: fallbackDna, source: 'fallback' }), {
+        headers: { ...CORS, 'Content-Type': 'application/json' }
+      })
     }
 
-    const sample = sampleMessages.slice(0, 80).join('\n---\n')
+    const sample = sampleMessages.slice(0, 150).join('\n---\n')
+    const sourceLabel = sourceUsed === 'instagram_posts' ? 'Instagram Posts/Captions' : 'echte Instagram DM-Nachrichten'
 
-    const response = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
-      max_tokens: 600,
-      messages: [{
-        role: 'user',
-        content: `Analysiere diese Texte von Thomas Pfeffer (Fitness Coach, DACH-Markt, Österreich). Quelle: ${sourceUsed === 'instagram_posts' ? 'Instagram Posts/Captions' : 'DM-Nachrichten'}.
+    const styleDna = await callClaude(`Analysiere diese ${sourceLabel} von Thomas Pfeffer (Fitness Coach, Österreich/DACH).
 
-TEXTE:
+NACHRICHTEN:
 ${sample}
 
-Erstelle ein kompaktes Style-DNA Profil (max. 250 Wörter) als direkte Schreibanweisung für eine KI die Thomas imitieren soll. Fokus auf:
-1. Satzbau & Länge (wie kurz/lang, Struktur)
-2. Tonalität & Nähe zum Leser
-3. Typische Phrasen & Formulierungen die er nutzt
-4. Emoji-Nutzung (welche, wie oft)
-5. Wie er Fragen stellt
-6. Was er NICHT schreibt / vermeidet
-7. Regionale Eigenheiten (österreichisches Deutsch?)
+Erstelle ein kompaktes Style-DNA Profil (max. 280 Wörter) als direkte Schreibanweisung für eine KI die Thomas in DMs imitieren soll. Sei sehr spezifisch — keine generischen Aussagen.
 
-Formuliere alles als Anweisung: "Thomas schreibt..." / "Er verwendet..." / "Er vermeidet..."`
-      }],
+Analysiere und dokumentiere:
+1. Satzbau & Länge (exakte Beobachtungen)
+2. Tonalität & wie er Nähe aufbaut
+3. Konkrete Phrasen & Formulierungen die er wiederholt verwendet
+4. Emoji-Nutzung (welche genau, wie häufig, wo im Satz)
+5. Wie er Fragen stellt (Stil, Formulierung)
+6. Wie er auf positive Signale reagiert
+7. Was er NICHT schreibt / aktiv vermeidet
+8. Regionale/sprachliche Besonderheiten
+
+Schreibe alles als Anweisung: "Thomas schreibt..." / "Er verwendet..." / "Er vermeidet..."`, 800)
+
+    await fetch(`${SUPABASE_URL}/rest/v1/dm_config?key=eq.style_dna`, {
+      method: 'PATCH',
+      headers: { ...dbHeaders(), 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ value: styleDna, updated_at: new Date().toISOString() }),
     })
-
-    const styleDna = response.content[0].type === 'text' ? response.content[0].text : ''
-
-    await supabase.from('dm_config')
-      .update({ value: styleDna, updated_at: new Date().toISOString() })
-      .eq('key', 'style_dna')
 
     return new Response(JSON.stringify({
       ok: true,
       style_dna: styleDna,
       source: sourceUsed,
       samples_used: sampleMessages.length
-    }), { headers: { 'Content-Type': 'application/json' } })
+    }), { headers: { ...CORS, 'Content-Type': 'application/json' } })
 
-  } catch (err) {
+  } catch (err: any) {
     console.error('extract-style-dna error:', err)
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { ...CORS, 'Content-Type': 'application/json' }
     })
   }
 })

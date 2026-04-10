@@ -123,7 +123,7 @@ Antworte NUR mit JSON-Array:
     headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: CLAUDE_MODEL,
-      max_tokens: 3000,
+      max_tokens: 4000,
       messages: [{ role: 'user', content: prompt }]
     })
   })
@@ -138,7 +138,9 @@ Antworte NUR mit JSON-Array:
 
   let insights: any[] = []
   try {
-    const match = rawText.match(/\[[\s\S]*\]/)
+    // Markdown code block entfernen falls vorhanden
+    const stripped = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    const match = stripped.match(/\[[\s\S]*\]/)
     if (match) insights = JSON.parse(match[0])
   } catch {
     return new Response(JSON.stringify({ error: 'Parse error', raw: rawText.substring(0, 500) }), { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } })
