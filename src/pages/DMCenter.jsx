@@ -1,0 +1,809 @@
+import { useState, useEffect, useRef } from 'react'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+)
+
+const HEAT_COLORS = {
+  hot: '#ee4f00',
+  warm: '#eab308',
+  cold: '#555',
+  archived: '#333',
+}
+
+const STAGE_LABELS = {
+  qualification: 'Qualifizierung',
+  interest: 'Interesse',
+  offer: 'Offer',
+  objection: 'Einwand',
+  closing: 'Closing',
+  follow_up: 'Follow-Up',
+}
+
+const AUTONOMY_LABELS = {
+  A: 'Vorschlag (du bestätigst)',
+  B: 'Vorschlag + Benachrichtigung',
+  C: 'Vollautomatisch',
+}
+
+export default function DMCenter() {
+  const [conversations, setConversations] = useState([])
+  const [selectedConv, setSelectedConv] = useState(null)
+  const [messages, setMessages] = useState([])
+  const [config, setConfig] = useState({})
+  const [activeTab, setActiveTab] = useState('inbox') // inbox | settings
+  const [filter, setFilter] = useState('all') // all | hot | warm | cold
+  const [sending, setSending] = useState(false)
+  const [customReply, setCustomReply] = useState('')
+  const [styleDnaLoading, setStyleDnaLoading] = useState(false)
+  const messagesEndRef = useRef(null)
+
+  useEffect(() => {
+    loadConversations()
+    loadConfig()
+
+    // Realtime subscription
+    const channel = supabase
+      .channel('dm_updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dm_conversations' }, () => loadConversations())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dm_messages' }, (payload) => {
+        if (selectedConv && payload.new?.conversation_id === selectedConv.id) {
+          loadMessages(selectedConv.id)
+        }
+      })
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+  }, [])
+
+  useEffect(() => {
+    if (selectedConv) loadMessages(selectedConv.id)
+  }, [selectedConv])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  async function loadConversations() {
+    const { data } = await supabase
+      .from('dm_conversations')
+      .select('*')
+      .neq('lead_heat', 'archived')
+      .order('last_message_at', { ascending: false })
+    setConversations(data || [])
+  }
+
+  async function loadMessages(convId) {
+    const { data } = await supabase
+      .from('dm_messages')
+      .select('*')
+      .eq('conversation_id', convId)
+      .order('created_at', { ascending: true })
+    setMessages(data || [])
+  }
+
+  async function loadConfig() {
+    const { data } = await supabase.from('dm_config').select('key, value')
+    const map = {}
+    data?.forEach(c => { map[c.key] = c.value })
+    setConfig(map)
+  }
+
+  async function updateConfig(key, value) {
+    await supabase.from('dm_config').update({ value, updated_at: new Date().toISOString() }).eq('key', key)
+    setConfig(prev => ({ ...prev, [key]: value }))
+  }
+
+  async function toggleGlobalClaude() {
+    const newVal = config['global_claude_enabled'] === 'true' ? 'false' : 'true'
+    await updateConfig('global_claude_enabled', newVal)
+  }
+
+  async function toggleConvClaude(convId, current) {
+    await supabase.from('dm_conversations').update({ claude_enabled: !current }).eq('id', convId)
+    setConversations(prev => prev.map(c => c.id === convId ? { ...c, claude_enabled: !current } : c))
+    if (selectedConv?.id === convId) setSelectedConv(prev => ({ ...prev, claude_enabled: !current }))
+  }
+
+  async function sendReply(text, sentBy = 'thomas') {
+    if (!selectedConv || !text.trim()) return
+    setSending(true)
+    try {
+      // Insert message into DB
+      await supabase.from('dm_messages').insert({
+        conversation_id: selectedConv.id,
+        direction: 'outbound',
+        content: text,
+        sent_by: sentBy,
+        status: 'sent',
+      })
+      // Update conversation preview
+      await supabase.from('dm_conversations').update({
+        last_message_at: new Date().toISOString(),
+        last_message_preview: text.slice(0, 100),
+      }).eq('id', selectedConv.id)
+
+      setCustomReply('')
+      await loadMessages(selectedConv.id)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function approveClaudeSuggestion(message) {
+    if (!message.claude_suggestion) return
+    await sendReply(message.claude_suggestion, 'claude')
+  }
+
+  async function updateConvStage(stage) {
+    await supabase.from('dm_conversations').update({ stage }).eq('id', selectedConv.id)
+    setSelectedConv(prev => ({ ...prev, stage }))
+  }
+
+  async function archiveConv() {
+    await supabase.from('dm_conversations').update({ lead_heat: 'archived' }).eq('id', selectedConv.id)
+    setSelectedConv(null)
+    loadConversations()
+  }
+
+  async function runStyleDna() {
+    setStyleDnaLoading(true)
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-style-dna`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      })
+      const data = await res.json()
+      if (data.style_dna) {
+        setConfig(prev => ({ ...prev, style_dna: data.style_dna }))
+      }
+    } finally {
+      setStyleDnaLoading(false)
+    }
+  }
+
+  const filtered = conversations.filter(c => filter === 'all' || c.lead_heat === filter)
+  const hotCount = conversations.filter(c => c.lead_heat === 'hot').length
+
+  return (
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: 'var(--bg)' }}>
+
+      {/* ─── LEFT: Inbox ─── */}
+      <div style={{
+        width: 300, flexShrink: 0, borderRight: '1px solid var(--border)',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        {/* Header */}
+        <div style={{ padding: '16px 16px 0', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>DM Center</div>
+              {hotCount > 0 && (
+                <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 2 }}>
+                  {hotCount} heißer Lead{hotCount > 1 ? 's' : ''}
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => setActiveTab(activeTab === 'inbox' ? 'settings' : 'inbox')}
+                className="btn-ghost"
+                style={{ padding: '4px 8px', fontSize: 11, color: 'var(--text2)' }}
+              >
+                {activeTab === 'inbox' ? '⚙ Config' : '← Inbox'}
+              </button>
+            </div>
+          </div>
+
+          {/* Global Claude Toggle */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '8px 10px', background: 'var(--bg-card)', borderRadius: 'var(--r)',
+            marginBottom: 12,
+          }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 500 }}>Claude Global</div>
+              <div style={{ fontSize: 10, color: 'var(--text2)' }}>Für alle Chats</div>
+            </div>
+            <Toggle
+              value={config['global_claude_enabled'] === 'true'}
+              onChange={toggleGlobalClaude}
+            />
+          </div>
+
+          {/* Filter */}
+          {activeTab === 'inbox' && (
+            <div style={{ display: 'flex', gap: 4, paddingBottom: 12 }}>
+              {['all', 'hot', 'warm', 'cold'].map(f => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  style={{
+                    padding: '3px 8px', borderRadius: 4, fontSize: 11, border: 'none',
+                    cursor: 'pointer', fontFamily: 'var(--font)',
+                    background: filter === f ? 'var(--accent)' : 'var(--bg-card)',
+                    color: filter === f ? '#fff' : 'var(--text2)',
+                  }}
+                >
+                  {f === 'all' ? 'Alle' : f === 'hot' ? '🔥 Heiß' : f === 'warm' ? '🟡 Warm' : '❄️ Kalt'}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* List or Settings */}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {activeTab === 'inbox' ? (
+            filtered.length === 0 ? (
+              <div style={{ padding: 24, color: 'var(--text3)', fontSize: 13, textAlign: 'center' }}>
+                Keine Conversations
+              </div>
+            ) : (
+              filtered.map(conv => (
+                <ConvItem
+                  key={conv.id}
+                  conv={conv}
+                  selected={selectedConv?.id === conv.id}
+                  onClick={() => setSelectedConv(conv)}
+                  onToggleClaude={() => toggleConvClaude(conv.id, conv.claude_enabled)}
+                />
+              ))
+            )
+          ) : (
+            <SettingsPanel config={config} onUpdate={updateConfig} onStyleDna={runStyleDna} styleDnaLoading={styleDnaLoading} />
+          )}
+        </div>
+      </div>
+
+      {/* ─── MIDDLE: Conversation ─── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {!selectedConv ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>💬</div>
+              <div style={{ fontSize: 14 }}>Wähle einen Chat aus</div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Conv Header */}
+            <div style={{
+              padding: '12px 16px', borderBottom: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', gap: 12,
+            }}>
+              <Avatar name={selectedConv.display_name} pic={selectedConv.profile_pic_url} size={36} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>
+                  {selectedConv.display_name || selectedConv.instagram_username}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text2)' }}>
+                  @{selectedConv.instagram_username} · Score: {selectedConv.lead_score}/100
+                </div>
+              </div>
+              <HeatBadge heat={selectedConv.lead_heat} />
+              <select
+                value={selectedConv.stage || 'qualification'}
+                onChange={e => updateConvStage(e.target.value)}
+                style={{
+                  background: 'var(--bg-card)', color: 'var(--text)', border: '1px solid var(--border)',
+                  borderRadius: 'var(--r)', padding: '4px 8px', fontSize: 11, cursor: 'pointer',
+                  fontFamily: 'var(--font)',
+                }}
+              >
+                {Object.entries(STAGE_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Messages */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+              {messages.map((msg, i) => (
+                <MessageBubble key={msg.id || i} msg={msg} onApprove={() => approveClaudeSuggestion(msg)} />
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input */}
+            <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
+              {/* Claude suggestion banner */}
+              {messages.filter(m => m.direction === 'inbound' && m.claude_suggestion && !messages.find(m2 => m2.direction === 'outbound' && m2.created_at > m.created_at)).slice(-1).map(msg => (
+                <div key={msg.id} style={{
+                  background: 'rgba(238,79,0,0.08)', border: '1px solid rgba(238,79,0,0.2)',
+                  borderRadius: 'var(--r)', padding: '10px 12px', marginBottom: 10,
+                }}>
+                  <div style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600, marginBottom: 6 }}>
+                    CLAUDE SCHLÄGT VOR
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5, marginBottom: 8 }}>
+                    {msg.claude_suggestion}
+                  </div>
+                  {msg.claude_reasoning && (
+                    <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8, fontStyle: 'italic' }}>
+                      💡 {msg.claude_reasoning}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => approveClaudeSuggestion(msg)}
+                      disabled={sending}
+                      style={{
+                        background: 'var(--accent)', color: '#fff', border: 'none',
+                        borderRadius: 'var(--r-sm)', padding: '5px 12px', fontSize: 12,
+                        cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 500,
+                      }}
+                    >
+                      ✓ Senden
+                    </button>
+                    <button
+                      onClick={() => setCustomReply(msg.claude_suggestion)}
+                      style={{
+                        background: 'var(--bg-card)', color: 'var(--text2)', border: '1px solid var(--border)',
+                        borderRadius: 'var(--r-sm)', padding: '5px 12px', fontSize: 12,
+                        cursor: 'pointer', fontFamily: 'var(--font)',
+                      }}
+                    >
+                      ✏ Bearbeiten
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <textarea
+                  value={customReply}
+                  onChange={e => setCustomReply(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      sendReply(customReply, 'thomas')
+                    }
+                  }}
+                  placeholder="Antwort schreiben... (Enter = senden)"
+                  rows={2}
+                  style={{
+                    flex: 1, background: 'var(--bg-input)', color: 'var(--text)',
+                    border: '1px solid var(--border)', borderRadius: 'var(--r)',
+                    padding: '8px 12px', fontSize: 13, fontFamily: 'var(--font)',
+                    resize: 'none', outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={() => sendReply(customReply, 'thomas')}
+                  disabled={sending || !customReply.trim()}
+                  style={{
+                    background: 'var(--accent)', color: '#fff', border: 'none',
+                    borderRadius: 'var(--r)', padding: '0 16px', cursor: 'pointer',
+                    fontSize: 18, opacity: (!customReply.trim() || sending) ? 0.4 : 1,
+                  }}
+                >
+                  ↑
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ─── RIGHT: Lead Info ─── */}
+      {selectedConv && (
+        <div style={{
+          width: 260, flexShrink: 0, borderLeft: '1px solid var(--border)',
+          overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 16,
+        }}>
+          {/* Lead Profile */}
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, letterSpacing: '0.05em', marginBottom: 10 }}>
+              LEAD INFO
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Avatar name={selectedConv.display_name} pic={selectedConv.profile_pic_url} size={52} />
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{selectedConv.display_name}</div>
+                <div style={{ fontSize: 12, color: 'var(--text2)' }}>@{selectedConv.instagram_username}</div>
+              </div>
+            </div>
+
+            {/* Score Bar */}
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text2)', marginBottom: 4 }}>
+                <span>Lead Score</span>
+                <span style={{ color: HEAT_COLORS[selectedConv.lead_heat] }}>{selectedConv.lead_score}/100</span>
+              </div>
+              <div style={{ height: 4, background: 'var(--border)', borderRadius: 2 }}>
+                <div style={{
+                  height: '100%', borderRadius: 2,
+                  width: `${selectedConv.lead_score}%`,
+                  background: HEAT_COLORS[selectedConv.lead_heat],
+                  transition: 'width 0.3s ease',
+                }} />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 6 }}>
+              <HeatBadge heat={selectedConv.lead_heat} />
+              <span style={{ fontSize: 11, color: 'var(--text2)', padding: '2px 8px', background: 'var(--bg-card)', borderRadius: 4 }}>
+                {STAGE_LABELS[selectedConv.stage] || 'Qualifizierung'}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ height: 1, background: 'var(--border)' }} />
+
+          {/* Claude per Chat Toggle */}
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, letterSpacing: '0.05em', marginBottom: 10 }}>
+              CLAUDE EINSTELLUNGEN
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 500 }}>Claude aktiv</div>
+                <div style={{ fontSize: 11, color: 'var(--text2)' }}>Für diesen Chat</div>
+              </div>
+              <Toggle
+                value={selectedConv.claude_enabled}
+                onChange={() => toggleConvClaude(selectedConv.id, selectedConv.claude_enabled)}
+              />
+            </div>
+
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 6 }}>Modus</div>
+              {['A', 'B', 'C'].map(mode => (
+                <button
+                  key={mode}
+                  onClick={async () => {
+                    await supabase.from('dm_conversations').update({ autonomy_mode: mode }).eq('id', selectedConv.id)
+                    setSelectedConv(prev => ({ ...prev, autonomy_mode: mode }))
+                  }}
+                  style={{
+                    display: 'block', width: '100%', textAlign: 'left',
+                    padding: '6px 10px', borderRadius: 'var(--r-sm)', marginBottom: 4,
+                    border: `1px solid ${selectedConv.autonomy_mode === mode ? 'var(--accent)' : 'var(--border)'}`,
+                    background: selectedConv.autonomy_mode === mode ? 'var(--accent-dim)' : 'var(--bg-card)',
+                    color: selectedConv.autonomy_mode === mode ? 'var(--accent)' : 'var(--text2)',
+                    cursor: 'pointer', fontFamily: 'var(--font)', fontSize: 11,
+                  }}
+                >
+                  <strong>{mode}</strong> — {AUTONOMY_LABELS[mode]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ height: 1, background: 'var(--border)' }} />
+
+          {/* Notes */}
+          <div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, letterSpacing: '0.05em', marginBottom: 8 }}>
+              NOTIZEN
+            </div>
+            <textarea
+              defaultValue={selectedConv.notes || ''}
+              onBlur={async e => {
+                await supabase.from('dm_conversations').update({ notes: e.target.value }).eq('id', selectedConv.id)
+              }}
+              placeholder="Interne Notizen..."
+              rows={4}
+              style={{
+                width: '100%', background: 'var(--bg-input)', color: 'var(--text)',
+                border: '1px solid var(--border)', borderRadius: 'var(--r)',
+                padding: '8px 10px', fontSize: 12, fontFamily: 'var(--font)',
+                resize: 'none', outline: 'none',
+              }}
+            />
+          </div>
+
+          {/* Archive */}
+          <button
+            onClick={archiveConv}
+            style={{
+              background: 'transparent', color: 'var(--text3)', border: '1px solid var(--border)',
+              borderRadius: 'var(--r)', padding: '6px 12px', cursor: 'pointer',
+              fontSize: 12, fontFamily: 'var(--font)', marginTop: 'auto',
+            }}
+          >
+            Archivieren
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Sub-Components ───
+
+function ConvItem({ conv, selected, onClick, onToggleClaude }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid var(--border)',
+        background: selected ? 'var(--bg-card)' : 'transparent',
+        transition: 'background 0.1s',
+        position: 'relative',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ position: 'relative' }}>
+          <Avatar name={conv.display_name} pic={conv.profile_pic_url} size={36} />
+          <div style={{
+            position: 'absolute', bottom: -1, right: -1,
+            width: 8, height: 8, borderRadius: '50%',
+            background: HEAT_COLORS[conv.lead_heat],
+            border: '1.5px solid var(--bg-sidebar)',
+          }} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontWeight: 500, fontSize: 13, truncate: true }}>
+              {conv.display_name || conv.instagram_username}
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text3)', whiteSpace: 'nowrap' }}>
+              {formatTime(conv.last_message_at)}
+            </div>
+          </div>
+          <div style={{
+            fontSize: 12, color: 'var(--text2)', overflow: 'hidden',
+            textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2,
+          }}>
+            {conv.last_message_preview || '—'}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+            <span style={{ fontSize: 10, color: HEAT_COLORS[conv.lead_heat] }}>
+              {conv.lead_score}pts
+            </span>
+            <span style={{ fontSize: 10, color: 'var(--text3)' }}>
+              {STAGE_LABELS[conv.stage] || 'Qualifizierung'}
+            </span>
+            <span
+              onClick={e => { e.stopPropagation(); onToggleClaude() }}
+              style={{
+                marginLeft: 'auto', fontSize: 10,
+                color: conv.claude_enabled ? 'var(--accent)' : 'var(--text3)',
+                cursor: 'pointer',
+              }}
+            >
+              {conv.claude_enabled ? '● Claude' : '○ Claude'}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MessageBubble({ msg, onApprove }) {
+  const isInbound = msg.direction === 'inbound'
+  return (
+    <div style={{
+      display: 'flex', justifyContent: isInbound ? 'flex-start' : 'flex-end',
+      marginBottom: 12,
+    }}>
+      <div style={{ maxWidth: '70%' }}>
+        <div style={{
+          padding: '8px 12px', borderRadius: isInbound ? '4px 12px 12px 12px' : '12px 4px 12px 12px',
+          background: isInbound ? 'var(--bg-card)' : msg.sent_by === 'claude' ? 'rgba(238,79,0,0.15)' : 'var(--accent)',
+          color: 'var(--text)', fontSize: 13, lineHeight: 1.5,
+          border: msg.sent_by === 'claude' ? '1px solid rgba(238,79,0,0.3)' : 'none',
+        }}>
+          {msg.content}
+        </div>
+        <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3, textAlign: isInbound ? 'left' : 'right' }}>
+          {msg.sent_by === 'claude' ? '🤖 Claude · ' : msg.sent_by === 'thomas' ? '✓ Du · ' : ''}
+          {formatTime(msg.created_at)}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SettingsPanel({ config, onUpdate, onStyleDna, styleDnaLoading }) {
+  return (
+    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div>
+        <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, letterSpacing: '0.05em', marginBottom: 10 }}>
+          STANDARD MODUS
+        </div>
+        {['A', 'B', 'C'].map(mode => (
+          <button
+            key={mode}
+            onClick={() => onUpdate('default_autonomy_mode', mode)}
+            style={{
+              display: 'block', width: '100%', textAlign: 'left',
+              padding: '8px 10px', borderRadius: 'var(--r-sm)', marginBottom: 4,
+              border: `1px solid ${config['default_autonomy_mode'] === mode ? 'var(--accent)' : 'var(--border)'}`,
+              background: config['default_autonomy_mode'] === mode ? 'var(--accent-dim)' : 'var(--bg-card)',
+              color: config['default_autonomy_mode'] === mode ? 'var(--accent)' : 'var(--text2)',
+              cursor: 'pointer', fontFamily: 'var(--font)', fontSize: 12,
+            }}
+          >
+            <strong>{mode}</strong> — {AUTONOMY_LABELS[mode]}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ height: 1, background: 'var(--border)' }} />
+
+      <div>
+        <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, letterSpacing: '0.05em', marginBottom: 10 }}>
+          FOLLOW-UP
+        </div>
+        <label style={{ fontSize: 12, color: 'var(--text2)', display: 'block', marginBottom: 4 }}>
+          Nach X Tagen nachhaken
+        </label>
+        <input
+          type="number"
+          defaultValue={config['followup_days'] || '2'}
+          onBlur={e => onUpdate('followup_days', e.target.value)}
+          min="1" max="14"
+          style={{
+            width: '100%', background: 'var(--bg-input)', color: 'var(--text)',
+            border: '1px solid var(--border)', borderRadius: 'var(--r)',
+            padding: '6px 10px', fontSize: 13, fontFamily: 'var(--font)', outline: 'none',
+          }}
+        />
+        <label style={{ fontSize: 12, color: 'var(--text2)', display: 'block', marginTop: 8, marginBottom: 4 }}>
+          Max. Follow-Ups
+        </label>
+        <input
+          type="number"
+          defaultValue={config['max_followups'] || '2'}
+          onBlur={e => onUpdate('max_followups', e.target.value)}
+          min="1" max="5"
+          style={{
+            width: '100%', background: 'var(--bg-input)', color: 'var(--text)',
+            border: '1px solid var(--border)', borderRadius: 'var(--r)',
+            padding: '6px 10px', fontSize: 13, fontFamily: 'var(--font)', outline: 'none',
+          }}
+        />
+      </div>
+
+      <div style={{ height: 1, background: 'var(--border)' }} />
+
+      <div>
+        <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, letterSpacing: '0.05em', marginBottom: 10 }}>
+          MANYCHAT API
+        </div>
+        <input
+          type="password"
+          defaultValue={config['manychat_api_key'] || ''}
+          onBlur={e => onUpdate('manychat_api_key', e.target.value)}
+          placeholder="ManyChat API Key..."
+          style={{
+            width: '100%', background: 'var(--bg-input)', color: 'var(--text)',
+            border: '1px solid var(--border)', borderRadius: 'var(--r)',
+            padding: '6px 10px', fontSize: 13, fontFamily: 'var(--font)', outline: 'none',
+          }}
+        />
+      </div>
+
+      <div style={{ height: 1, background: 'var(--border)' }} />
+
+      <div>
+        <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, letterSpacing: '0.05em', marginBottom: 6 }}>
+          STYLE DNA
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 10, lineHeight: 1.5 }}>
+          Analysiert deine gesendeten Nachrichten und extrahiert deinen Schreibstil für Claude.
+        </div>
+        {config['style_dna'] && (
+          <div style={{
+            background: 'var(--bg-card)', borderRadius: 'var(--r)', padding: 10,
+            fontSize: 11, color: 'var(--text2)', lineHeight: 1.6, marginBottom: 8,
+            maxHeight: 120, overflowY: 'auto',
+          }}>
+            {config['style_dna']}
+          </div>
+        )}
+        <button
+          onClick={onStyleDna}
+          disabled={styleDnaLoading}
+          style={{
+            width: '100%', background: 'var(--accent)', color: '#fff', border: 'none',
+            borderRadius: 'var(--r)', padding: '8px 12px', fontSize: 12,
+            cursor: styleDnaLoading ? 'not-allowed' : 'pointer',
+            fontFamily: 'var(--font)', fontWeight: 500, opacity: styleDnaLoading ? 0.6 : 1,
+          }}
+        >
+          {styleDnaLoading ? 'Analysiere...' : '✦ Style DNA extrahieren'}
+        </button>
+      </div>
+
+      <div style={{ height: 1, background: 'var(--border)' }} />
+
+      <div>
+        <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, letterSpacing: '0.05em', marginBottom: 10 }}>
+          PRODUKTE
+        </div>
+        <label style={{ fontSize: 11, color: 'var(--text2)', display: 'block', marginBottom: 4 }}>Hauptprodukt URL</label>
+        <input
+          defaultValue={config['primary_product_url'] || ''}
+          onBlur={e => onUpdate('primary_product_url', e.target.value)}
+          style={{
+            width: '100%', background: 'var(--bg-input)', color: 'var(--text)',
+            border: '1px solid var(--border)', borderRadius: 'var(--r)',
+            padding: '6px 10px', fontSize: 12, fontFamily: 'var(--font)', outline: 'none', marginBottom: 8,
+          }}
+        />
+        <label style={{ fontSize: 11, color: 'var(--text2)', display: 'block', marginBottom: 4 }}>App URL (Fallback)</label>
+        <input
+          defaultValue={config['secondary_product_url'] || ''}
+          onBlur={e => onUpdate('secondary_product_url', e.target.value)}
+          style={{
+            width: '100%', background: 'var(--bg-input)', color: 'var(--text)',
+            border: '1px solid var(--border)', borderRadius: 'var(--r)',
+            padding: '6px 10px', fontSize: 12, fontFamily: 'var(--font)', outline: 'none',
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function Toggle({ value, onChange }) {
+  return (
+    <div
+      onClick={onChange}
+      style={{
+        width: 36, height: 20, borderRadius: 10, cursor: 'pointer',
+        background: value ? 'var(--accent)' : 'var(--border)',
+        position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+      }}
+    >
+      <div style={{
+        position: 'absolute', top: 2,
+        left: value ? 18 : 2,
+        width: 16, height: 16, borderRadius: '50%',
+        background: '#fff', transition: 'left 0.2s',
+      }} />
+    </div>
+  )
+}
+
+function Avatar({ name, pic, size = 36 }) {
+  if (pic) {
+    return <img src={pic} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover' }} />
+  }
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%',
+      background: 'var(--accent-dim)', border: '1px solid rgba(238,79,0,0.3)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size * 0.4, fontWeight: 600, color: 'var(--accent)', flexShrink: 0,
+    }}>
+      {name?.[0]?.toUpperCase() || '?'}
+    </div>
+  )
+}
+
+function HeatBadge({ heat }) {
+  const labels = { hot: '🔥 Heiß', warm: '🟡 Warm', cold: '❄️ Kalt', archived: 'Archiv' }
+  return (
+    <span style={{
+      fontSize: 11, padding: '2px 8px', borderRadius: 4,
+      background: `${HEAT_COLORS[heat]}20`,
+      color: HEAT_COLORS[heat],
+      border: `1px solid ${HEAT_COLORS[heat]}40`,
+    }}>
+      {labels[heat] || heat}
+    </span>
+  )
+}
+
+function formatTime(ts) {
+  if (!ts) return ''
+  const d = new Date(ts)
+  const now = new Date()
+  const diff = now - d
+  if (diff < 60000) return 'Gerade eben'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`
+  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
+}
