@@ -62,16 +62,33 @@ const FEMALE_NAMES = new Set([
   'sabine','sandra','miriam','steffi','anni','leni','nora','pia','rosi','trudi','liesel',
 ])
 
-function detectGender(name: string, manychatGender?: string): string {
+function detectGender(name: string, username: string, manychatGender?: string): string {
+  // Prio 1: ManyChat explicit gender field
   if (manychatGender) {
     const g = manychatGender.toLowerCase()
     if (g === 'female' || g === 'f') return 'female'
     if (g === 'male' || g === 'm') return 'male'
   }
-  if (!name) return 'unknown'
-  const firstName = name.trim().split(' ')[0].toLowerCase()
+
+  const combined = `${name} ${username}`.toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  return FEMALE_NAMES.has(firstName) ? 'female' : 'male'
+
+  // Prio 2: Clear female title/prefix in name or username
+  if (/\bmrs[\.\s]|^mrs$|\bms[\.\s]|^ms$|\bfrau\b|\blady\b|\bgirl\b|\bshe\b|\bher\b/.test(combined)) return 'female'
+  // Male titles
+  if (/\bmr[\.\s]|^mr$|\bherr\b|\bsir\b|\bhe\b|\bhim\b/.test(combined)) return 'male'
+
+  // Prio 3: Female keywords in username
+  if (/girl|woman|women|lady|mama|mami|mutti|mutter|queen|princess|beautymom|babygirl/.test(combined)) return 'female'
+  if (/guy|man|boy|papa|daddy|king|prince|bro|bruder/.test(combined)) return 'male'
+
+  // Prio 4: First name from display name
+  if (!name) return 'unknown'
+  const firstName = name.trim().split(/[\s\.\_]/)[0].toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  if (FEMALE_NAMES.has(firstName)) return 'female'
+
+  return 'unknown' // besser unknown als falsch raten
 }
 
 Deno.serve(async (req: Request) => {
@@ -107,7 +124,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Detect gender
-    const gender = detectGender(displayName, manychatGender)
+    const gender = detectGender(displayName, username, manychatGender)
     const autoBlocked = gender === 'female'
 
     // Load existing conversation to preserve manual overrides

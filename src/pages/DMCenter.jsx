@@ -333,47 +333,35 @@ export default function DMCenter() {
             {/* Input */}
             <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
               {/* Claude suggestion banner */}
-              {messages.filter(m => m.direction === 'inbound' && m.claude_suggestion && !messages.find(m2 => m2.direction === 'outbound' && m2.created_at > m.created_at)).slice(-1).map(msg => (
-                <div key={msg.id} style={{
-                  background: 'rgba(238,79,0,0.08)', border: '1px solid rgba(238,79,0,0.2)',
-                  borderRadius: 'var(--r)', padding: '10px 12px', marginBottom: 10,
-                }}>
-                  <div style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600, marginBottom: 6 }}>
-                    CLAUDE SCHLÄGT VOR
-                  </div>
-                  <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5, marginBottom: 8 }}>
-                    {msg.claude_suggestion}
-                  </div>
-                  {msg.claude_reasoning && (
-                    <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8, fontStyle: 'italic' }}>
-                      💡 {msg.claude_reasoning}
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      onClick={() => approveClaudeSuggestion(msg)}
-                      disabled={sending}
-                      style={{
-                        background: 'var(--accent)', color: '#fff', border: 'none',
-                        borderRadius: 'var(--r-sm)', padding: '5px 12px', fontSize: 12,
-                        cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 500,
-                      }}
-                    >
-                      ✓ Senden
-                    </button>
-                    <button
-                      onClick={() => setCustomReply(msg.claude_suggestion)}
-                      style={{
-                        background: 'var(--bg-card)', color: 'var(--text2)', border: '1px solid var(--border)',
-                        borderRadius: 'var(--r-sm)', padding: '5px 12px', fontSize: 12,
-                        cursor: 'pointer', fontFamily: 'var(--font)',
-                      }}
-                    >
-                      ✏ Bearbeiten
-                    </button>
-                  </div>
-                </div>
-              ))}
+              <ClaudeBanner
+                messages={messages}
+                conv={selectedConv}
+                sending={sending}
+                onApprove={approveClaudeSuggestion}
+                onEdit={setCustomReply}
+                onGenerate={async () => {
+                  const lastInbound = [...messages].reverse().find(m => m.direction === 'inbound')
+                  if (!lastInbound) return
+                  setSending(true)
+                  try {
+                    await fetch(`https://shrsluxbrazqscgiwfpu.supabase.co/functions/v1/dm-reply`, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNocnNsdXhicmF6cXNjZ2l3ZnB1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4ODk4MjEsImV4cCI6MjA5MDQ2NTgyMX0.8hQITokKKhVCfdVTHoGiyUzsHggfD7i13IFumsOfnuo`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        conversation_id: selectedConv.id,
+                        autonomy_mode: 'B',
+                        trigger_message: lastInbound.content,
+                      }),
+                    })
+                    await loadMessages(selectedConv.id)
+                  } finally {
+                    setSending(false)
+                  }
+                }}
+              />
 
               <div style={{ display: 'flex', gap: 8 }}>
                 <textarea
@@ -889,6 +877,84 @@ function HeatBadge({ heat }) {
     }}>
       {labels[heat] || heat}
     </span>
+  )
+}
+
+function ClaudeBanner({ messages, conv, sending, onApprove, onEdit, onGenerate }) {
+  // Find last inbound message
+  const lastInbound = [...messages].reverse().find(m => m.direction === 'inbound')
+  if (!lastInbound) return null
+
+  // Check if there's already an outbound message after this inbound
+  const lastInboundTime = lastInbound.created_at
+  const alreadyReplied = messages.some(m => m.direction === 'outbound' && m.created_at > lastInboundTime)
+  if (alreadyReplied) return null
+
+  // Has suggestion
+  if (lastInbound.claude_suggestion) {
+    return (
+      <div style={{
+        background: 'rgba(238,79,0,0.08)', border: '1px solid rgba(238,79,0,0.2)',
+        borderRadius: 'var(--r)', padding: '10px 12px', marginBottom: 10,
+      }}>
+        <div style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600, marginBottom: 6 }}>
+          CLAUDE SCHLÄGT VOR
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5, marginBottom: 8 }}>
+          {lastInbound.claude_suggestion}
+        </div>
+        {lastInbound.claude_reasoning && (
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8, fontStyle: 'italic' }}>
+            💡 {lastInbound.claude_reasoning}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => onApprove(lastInbound)} disabled={sending} style={{
+            background: 'var(--accent)', color: '#fff', border: 'none',
+            borderRadius: 'var(--r-sm)', padding: '5px 12px', fontSize: 12,
+            cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 500,
+          }}>✓ Senden</button>
+          <button onClick={() => onEdit(lastInbound.claude_suggestion)} style={{
+            background: 'var(--bg-card)', color: 'var(--text2)', border: '1px solid var(--border)',
+            borderRadius: 'var(--r-sm)', padding: '5px 12px', fontSize: 12,
+            cursor: 'pointer', fontFamily: 'var(--font)',
+          }}>✏ Bearbeiten</button>
+          <button onClick={onGenerate} disabled={sending} style={{
+            background: 'transparent', color: 'var(--text3)', border: '1px solid var(--border)',
+            borderRadius: 'var(--r-sm)', padding: '5px 10px', fontSize: 11,
+            cursor: 'pointer', fontFamily: 'var(--font)',
+          }}>↻ Neu</button>
+        </div>
+      </div>
+    )
+  }
+
+  // No suggestion yet — show generate button
+  if (conv?.claude_blocked) return null
+
+  return (
+    <div style={{
+      background: 'var(--bg-card)', border: '1px solid var(--border)',
+      borderRadius: 'var(--r)', padding: '8px 12px', marginBottom: 10,
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    }}>
+      <div style={{ fontSize: 12, color: 'var(--text3)' }}>
+        Kein Vorschlag für diese Nachricht
+      </div>
+      <button
+        onClick={onGenerate}
+        disabled={sending}
+        style={{
+          background: 'var(--accent-dim)', color: 'var(--accent)',
+          border: '1px solid rgba(238,79,0,0.3)',
+          borderRadius: 'var(--r-sm)', padding: '4px 10px', fontSize: 11,
+          cursor: sending ? 'not-allowed' : 'pointer', fontFamily: 'var(--font)',
+          fontWeight: 500, opacity: sending ? 0.5 : 1,
+        }}
+      >
+        {sending ? '...' : '✦ Vorschlag generieren'}
+      </button>
+    </div>
   )
 }
 
