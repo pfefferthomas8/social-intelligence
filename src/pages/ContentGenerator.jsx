@@ -197,6 +197,7 @@ export default function ContentGenerator() {
   const [historyLoading, setHistoryLoading] = useState(true)
   const [progress, setProgress] = useState(0)
   const [deletingId, setDeletingId] = useState(null)
+  const [ratings, setRatings] = useState({}) // id → 1 | -1
   const progressRef = useRef(null)
 
   useEffect(() => { loadHistory() }, [])
@@ -210,7 +211,19 @@ export default function ContentGenerator() {
     setHistoryLoading(true)
     const { data } = await supabase.from('generated_content').select('*').order('created_at', { ascending: false }).limit(20)
     setHistory(data || [])
+    // Ratings aus geladenen Items laden
+    if (data?.length) {
+      const r = {}
+      data.forEach(item => { if (item.user_rating) r[item.id] = item.user_rating })
+      setRatings(r)
+    }
     setHistoryLoading(false)
+  }
+
+  async function rateContent(id, rating) {
+    const newRating = ratings[id] === rating ? null : rating // Toggle: nochmal klicken entfernt Bewertung
+    setRatings(prev => ({ ...prev, [id]: newRating }))
+    await supabase.from('generated_content').update({ user_rating: newRating }).eq('id', id)
   }
 
   async function generate() {
@@ -396,6 +409,42 @@ export default function ContentGenerator() {
                 {result.content}
               </div>
               )}
+              {/* Feedback Buttons */}
+              {result.id && (
+                <div style={{
+                  marginTop: 14, display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '12px 16px', background: 'var(--bg-card)',
+                  border: '1px solid var(--border)', borderRadius: 'var(--r)',
+                }}>
+                  <span style={{ fontSize: 12, color: 'var(--text3)', flex: 1 }}>
+                    War das gut? KI lernt aus deinem Feedback.
+                  </span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      onClick={() => rateContent(result.id, 1)}
+                      className="btn btn-sm"
+                      style={{
+                        background: ratings[result.id] === 1 ? 'rgba(34,197,94,0.15)' : 'transparent',
+                        border: `1px solid ${ratings[result.id] === 1 ? 'rgba(34,197,94,0.4)' : 'var(--border)'}`,
+                        color: ratings[result.id] === 1 ? '#22c55e' : 'var(--text3)',
+                        fontSize: 16, padding: '5px 10px',
+                      }}
+                      title="Gut"
+                    >👍</button>
+                    <button
+                      onClick={() => rateContent(result.id, -1)}
+                      className="btn btn-sm"
+                      style={{
+                        background: ratings[result.id] === -1 ? 'rgba(239,68,68,0.1)' : 'transparent',
+                        border: `1px solid ${ratings[result.id] === -1 ? 'rgba(239,68,68,0.3)' : 'var(--border)'}`,
+                        color: ratings[result.id] === -1 ? '#ef4444' : 'var(--text3)',
+                        fontSize: 16, padding: '5px 10px',
+                      }}
+                      title="Nicht gut"
+                    >👎</button>
+                  </div>
+                </div>
+              )}
               {confirmed ? (
                 <div style={{
                   marginTop: 12, padding: '10px 16px',
@@ -461,7 +510,30 @@ export default function ContentGenerator() {
                             {item.topic}
                           </p>
                         </div>
-                        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+                          {/* Feedback Buttons */}
+                          <button
+                            onClick={e => { e.stopPropagation(); rateContent(item.id, 1) }}
+                            className="btn btn-sm"
+                            style={{
+                              padding: '4px 7px', fontSize: 13,
+                              background: ratings[item.id] === 1 ? 'rgba(34,197,94,0.15)' : 'transparent',
+                              border: `1px solid ${ratings[item.id] === 1 ? 'rgba(34,197,94,0.4)' : 'var(--border)'}`,
+                              color: ratings[item.id] === 1 ? '#22c55e' : 'var(--text4)',
+                            }}
+                            title="Gut"
+                          >👍</button>
+                          <button
+                            onClick={e => { e.stopPropagation(); rateContent(item.id, -1) }}
+                            className="btn btn-sm"
+                            style={{
+                              padding: '4px 7px', fontSize: 13,
+                              background: ratings[item.id] === -1 ? 'rgba(239,68,68,0.1)' : 'transparent',
+                              border: `1px solid ${ratings[item.id] === -1 ? 'rgba(239,68,68,0.3)' : 'var(--border)'}`,
+                              color: ratings[item.id] === -1 ? '#ef4444' : 'var(--text4)',
+                            }}
+                            title="Nicht gut"
+                          >👎</button>
                           <CopyButton text={item.content} />
                           <button
                             onClick={e => deleteItem(e, item.id)}

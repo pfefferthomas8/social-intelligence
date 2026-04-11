@@ -83,12 +83,13 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'topic + content_type required' }), { status: 400, headers: CORS })
   }
 
-  const [ownPosts, topCompPosts, customPosts, thomasDna, trendPosts] = await Promise.all([
+  const [ownPosts, topCompPosts, customPosts, thomasDna, trendPosts, topRated] = await Promise.all([
     dbQuery('instagram_posts?select=caption,transcript,post_type,likes_count,views_count&source=eq.own&caption=not.is.null&order=views_count.desc&limit=30'),
     dbQuery('instagram_posts?select=caption,transcript,post_type,likes_count,views_count&source=eq.competitor&order=views_count.desc&limit=20'),
     dbQuery('instagram_posts?select=caption,transcript,post_type&source=eq.custom&limit=10'),
     dbQuery('thomas_dna?select=category,insight,confidence&order=confidence.desc&limit=20'),
     dbQuery('trend_posts?select=caption,visual_text,username,viral_score,recommendation&order=viral_score.desc&limit=10'),
+    dbQuery('generated_content?select=topic,content_type,content,content_pillar&user_rating=eq.1&order=created_at.desc&limit=8'),
   ])
 
   // ── DNA nach Kategorie gruppieren ──────────────────────────────────────────
@@ -196,6 +197,17 @@ ${customPosts.length > 0
 [7] AKTUELLE TREND-SIGNALE — WAS GERADE IM MARKT FUNKTIONIERT
 ═══════════════════════════════════════════════════════
 ${trendSignals || 'Noch keine Trend-Daten verfügbar.'}
+
+${topRated.length > 0 ? `═══════════════════════════════════════════════════════
+[8] THOMAS HAT DIESE OUTPUTS POSITIV BEWERTET — STIL BEIBEHALTEN
+═══════════════════════════════════════════════════════
+Das ist Feedback aus der Praxis — diese Art von Content hat Thomas als "gut" markiert.
+Orientiere dich an Ton, Struktur und Stil dieser Beispiele:
+
+${topRated.map((r: any) => {
+  const preview = clean(r.content).substring(0, 200)
+  return `[${r.content_type}${r.content_pillar ? ' · ' + r.content_pillar : ''}] Thema: "${r.topic}"\n"${preview}…"`
+}).join('\n\n')}` : ''}
 
 ═══════════════════════════════════════════════════════
 SYNTHESE-PRINZIP

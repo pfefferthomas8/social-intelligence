@@ -1,0 +1,86 @@
+name: Daily Auto-Scrape
+
+on:
+  schedule:
+    # Eigenes Profil täglich 06:00 UTC
+    - cron: '0 6 * * *'
+    # Competitors täglich 06:30 UTC
+    - cron: '30 6 * * *'
+    # Trend Scout jeden Montag + Donnerstag 07:00 UTC
+    - cron: '0 7 * * 1,4'
+  # Manuell triggern möglich
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Scrape mode'
+        required: true
+        default: 'own'
+        type: choice
+        options:
+          - own
+          - competitors
+          - trends
+
+jobs:
+  scrape-own:
+    name: Eigenes Profil scrapen
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'own' || github.event.schedule == '0 6 * * *'
+    steps:
+      - name: Trigger own profile scrape
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/auto-scrape" \
+            -H "Authorization: Bearer ${{ secrets.DASHBOARD_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"mode":"own"}')
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | head -1)
+          echo "Response: $body"
+          echo "HTTP Status: $http_code"
+          if [ "$http_code" -ge 400 ]; then
+            echo "::error::Scrape failed with status $http_code"
+            exit 1
+          fi
+
+  scrape-competitors:
+    name: Competitors scrapen
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'competitors' || github.event.schedule == '30 6 * * *'
+    steps:
+      - name: Trigger competitor scrapes
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/auto-scrape" \
+            -H "Authorization: Bearer ${{ secrets.DASHBOARD_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"mode":"competitors"}')
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | head -1)
+          echo "Response: $body"
+          echo "HTTP Status: $http_code"
+          if [ "$http_code" -ge 400 ]; then
+            echo "::error::Scrape failed with status $http_code"
+            exit 1
+          fi
+
+  trend-scout:
+    name: Trend Scout
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'trends' || github.event.schedule == '0 7 * * 1,4'
+    steps:
+      - name: Trigger trend discovery
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/auto-scrape" \
+            -H "Authorization: Bearer ${{ secrets.DASHBOARD_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"mode":"trends"}')
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | head -1)
+          echo "Response: $body"
+          echo "HTTP Status: $http_code"
+          if [ "$http_code" -ge 400 ]; then
+            echo "::error::Trend discovery failed with status $http_code"
+            exit 1
+          fi
