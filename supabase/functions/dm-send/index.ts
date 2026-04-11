@@ -67,28 +67,30 @@ Deno.serve(async (req: Request) => {
     // Send via ManyChat API
     if (manychatKey && conv.manychat_contact_id) {
       try {
+        const mcPayload = {
+          subscriber_id: conv.manychat_contact_id,
+          data: {
+            version: 'v2',
+            content: {
+              messages: [{ type: 'text', text: text.trim() }],
+            },
+          },
+        }
+        console.log('ManyChat send payload:', JSON.stringify(mcPayload))
         const mcRes = await fetch('https://api.manychat.com/fb/sending/sendContent', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${manychatKey}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            subscriber_id: conv.manychat_contact_id,
-            data: {
-              version: 'v2',
-              content: {
-                messages: [{ type: 'text', text: text.trim() }],
-              },
-            },
-            message_tag: 'ACCOUNT_UPDATE',
-          }),
+          body: JSON.stringify(mcPayload),
         })
         const mcData = await mcRes.json()
-        if (mcData.status === 'success' || mcRes.ok) {
+        console.log('ManyChat response:', JSON.stringify(mcData))
+        if (mcData.status === 'success') {
           manychatSent = true
         } else {
-          manychatError = mcData.message || 'ManyChat error'
+          manychatError = mcData.message || JSON.stringify(mcData)
           console.error('ManyChat send error:', JSON.stringify(mcData))
         }
       } catch (err: any) {

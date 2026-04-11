@@ -341,6 +341,29 @@ export default function DMCenter() {
 
             {/* Input */}
             <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
+              {/* 24h Window Warning */}
+              {(() => {
+                const lastInbound = [...messages].reverse().find(m => m.direction === 'inbound')
+                if (!lastInbound) return null
+                const hoursAgo = (Date.now() - new Date(lastInbound.created_at).getTime()) / 36e5
+                if (hoursAgo < 20) return null
+                const expired = hoursAgo >= 24
+                return (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8,
+                    padding: '6px 10px', borderRadius: 'var(--r-sm)',
+                    background: expired ? 'rgba(239,68,68,0.08)' : 'rgba(234,179,8,0.08)',
+                    border: `1px solid ${expired ? 'rgba(239,68,68,0.25)' : 'rgba(234,179,8,0.25)'}`,
+                    fontSize: 11, color: expired ? '#ef4444' : '#eab308',
+                  }}>
+                    {expired ? '⛔' : '⚠️'}
+                    {expired
+                      ? ` 24h-Fenster abgelaufen (${Math.round(hoursAgo)}h) — Instagram blockiert ausgehende Nachrichten. Lead muss zuerst schreiben.`
+                      : ` Noch ${Math.round(24 - hoursAgo)}h im 24h-Fenster — danach kann Instagram nicht mehr angeschrieben werden.`
+                    }
+                  </div>
+                )
+              })()}
               {/* Claude suggestion banner */}
               <ClaudeBanner
                 messages={messages}

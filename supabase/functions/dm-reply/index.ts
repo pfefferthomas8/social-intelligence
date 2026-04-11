@@ -186,15 +186,17 @@ ABSOLUT WICHTIG:
 })
 
 async function sendViaManyChat(apiKey: string, subscriberId: string, text: string) {
-  return fetch('https://api.manychat.com/fb/sending/sendContent', {
+  const res = await fetch('https://api.manychat.com/fb/sending/sendContent', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       subscriber_id: subscriberId,
       data: { version: 'v2', content: { messages: [{ type: 'text', text }] } },
-      message_tag: 'ACCOUNT_UPDATE',
     }),
   })
+  const data = await res.json()
+  console.log('ManyChat sendViaManyChat response:', JSON.stringify(data))
+  return data
 }
 
 function detectStage(message: string, currentStage: string): string {
