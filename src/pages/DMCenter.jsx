@@ -768,10 +768,10 @@ function SettingsPanel({ config, onUpdate, onStyleDna, styleDnaLoading }) {
         </div>
         {[1, 2, 3].map(i => (
           <textarea
-            key={`opening_msg_${i}_${config[`opening_msg_${i}`] !== undefined}`}
-            defaultValue={config[`opening_msg_${i}`] || ''}
-            onBlur={e => onUpdate(`opening_msg_${i}`, e.target.value)}
-            placeholder={i === 1 ? 'z.B. "Hey, hab gesehen du hast mein Reel geliked 💪🏽 Trainierst du aktuell?"' : `Variante ${i} (optional)`}
+            key={i}
+            defaultValue={config['opening_msg_' + i] || ''}
+            onBlur={e => onUpdate('opening_msg_' + i, e.target.value)}
+            placeholder={i === 1 ? 'z.B. "Hey, hab gesehen du hast mein Reel geliked 💪🏽 Trainierst du aktuell?"' : 'Variante ' + i + ' (optional)'}
             rows={2}
             style={{
               width: '100%', background: 'var(--bg-input)', color: 'var(--text)',
