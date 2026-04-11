@@ -61,44 +61,45 @@ Deno.serve(async (req: Request) => {
     configRows.forEach((c: any) => { config[c.key] = c.value })
 
     const manychatKey = config['manychat_api_key']
+    const flowNs = config['manychat_flow_ns']
     let manychatSent = false
     let manychatError = null
 
-    // Send via ManyChat API
-    if (manychatKey && conv.manychat_contact_id) {
+    // Send via ManyChat: set custom field + trigger flow
+    if (manychatKey && flowNs && conv.manychat_contact_id) {
       try {
-        const mcPayload = {
-          subscriber_id: conv.manychat_contact_id,
-          data: {
-            version: 'v2',
-            content: {
-              messages: [{ type: 'text', text: text.trim() }],
-            },
-          },
-        }
-        console.log('ManyChat send payload:', JSON.stringify(mcPayload))
-        const mcRes = await fetch('https://api.manychat.com/fb/sending/sendContent', {
+        // Step 1: set claude_reply custom field
+        const fieldRes = await fetch('https://api.manychat.com/fb/subscriber/setCustomFieldByName', {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${manychatKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(mcPayload),
+          headers: { 'Authorization': `Bearer ${manychatKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subscriber_id: conv.manychat_contact_id,
+            field_name: 'claude_reply',
+            field_value: text.trim(),
+          }),
         })
-        const mcData = await mcRes.json()
-        console.log('ManyChat response:', JSON.stringify(mcData))
-        if (mcData.status === 'success') {
+        const fieldData = await fieldRes.json()
+        if (fieldData.status !== 'success') throw new Error(`setCustomField failed: ${fieldData.message}`)
+
+        // Step 2: trigger flow that sends {{claude_reply}}
+        const flowRes = await fetch('https://api.manychat.com/fb/sending/sendFlow', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${manychatKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscriber_id: conv.manychat_contact_id, flow_ns: flowNs }),
+        })
+        const flowData = await flowRes.json()
+        if (flowData.status === 'success') {
           manychatSent = true
         } else {
-          manychatError = mcData.message || JSON.stringify(mcData)
-          console.error('ManyChat send error:', JSON.stringify(mcData))
+          manychatError = flowData.message || JSON.stringify(flowData)
+          console.error('sendFlow error:', JSON.stringify(flowData))
         }
       } catch (err: any) {
         manychatError = err.message
-        console.error('ManyChat fetch error:', err)
+        console.error('ManyChat send error:', err)
       }
     } else {
-      manychatError = manychatKey ? 'No manychat_contact_id' : 'No ManyChat API key configured'
+      manychatError = !manychatKey ? 'No ManyChat API key' : !flowNs ? 'No flow NS configured' : 'No manychat_contact_id'
     }
 
     // Save message to DB regardless of ManyChat result

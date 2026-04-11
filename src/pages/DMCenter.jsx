@@ -141,14 +141,6 @@ export default function DMCenter() {
 
   async function approveClaudeSuggestion(message) {
     if (!message.claude_suggestion) return
-    // Copy to clipboard
-    try { await navigator.clipboard.writeText(message.claude_suggestion) } catch {}
-    // Open ManyChat live chat
-    const accountId = (config['manychat_api_key'] || '').split(':')[0]
-    if (accountId && selectedConv?.manychat_contact_id) {
-      window.open(`https://app.manychat.com/fb${accountId}/chat/${selectedConv.manychat_contact_id}`, '_blank')
-    }
-    // Save as outbound in DB (for Claude context)
     await sendReply(message.claude_suggestion, 'claude')
   }
 
