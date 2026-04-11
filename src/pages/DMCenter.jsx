@@ -109,20 +109,19 @@ export default function DMCenter() {
     if (!selectedConv || !text.trim()) return
     setSending(true)
     try {
-      // Insert message into DB
-      await supabase.from('dm_messages').insert({
-        conversation_id: selectedConv.id,
-        direction: 'outbound',
-        content: text,
-        sent_by: sentBy,
-        status: 'sent',
+      // Send via ManyChat + save to DB
+      const res = await fetch('https://shrsluxbrazqscgiwfpu.supabase.co/functions/v1/dm-send', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNocnNsdXhicmF6cXNjZ2l3ZnB1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4ODk4MjEsImV4cCI6MjA5MDQ2NTgyMX0.8hQITokKKhVCfdVTHoGiyUzsHggfD7i13IFumsOfnuo',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ conversation_id: selectedConv.id, text, sent_by: sentBy }),
       })
-      // Update conversation preview
-      await supabase.from('dm_conversations').update({
-        last_message_at: new Date().toISOString(),
-        last_message_preview: text.slice(0, 100),
-      }).eq('id', selectedConv.id)
-
+      const data = await res.json()
+      if (data.manychat_error) {
+        console.warn('ManyChat:', data.manychat_error)
+      }
       setCustomReply('')
       await loadMessages(selectedConv.id)
     } finally {
