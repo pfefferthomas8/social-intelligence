@@ -23,22 +23,27 @@ const AUTONOMY_LABELS = {
   C: 'Vollautomatisch',
 }
 
+const WEBHOOK_BASE = 'https://shrsluxbrazqscgiwfpu.supabase.co/functions/v1/manychat-webhook'
+
 export default function DMCenter() {
   const [conversations, setConversations] = useState([])
   const [selectedConv, setSelectedConv] = useState(null)
   const [messages, setMessages] = useState([])
   const [config, setConfig] = useState({})
-  const [activeTab, setActiveTab] = useState('inbox') // inbox | settings
+  const [campaigns, setCampaigns] = useState([])
+  const [activeTab, setActiveTab] = useState('inbox') // inbox | settings | campaigns
   const [filter, setFilter] = useState('all') // all | hot | warm | cold
   const [sending, setSending] = useState(false)
   const [customReply, setCustomReply] = useState('')
   const [styleDnaLoading, setStyleDnaLoading] = useState(false)
   const [savedKey, setSavedKey] = useState(null)
+  const [copiedId, setCopiedId] = useState(null)
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
     loadConversations()
     loadConfig()
+    loadCampaigns()
 
     // Realtime subscription
     const channel = supabase
@@ -751,24 +756,26 @@ function SettingsPanel({ config, onUpdate, onStyleDna, styleDnaLoading }) {
 
       <div>
         <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, letterSpacing: '0.05em', marginBottom: 6 }}>
-          ERÖFFNUNGSNACHRICHT
+          ERÖFFNUNGSTEXTE
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8, lineHeight: 1.5 }}>
-          Deine erste Nachricht wenn du Leute anschreibst (z.B. Reel-Liker). Wird automatisch als Kontext gespeichert wenn jemand zum ersten Mal antwortet — damit Claude weiß womit du gestartet hast.
+        <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 10, lineHeight: 1.5 }}>
+          Deine typischen ersten Nachrichten bei Kaltakquise. Claude kennt alle Varianten und weiß damit womit du gestartet hast.
         </div>
-        <textarea
-          key={config['opening_message']}
-          defaultValue={config['opening_message'] || ''}
-          onBlur={e => onUpdate('opening_message', e.target.value)}
-          placeholder={'z.B. "Hey, hab gesehen du hast mein Reel geliked 💪🏽 Hast du schon Erfahrung mit Coaching?"'}
-          rows={4}
-          style={{
-            width: '100%', background: 'var(--bg-input)', color: 'var(--text)',
-            border: '1px solid var(--border)', borderRadius: 'var(--r)',
-            padding: '8px 10px', fontSize: 12, fontFamily: 'var(--font)', outline: 'none',
-            resize: 'vertical', lineHeight: 1.5, boxSizing: 'border-box',
-          }}
-        />
+        {[1, 2, 3].map(i => (
+          <textarea
+            key={`opening_msg_${i}_${config[`opening_msg_${i}`] !== undefined}`}
+            defaultValue={config[`opening_msg_${i}`] || ''}
+            onBlur={e => onUpdate(`opening_msg_${i}`, e.target.value)}
+            placeholder={i === 1 ? 'z.B. "Hey, hab gesehen du hast mein Reel geliked 💪🏽 Trainierst du aktuell?"' : `Variante ${i} (optional)`}
+            rows={2}
+            style={{
+              width: '100%', background: 'var(--bg-input)', color: 'var(--text)',
+              border: '1px solid var(--border)', borderRadius: 'var(--r)',
+              padding: '7px 10px', fontSize: 12, fontFamily: 'var(--font)', outline: 'none',
+              resize: 'vertical', lineHeight: 1.5, boxSizing: 'border-box', marginBottom: 6,
+            }}
+          />
+        ))}
       </div>
 
       <div style={{ height: 1, background: 'var(--border)' }} />
@@ -809,26 +816,60 @@ function SettingsPanel({ config, onUpdate, onStyleDna, styleDnaLoading }) {
         <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, letterSpacing: '0.05em', marginBottom: 10 }}>
           PRODUKTE
         </div>
-        <label style={{ fontSize: 11, color: 'var(--text2)', display: 'block', marginBottom: 4 }}>Hauptprodukt URL</label>
-        <input
-          defaultValue={config['primary_product_url'] || ''}
-          onBlur={e => onUpdate('primary_product_url', e.target.value)}
-          style={{
-            width: '100%', background: 'var(--bg-input)', color: 'var(--text)',
-            border: '1px solid var(--border)', borderRadius: 'var(--r)',
-            padding: '6px 10px', fontSize: 12, fontFamily: 'var(--font)', outline: 'none', marginBottom: 8,
-          }}
-        />
-        <label style={{ fontSize: 11, color: 'var(--text2)', display: 'block', marginBottom: 4 }}>App URL (Fallback)</label>
-        <input
-          defaultValue={config['secondary_product_url'] || ''}
-          onBlur={e => onUpdate('secondary_product_url', e.target.value)}
-          style={{
-            width: '100%', background: 'var(--bg-input)', color: 'var(--text)',
-            border: '1px solid var(--border)', borderRadius: 'var(--r)',
-            padding: '6px 10px', fontSize: 12, fontFamily: 'var(--font)', outline: 'none',
-          }}
-        />
+
+        {/* Hauptprodukt */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 500, marginBottom: 6 }}>Hauptprodukt (1:1 Coaching)</div>
+          <input
+            key={`pname_${config['primary_product_name'] !== undefined}`}
+            defaultValue={config['primary_product_name'] || ''}
+            onBlur={e => onUpdate('primary_product_name', e.target.value)}
+            placeholder="Name..."
+            style={{ width: '100%', background: 'var(--bg-input)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '6px 10px', fontSize: 12, fontFamily: 'var(--font)', outline: 'none', marginBottom: 4, boxSizing: 'border-box' }}
+          />
+          <input
+            key={`purl_${config['primary_product_url'] !== undefined}`}
+            defaultValue={config['primary_product_url'] || ''}
+            onBlur={e => onUpdate('primary_product_url', e.target.value)}
+            placeholder="URL..."
+            style={{ width: '100%', background: 'var(--bg-input)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '6px 10px', fontSize: 12, fontFamily: 'var(--font)', outline: 'none', marginBottom: 4, boxSizing: 'border-box' }}
+          />
+          <textarea
+            key={`pdesc_${config['primary_product_desc'] !== undefined}`}
+            defaultValue={config['primary_product_desc'] || ''}
+            onBlur={e => onUpdate('primary_product_desc', e.target.value)}
+            placeholder="Kurzbeschreibung für Claude (für wen, was ist drin, Preis-Range)..."
+            rows={3}
+            style={{ width: '100%', background: 'var(--bg-input)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '7px 10px', fontSize: 12, fontFamily: 'var(--font)', outline: 'none', resize: 'vertical', lineHeight: 1.5, boxSizing: 'border-box' }}
+          />
+        </div>
+
+        {/* Fallback-Produkt */}
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text2)', fontWeight: 500, marginBottom: 6 }}>Fallback-Produkt (App)</div>
+          <input
+            key={`sname_${config['secondary_product_name'] !== undefined}`}
+            defaultValue={config['secondary_product_name'] || ''}
+            onBlur={e => onUpdate('secondary_product_name', e.target.value)}
+            placeholder="Name..."
+            style={{ width: '100%', background: 'var(--bg-input)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '6px 10px', fontSize: 12, fontFamily: 'var(--font)', outline: 'none', marginBottom: 4, boxSizing: 'border-box' }}
+          />
+          <input
+            key={`surl_${config['secondary_product_url'] !== undefined}`}
+            defaultValue={config['secondary_product_url'] || ''}
+            onBlur={e => onUpdate('secondary_product_url', e.target.value)}
+            placeholder="URL..."
+            style={{ width: '100%', background: 'var(--bg-input)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '6px 10px', fontSize: 12, fontFamily: 'var(--font)', outline: 'none', marginBottom: 4, boxSizing: 'border-box' }}
+          />
+          <textarea
+            key={`sdesc_${config['secondary_product_desc'] !== undefined}`}
+            defaultValue={config['secondary_product_desc'] || ''}
+            onBlur={e => onUpdate('secondary_product_desc', e.target.value)}
+            placeholder="Kurzbeschreibung für Claude..."
+            rows={2}
+            style={{ width: '100%', background: 'var(--bg-input)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '7px 10px', fontSize: 12, fontFamily: 'var(--font)', outline: 'none', resize: 'vertical', lineHeight: 1.5, boxSizing: 'border-box' }}
+          />
+        </div>
       </div>
     </div>
   )

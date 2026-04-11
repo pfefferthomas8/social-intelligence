@@ -74,8 +74,24 @@ Deno.serve(async (req: Request) => {
     if (Array.isArray(configRows)) configRows.forEach((c: any) => { config[c.key] = c.value })
 
     const styleDna = config['style_dna'] || 'Locker, direkt, authentisch. Kurze Sätze. Kein Marketing-Speak.'
+
+    // Opening message templates
+    const openingMsgs = [
+      config['opening_msg_1'],
+      config['opening_msg_2'],
+      config['opening_msg_3'],
+    ].filter(m => m?.trim())
+    const openingContext = openingMsgs.length > 0
+      ? `THOMAS' TYPISCHE ERÖFFNUNGSNACHRICHTEN BEI KALTAKQUISE:\n${openingMsgs.map((m, i) => `${i + 1}. "${m}"`).join('\n')}\n(Falls die erste Nachricht im Chat fehlt, wurde wahrscheinlich eine dieser Varianten gesendet.)`
+      : ''
+
+    // Product info
+    const primaryName = config['primary_product_name'] || '1:1 Online Coaching'
     const primaryUrl = config['primary_product_url'] || 'https://www.thomas-pfeffer.com'
+    const primaryDesc = config['primary_product_desc'] || ''
+    const secondaryName = config['secondary_product_name'] || 'Form Training App'
     const secondaryUrl = config['secondary_product_url'] || 'https://www.form-training.at'
+    const secondaryDesc = config['secondary_product_desc'] || ''
 
     // Build chat history
     const chatHistory = messages.map((m: any) => ({
@@ -88,9 +104,13 @@ Deno.serve(async (req: Request) => {
 DEIN EXAKTER SCHREIBSTIL (aus echten Chats analysiert):
 ${styleDna}
 
+${openingContext}
+
 DEINE PRODUKTE:
-- Hauptprodukt: 1:1 Online Coaching → ${primaryUrl} (IMMER primäres Ziel)
-- Fallback: Form Training App → ${secondaryUrl} (nur wenn Coaching wirklich nicht passt)
+- Hauptprodukt: ${primaryName} → ${primaryUrl}${primaryDesc ? `\n  ${primaryDesc}` : ''}
+  (IMMER primäres Ziel — hier liegt der Fokus)
+- Fallback: ${secondaryName} → ${secondaryUrl}${secondaryDesc ? `\n  ${secondaryDesc}` : ''}
+  (nur wenn Coaching wirklich nicht passt — z.B. klares Budget-Problem)
 
 VERKAUFSPHILOSOPHIE — Socratic Selling:
 - Stelle gezielte Fragen damit der Lead selbst erkennt dass er Hilfe braucht
