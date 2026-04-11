@@ -266,8 +266,8 @@ export default function Dashboard() {
 
   // Pillar Rotation Label für Daily Brief Button
   const PILLAR_ROTATION = ['haltung', 'mehrwert', 'transformation', 'verkauf', 'haltung', 'mehrwert', 'transformation']
-  const PILLAR_LABELS: Record<string, string> = { haltung: 'Haltung', mehrwert: 'Mehrwert', transformation: 'Transformation', verkauf: 'Verkauf' }
-  const PILLAR_COLORS: Record<string, string> = { haltung: '#ee4f00', mehrwert: '#22c55e', transformation: '#3b82f6', verkauf: '#a855f7' }
+  const PILLAR_LABELS = { haltung: 'Haltung', mehrwert: 'Mehrwert', transformation: 'Transformation', verkauf: 'Verkauf' }
+  const PILLAR_COLORS = { haltung: '#ee4f00', mehrwert: '#22c55e', transformation: '#3b82f6', verkauf: '#a855f7' }
   const todayPillar = PILLAR_ROTATION[new Date().getDay()]
 
   return (
