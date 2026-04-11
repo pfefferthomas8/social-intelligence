@@ -152,7 +152,24 @@ Deno.serve(async (req: Request) => {
 
     if (!conv?.id) throw new Error('Failed to upsert conversation')
 
-    // Insert message
+    // If NEW conversation + inbound: prepend opening message as first outbound message
+    if (!existingConv && direction === 'inbound') {
+      const configRows = await dbGet('dm_config?select=key,value')
+      const cfg: Record<string, string> = {}
+      configRows.forEach((c: any) => { cfg[c.key] = c.value })
+      const openingMsg = cfg['opening_message'] || ''
+      if (openingMsg.trim()) {
+        await dbPost('dm_messages', {
+          conversation_id: conv.id,
+          direction: 'outbound',
+          content: openingMsg.trim(),
+          sent_by: 'thomas',
+          status: 'sent',
+        })
+      }
+    }
+
+    // Insert inbound/outbound message
     await dbPost('dm_messages', {
       conversation_id: conv.id,
       manychat_message_id: messageId || null,

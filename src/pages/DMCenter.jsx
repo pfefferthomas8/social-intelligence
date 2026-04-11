@@ -751,6 +751,30 @@ function SettingsPanel({ config, onUpdate, onStyleDna, styleDnaLoading }) {
 
       <div>
         <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, letterSpacing: '0.05em', marginBottom: 6 }}>
+          ERÖFFNUNGSNACHRICHT
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8, lineHeight: 1.5 }}>
+          Deine erste Nachricht wenn du Leute anschreibst (z.B. Reel-Liker). Wird automatisch als Kontext gespeichert wenn jemand zum ersten Mal antwortet — damit Claude weiß womit du gestartet hast.
+        </div>
+        <textarea
+          key={config['opening_message']}
+          defaultValue={config['opening_message'] || ''}
+          onBlur={e => onUpdate('opening_message', e.target.value)}
+          placeholder={'z.B. "Hey, hab gesehen du hast mein Reel geliked 💪🏽 Hast du schon Erfahrung mit Coaching?"'}
+          rows={4}
+          style={{
+            width: '100%', background: 'var(--bg-input)', color: 'var(--text)',
+            border: '1px solid var(--border)', borderRadius: 'var(--r)',
+            padding: '8px 10px', fontSize: 12, fontFamily: 'var(--font)', outline: 'none',
+            resize: 'vertical', lineHeight: 1.5, boxSizing: 'border-box',
+          }}
+        />
+      </div>
+
+      <div style={{ height: 1, background: 'var(--border)' }} />
+
+      <div>
+        <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, letterSpacing: '0.05em', marginBottom: 6 }}>
           STYLE DNA
         </div>
         <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 10, lineHeight: 1.5 }}>
