@@ -92,6 +92,11 @@ export default function DMCenter() {
     setConfig(map)
   }
 
+  async function loadCampaigns() {
+    const { data } = await supabase.from('dm_campaigns').select('*').order('created_at', { ascending: false })
+    setCampaigns(data || [])
+  }
+
   async function updateConfig(key, value) {
     await supabase.from('dm_config').update({ value, updated_at: new Date().toISOString() }).eq('key', key)
     setConfig(prev => ({ ...prev, [key]: value }))
