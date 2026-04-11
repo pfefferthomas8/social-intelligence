@@ -217,25 +217,11 @@ ABSOLUT WICHTIG:
       ? chatHistory
       : [{ role: 'user', content: trigger_message }]
 
+    const autonomyMode = conv.autonomy_mode || config['default_autonomy_mode'] || 'B'
+    const autoSend = autonomyMode === 'C'
+
     const reply = await callClaude(systemPrompt, history)
-
     if (!reply) throw new Error('Claude returned empty reply')
-
-    // Save outbound message to DB (for DM Center monitoring)
-    await dbInsert('dm_messages', {
-      conversation_id: conv.id,
-      direction: 'outbound',
-      content: reply,
-      sent_by: 'claude',
-      status: 'sent',
-    })
-
-    // Update conversation
-    await dbPatch('dm_conversations', `id=eq.${conv.id}`, {
-      last_message_at: new Date().toISOString(),
-      last_message_preview: reply.slice(0, 100),
-      updated_at: new Date().toISOString(),
-    })
 
     // Update lead score
     let scoreIncrease = 0
@@ -250,11 +236,37 @@ ABSOLUT WICHTIG:
       await dbPatch('dm_conversations', `id=eq.${conv.id}`, { lead_score: newScore, lead_heat: heat })
     }
 
-    console.log(`Reply generated for ${ig_username}: ${reply.slice(0, 60)}...`)
-
-    return new Response(JSON.stringify({ reply }), {
-      headers: { ...CORS, 'Content-Type': 'application/json' }
-    })
+    if (autoSend) {
+      // Modus C: sofort senden + in DB speichern
+      await dbInsert('dm_messages', {
+        conversation_id: conv.id,
+        direction: 'outbound',
+        content: reply,
+        sent_by: 'claude',
+        status: 'sent',
+      })
+      await dbPatch('dm_conversations', `id=eq.${conv.id}`, {
+        last_message_at: new Date().toISOString(),
+        last_message_preview: reply.slice(0, 100),
+        updated_at: new Date().toISOString(),
+      })
+      console.log(`Auto-sent for ${ig_username}: ${reply.slice(0, 60)}...`)
+      return new Response(JSON.stringify({ reply }), {
+        headers: { ...CORS, 'Content-Type': 'application/json' }
+      })
+    } else {
+      // Modus A/B: Vorschlag im DM Center speichern, nichts senden
+      const lastInbound = msgs.filter((m: any) => m.direction === 'inbound').pop()
+      if (lastInbound) {
+        await dbPatch('dm_messages', `id=eq.${lastInbound.id}`, {
+          claude_suggestion: reply,
+        })
+      }
+      console.log(`Suggestion saved for ${ig_username}: ${reply.slice(0, 60)}...`)
+      return new Response(JSON.stringify({ reply: '' }), {
+        headers: { ...CORS, 'Content-Type': 'application/json' }
+      })
+    }
 
   } catch (err: any) {
     console.error('dm-manychat-reply error:', err)
