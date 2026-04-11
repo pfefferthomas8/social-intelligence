@@ -141,6 +141,14 @@ export default function DMCenter() {
 
   async function approveClaudeSuggestion(message) {
     if (!message.claude_suggestion) return
+    // Copy to clipboard
+    try { await navigator.clipboard.writeText(message.claude_suggestion) } catch {}
+    // Open ManyChat live chat
+    const accountId = (config['manychat_api_key'] || '').split(':')[0]
+    if (accountId && selectedConv?.manychat_contact_id) {
+      window.open(`https://app.manychat.com/fb${accountId}/chat/${selectedConv.manychat_contact_id}`, '_blank')
+    }
+    // Save as outbound in DB (for Claude context)
     await sendReply(message.claude_suggestion, 'claude')
   }
 
@@ -329,6 +337,22 @@ export default function DMCenter() {
                   <option key={k} value={k}>{v}</option>
                 ))}
               </select>
+              {selectedConv.manychat_contact_id && (
+                <a
+                  href={`https://app.manychat.com/fb${(config['manychat_api_key'] || '').split(':')[0]}/chat/${selectedConv.manychat_contact_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="In ManyChat öffnen"
+                  style={{
+                    padding: '4px 8px', borderRadius: 'var(--r)', fontSize: 11,
+                    background: 'var(--bg-card)', border: '1px solid var(--border)',
+                    color: 'var(--text2)', textDecoration: 'none', whiteSpace: 'nowrap',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                  }}
+                >
+                  💬 ManyChat
+                </a>
+              )}
             </div>
 
             {/* Messages */}
