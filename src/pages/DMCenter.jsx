@@ -292,7 +292,14 @@ export default function DMCenter() {
                   key={conv.id}
                   conv={conv}
                   selected={selectedConv?.id === conv.id}
-                  onClick={() => setSelectedConv(conv)}
+                  onClick={async () => {
+                    setSelectedConv(conv)
+                    // Als gelesen markieren
+                    if (conv.has_unread) {
+                      await supabase.from('dm_conversations').update({ has_unread: false }).eq('id', conv.id)
+                      setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, has_unread: false } : c))
+                    }
+                  }}
                   onToggleClaude={() => toggleConvClaude(conv.id, conv.claude_enabled)}
                   onArchive={async () => {
                     await supabase.from('dm_conversations').update({ lead_heat: 'archived' }).eq('id', conv.id)
@@ -695,16 +702,26 @@ function ConvItem({ conv, selected, onClick, onToggleClaude, onArchive }) {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ fontWeight: 500, fontSize: 13, truncate: true }}>
+            <div style={{ fontWeight: conv.has_unread ? 700 : 500, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {conv.display_name || conv.instagram_username}
             </div>
-            <div style={{ fontSize: 10, color: 'var(--text3)', whiteSpace: 'nowrap' }}>
-              {formatTime(conv.last_message_at)}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+              {conv.has_unread && (
+                <div style={{
+                  width: 8, height: 8, borderRadius: '50%',
+                  background: 'var(--accent)', flexShrink: 0,
+                  boxShadow: '0 0 6px rgba(238,79,0,0.6)',
+                }} />
+              )}
+              <div style={{ fontSize: 10, color: 'var(--text3)', whiteSpace: 'nowrap' }}>
+                {formatTime(conv.last_message_at)}
+              </div>
             </div>
           </div>
           <div style={{
-            fontSize: 12, color: 'var(--text2)', overflow: 'hidden',
-            textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2,
+            fontSize: 12, color: conv.has_unread ? 'var(--text)' : 'var(--text2)',
+            fontWeight: conv.has_unread ? 500 : 400,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2,
           }}>
             {conv.last_message_preview || '—'}
           </div>

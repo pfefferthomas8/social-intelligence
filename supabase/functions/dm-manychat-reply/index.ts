@@ -208,6 +208,13 @@ Deno.serve(async (req: Request) => {
       content: trigger_message,
       sent_by: 'user',
     })
+    // Unread Flag setzen
+    await dbPatch('dm_conversations', `id=eq.${conv.id}`, {
+      has_unread: true,
+      last_message_at: new Date().toISOString(),
+      last_message_preview: trigger_message.slice(0, 100),
+      updated_at: new Date().toISOString(),
+    })
     console.log(`Nachricht gespeichert für conv ${conv.id}: "${trigger_message.slice(0, 40)}"`)
 
     // ── Schritt 4: Lead Score Update ──────────────────────────────────────────
