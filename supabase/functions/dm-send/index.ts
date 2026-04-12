@@ -42,7 +42,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
-    const { conversation_id, text, sent_by = 'thomas' } = await req.json()
+    const { conversation_id, text, sent_by = 'thomas', original_suggestion = null } = await req.json()
 
     if (!conversation_id || !text?.trim()) {
       return new Response(JSON.stringify({ error: 'conversation_id and text required' }), {
@@ -110,13 +110,18 @@ Deno.serve(async (req: Request) => {
     }
 
     // Save message to DB regardless of ManyChat result
-    await dbPost('dm_messages', {
+    // original_suggestion wird gespeichert wenn Thomas einen Claude-Vorschlag bearbeitet hat
+    const msgPayload: any = {
       conversation_id,
       direction: 'outbound',
       content: text.trim(),
       sent_by,
       status: manychatSent ? 'sent' : 'draft',
-    })
+    }
+    if (original_suggestion && original_suggestion.trim() !== text.trim()) {
+      msgPayload.original_suggestion = original_suggestion.trim()
+    }
+    await dbPost('dm_messages', msgPayload)
 
     // Update conversation preview
     await dbPatch('dm_conversations', `id=eq.${conversation_id}`, {

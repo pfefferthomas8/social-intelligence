@@ -35,6 +35,7 @@ export default function DMCenter() {
   const [filter, setFilter] = useState('all') // all | hot | warm | cold
   const [sending, setSending] = useState(false)
   const [customReply, setCustomReply] = useState('')
+  const [editingOriginal, setEditingOriginal] = useState(null) // original Claude-Vorschlag beim Bearbeiten
   const [styleDnaLoading, setStyleDnaLoading] = useState(false)
   const [savedKey, setSavedKey] = useState(null)
   const [copiedId, setCopiedId] = useState(null)
@@ -82,6 +83,11 @@ export default function DMCenter() {
       .neq('lead_heat', 'archived')
       .order('last_message_at', { ascending: false })
     setConversations(data || [])
+    // selectedConv live halten (Lead Score, Heat etc.)
+    if (selectedConvRef.current) {
+      const updated = (data || []).find(c => c.id === selectedConvRef.current.id)
+      if (updated) setSelectedConv(updated)
+    }
   }
 
   async function loadMessages(convId) {
@@ -123,24 +129,27 @@ export default function DMCenter() {
     if (selectedConv?.id === convId) setSelectedConv(prev => ({ ...prev, claude_enabled: !current }))
   }
 
-  async function sendReply(text, sentBy = 'thomas') {
+  async function sendReply(text, sentBy = 'thomas', originalSuggestion = null) {
     if (!selectedConv || !text.trim()) return
     setSending(true)
     try {
-      // Send via ManyChat + save to DB
       const res = await fetch('https://shrsluxbrazqscgiwfpu.supabase.co/functions/v1/dm-send', {
         method: 'POST',
         headers: {
           'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNocnNsdXhicmF6cXNjZ2l3ZnB1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4ODk4MjEsImV4cCI6MjA5MDQ2NTgyMX0.8hQITokKKhVCfdVTHoGiyUzsHggfD7i13IFumsOfnuo',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ conversation_id: selectedConv.id, text, sent_by: sentBy }),
+        body: JSON.stringify({
+          conversation_id: selectedConv.id,
+          text,
+          sent_by: sentBy,
+          original_suggestion: originalSuggestion,
+        }),
       })
       const data = await res.json()
-      if (data.manychat_error) {
-        console.warn('ManyChat:', data.manychat_error)
-      }
+      if (data.manychat_error) console.warn('ManyChat:', data.manychat_error)
       setCustomReply('')
+      setEditingOriginal(null)
       await loadMessages(selectedConv.id)
     } finally {
       setSending(false)
@@ -337,22 +346,6 @@ export default function DMCenter() {
                   <option key={k} value={k}>{v}</option>
                 ))}
               </select>
-              {selectedConv.manychat_contact_id && (
-                <a
-                  href={`https://app.manychat.com/fb${(config['manychat_api_key'] || '').split(':')[0]}/chat/${selectedConv.manychat_contact_id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="In ManyChat öffnen"
-                  style={{
-                    padding: '4px 8px', borderRadius: 'var(--r)', fontSize: 11,
-                    background: 'var(--bg-card)', border: '1px solid var(--border)',
-                    color: 'var(--text2)', textDecoration: 'none', whiteSpace: 'nowrap',
-                    display: 'flex', alignItems: 'center', gap: 4,
-                  }}
-                >
-                  💬 ManyChat
-                </a>
-              )}
             </div>
 
             {/* Messages */}
@@ -394,7 +387,7 @@ export default function DMCenter() {
                 conv={selectedConv}
                 sending={sending}
                 onApprove={approveClaudeSuggestion}
-                onEdit={setCustomReply}
+                onEdit={(text) => { setCustomReply(text); setEditingOriginal(text) }}
                 onGenerate={async () => {
                   const lastInbound = [...messages].reverse().find(m => m.direction === 'inbound')
                   if (!lastInbound) return
@@ -426,28 +419,32 @@ export default function DMCenter() {
                   onKeyDown={e => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault()
-                      sendReply(customReply, 'thomas')
+                      sendReply(customReply, 'thomas', editingOriginal)
                     }
                   }}
-                  placeholder="Antwort schreiben... (Enter = senden)"
+                  placeholder={editingOriginal ? '✏ Bearbeitest Claude-Vorschlag...' : 'Antwort schreiben... (Enter = senden)'}
                   rows={2}
                   style={{
                     flex: 1, background: 'var(--bg-input)', color: 'var(--text)',
-                    border: '1px solid var(--border)', borderRadius: 'var(--r)',
+                    border: `1px solid ${editingOriginal ? 'rgba(238,79,0,0.5)' : 'var(--border)'}`,
+                    borderRadius: 'var(--r)',
                     padding: '8px 12px', fontSize: 13, fontFamily: 'var(--font)',
                     resize: 'none', outline: 'none',
                   }}
                 />
                 <button
-                  onClick={() => sendReply(customReply, 'thomas')}
+                  onClick={() => sendReply(customReply, 'thomas', editingOriginal)}
                   disabled={sending || !customReply.trim()}
                   style={{
-                    background: 'var(--accent)', color: '#fff', border: 'none',
-                    borderRadius: 'var(--r)', padding: '0 16px', cursor: 'pointer',
-                    fontSize: 18, opacity: (!customReply.trim() || sending) ? 0.4 : 1,
+                    background: customReply.trim() ? 'var(--accent)' : 'var(--bg-card)',
+                    color: customReply.trim() ? '#fff' : 'var(--text3)',
+                    border: 'none', borderRadius: 'var(--r)', padding: '0 16px',
+                    cursor: customReply.trim() ? 'pointer' : 'default',
+                    fontSize: 18, transition: 'all 0.15s',
+                    opacity: sending ? 0.5 : 1,
                   }}
                 >
-                  ↑
+                  {sending ? '⏳' : '↑'}
                 </button>
               </div>
             </div>

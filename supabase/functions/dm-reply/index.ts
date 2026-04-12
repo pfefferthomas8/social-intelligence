@@ -99,10 +99,23 @@ Deno.serve(async (req: Request) => {
       content: m.content,
     }))
 
+    // Lade letzte Korrekturen von Thomas (wo er Claude-Vorschläge bearbeitet hat)
+    const correctionRows = await dbGet(
+      `dm_messages?original_suggestion=not.is.null&direction=eq.outbound&order=created_at.desc&limit=10&select=content,original_suggestion`
+    )
+    const correctionContext = correctionRows.length > 0
+      ? `\nWAS THOMAS AN CLAUDE-VORSCHLÄGEN GEÄNDERT HAT (lerne daraus — das ist sein echter Stil):\n${
+          correctionRows.map((r: any, i: number) =>
+            `${i + 1}. Claude schlug vor: "${r.original_suggestion.slice(0, 120)}"\n   Thomas hat gesendet: "${r.content.slice(0, 120)}"`
+          ).join('\n')
+        }\n`
+      : ''
+
     const systemPrompt = `Du bist Thomas Pfeffer, Fitness Coach aus Österreich. Du antwortest auf Instagram DMs von potenziellen männlichen Kunden.
 
 DEIN EXAKTER SCHREIBSTIL (aus echten Chats analysiert):
 ${styleDna}
+${correctionContext}
 
 ${openingContext}
 
