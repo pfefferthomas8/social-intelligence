@@ -997,78 +997,102 @@ function HeatBadge({ heat }) {
 }
 
 function ClaudeBanner({ messages, conv, sending, onApprove, onEdit, onGenerate }) {
-  // Find last inbound message
   const lastInbound = [...messages].reverse().find(m => m.direction === 'inbound')
   if (!lastInbound) return null
 
-  // Check if there's already an outbound message after this inbound
   const lastInboundTime = lastInbound.created_at
   const alreadyReplied = messages.some(m => m.direction === 'outbound' && m.created_at > lastInboundTime)
   if (alreadyReplied) return null
 
-  // Has suggestion
+  const btnBase = {
+    borderRadius: 'var(--r-sm)', padding: '6px 14px', fontSize: 12,
+    cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 600,
+    transition: 'opacity 0.15s, transform 0.1s', border: 'none',
+  }
+
   if (lastInbound.claude_suggestion) {
     return (
       <div style={{
-        background: 'rgba(238,79,0,0.08)', border: '1px solid rgba(238,79,0,0.2)',
+        background: 'rgba(238,79,0,0.08)', border: '1px solid rgba(238,79,0,0.3)',
         borderRadius: 'var(--r)', padding: '10px 12px', marginBottom: 10,
       }}>
-        <div style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600, marginBottom: 6 }}>
-          CLAUDE SCHLÄGT VOR
+        <div style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 700, marginBottom: 6, letterSpacing: '0.05em' }}>
+          ✦ CLAUDE SCHLÄGT VOR
         </div>
         <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5, marginBottom: 8 }}>
           {lastInbound.claude_suggestion}
         </div>
         {lastInbound.claude_reasoning && (
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8, fontStyle: 'italic' }}>
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 10, fontStyle: 'italic' }}>
             💡 {lastInbound.claude_reasoning}
           </div>
         )}
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => onApprove(lastInbound)} disabled={sending} style={{
-            background: 'var(--accent)', color: '#fff', border: 'none',
-            borderRadius: 'var(--r-sm)', padding: '5px 12px', fontSize: 12,
-            cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 500,
-          }}>✓ Senden</button>
-          <button onClick={() => onEdit(lastInbound.claude_suggestion)} style={{
-            background: 'var(--bg-card)', color: 'var(--text2)', border: '1px solid var(--border)',
-            borderRadius: 'var(--r-sm)', padding: '5px 12px', fontSize: 12,
-            cursor: 'pointer', fontFamily: 'var(--font)',
-          }}>✏ Bearbeiten</button>
-          <button onClick={onGenerate} disabled={sending} style={{
-            background: 'transparent', color: 'var(--text3)', border: '1px solid var(--border)',
-            borderRadius: 'var(--r-sm)', padding: '5px 10px', fontSize: 11,
-            cursor: 'pointer', fontFamily: 'var(--font)',
-          }}>↻ Neu</button>
+          <button
+            onClick={() => onApprove(lastInbound)}
+            disabled={sending}
+            style={{
+              ...btnBase,
+              background: sending ? '#555' : 'var(--accent)',
+              color: '#fff',
+              opacity: sending ? 0.7 : 1,
+              minWidth: 90,
+            }}
+          >
+            {sending ? '⏳ Sendet...' : '✓ Senden'}
+          </button>
+          <button
+            onClick={() => onEdit(lastInbound.claude_suggestion)}
+            disabled={sending}
+            style={{
+              ...btnBase,
+              background: 'var(--bg-card)', color: 'var(--text)',
+              border: '1px solid var(--border)', opacity: sending ? 0.5 : 1,
+            }}
+          >
+            ✏ Bearbeiten
+          </button>
+          <button
+            onClick={onGenerate}
+            disabled={sending}
+            style={{
+              ...btnBase,
+              background: 'var(--bg-card)', color: 'var(--accent)',
+              border: '1px solid rgba(238,79,0,0.4)',
+              opacity: sending ? 0.5 : 1,
+              minWidth: 80,
+            }}
+          >
+            {sending ? '⏳' : '↻ Neu'}
+          </button>
         </div>
       </div>
     )
   }
 
-  // No suggestion yet — show generate button
   if (conv?.claude_blocked) return null
 
   return (
     <div style={{
-      background: 'var(--bg-card)', border: '1px solid var(--border)',
-      borderRadius: 'var(--r)', padding: '8px 12px', marginBottom: 10,
+      background: 'rgba(238,79,0,0.05)', border: '1px solid rgba(238,79,0,0.25)',
+      borderRadius: 'var(--r)', padding: '10px 12px', marginBottom: 10,
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     }}>
-      <div style={{ fontSize: 12, color: 'var(--text3)' }}>
+      <div style={{ fontSize: 12, color: 'var(--text2)' }}>
         Kein Vorschlag für diese Nachricht
       </div>
       <button
         onClick={onGenerate}
         disabled={sending}
         style={{
-          background: 'var(--accent-dim)', color: 'var(--accent)',
-          border: '1px solid rgba(238,79,0,0.3)',
-          borderRadius: 'var(--r-sm)', padding: '4px 10px', fontSize: 11,
-          cursor: sending ? 'not-allowed' : 'pointer', fontFamily: 'var(--font)',
-          fontWeight: 500, opacity: sending ? 0.5 : 1,
+          ...btnBase,
+          background: sending ? '#333' : 'var(--accent)',
+          color: '#fff',
+          opacity: sending ? 0.7 : 1,
+          minWidth: 160,
         }}
       >
-        {sending ? '...' : '✦ Vorschlag generieren'}
+        {sending ? '⏳ Generiert...' : '✦ Vorschlag generieren'}
       </button>
     </div>
   )

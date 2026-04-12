@@ -90,6 +90,13 @@ Deno.serve(async (req: Request) => {
         const flowData = await flowRes.json()
         if (flowData.status === 'success') {
           manychatSent = true
+          // Feld nach dem Senden zurücksetzen damit beim nächsten Trigger nicht nochmal gesendet wird
+          await new Promise(r => setTimeout(r, 2000))
+          await fetch('https://api.manychat.com/fb/subscriber/setCustomFieldByName', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${manychatKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subscriber_id: conv.manychat_contact_id, field_name: 'claude_reply', field_value: '0' }),
+          })
         } else {
           manychatError = flowData.message || JSON.stringify(flowData)
           console.error('sendFlow error:', JSON.stringify(flowData))

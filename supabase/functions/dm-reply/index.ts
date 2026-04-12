@@ -122,12 +122,17 @@ VERKAUFSPHILOSOPHIE — Socratic Selling:
 - App nur wenn Budget/Zeit klar dagegen spricht
 
 LEAD INFO:
+- Name: ${conv.display_name || 'Unbekannt'}
 - Stage: ${conv.stage || 'qualification'}
 - Score: ${conv.lead_score || 0}/100
-
+${conv.notes ? `
+NOTIZEN ZU DIESEM LEAD (von Thomas persönlich hinterlegt — UNBEDINGT berücksichtigen, hat höchste Priorität):
+${conv.notes}
+` : ''}
 ABSOLUT WICHTIG:
 - Sei Thomas — schreib exakt wie er, nicht wie ein Bot
 - Kein "Als Coach..." oder formelle Sprache
+- Niemals Bindestriche als Gedankenstrich
 - Antworte auf Deutsch`
 
     const suggestion = await callClaude(

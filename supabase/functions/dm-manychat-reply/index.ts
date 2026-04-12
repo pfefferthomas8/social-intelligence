@@ -24,22 +24,31 @@ async function dbGet(path: string): Promise<any[]> {
   return Array.isArray(data) ? data : []
 }
 
-async function dbPost(table: string, body: any): Promise<any> {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+async function dbUpsertConversation(body: any): Promise<any> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/dm_conversations`, {
     method: 'POST',
-    headers: { ...dbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=representation', 'on-conflict': 'manychat_contact_id' },
+    headers: {
+      ...dbHeaders(),
+      'Prefer': 'resolution=merge-duplicates,return=representation',
+      'on-conflict': 'manychat_contact_id',
+    },
     body: JSON.stringify(body),
   })
   const data = await res.json()
+  console.log('upsert conv response status:', res.status, 'data:', JSON.stringify(data).slice(0, 200))
   return Array.isArray(data) ? data[0] : data
 }
 
 async function dbInsert(table: string, body: any): Promise<void> {
-  await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
     method: 'POST',
     headers: { ...dbHeaders(), 'Prefer': 'return=minimal' },
     body: JSON.stringify(body),
   })
+  if (!res.ok) {
+    const text = await res.text()
+    console.error(`dbInsert ${table} failed:`, res.status, text)
+  }
 }
 
 async function dbPatch(table: string, filter: string, body: any): Promise<void> {
@@ -103,38 +112,105 @@ Deno.serve(async (req: Request) => {
       })
     }
 
-    console.log(`dm-manychat-reply: ${ig_username} (${subscriber_id}): ${trigger_message.slice(0, 80)}`)
+    console.log(`dm-manychat-reply: ${ig_username} (${subscriber_id}): "${trigger_message.slice(0, 80)}"`)
 
     // Load config
     const configRows = await dbGet('dm_config?select=key,value')
     const config: Record<string, string> = {}
     configRows.forEach((c: any) => { config[c.key] = c.value })
 
-    // Gender check
-    const gender = detectGender(display_name, ig_username)
+    // ── Platzhalter erkennen und echte Daten von ManyChat holen ───────────────
+    let resolvedName = display_name
+    let resolvedUsername = ig_username
+    const isPlaceholder = (v: string) => !v || v.includes('{{') || v === 'Unbekannt'
 
-    // IMMER Konversation speichern — unabhängig von Claude-Status
-    const conv = await dbPost('dm_conversations', {
-      manychat_contact_id: String(subscriber_id),
-      instagram_username: ig_username || String(subscriber_id),
-      display_name: display_name || ig_username || 'Unbekannt',
-      gender,
-      last_message_at: new Date().toISOString(),
-      last_message_preview: trigger_message.slice(0, 100),
-      updated_at: new Date().toISOString(),
+    if (isPlaceholder(resolvedName) || isPlaceholder(resolvedUsername)) {
+      try {
+        const mcKey = config['manychat_api_key']
+        if (mcKey) {
+          const mcRes = await fetch(
+            `https://api.manychat.com/fb/subscriber/getInfo?subscriber_id=${subscriber_id}`,
+            { headers: { 'Authorization': `Bearer ${mcKey}` } }
+          )
+          const mcData = await mcRes.json()
+          if (mcData.data) {
+            resolvedName = mcData.data.name || resolvedName
+            resolvedUsername = mcData.data.ig_username || resolvedUsername
+            console.log(`ManyChat lookup: name="${resolvedName}" ig="${resolvedUsername}"`)
+          }
+        }
+      } catch (e: any) {
+        console.error('ManyChat getInfo failed:', e.message)
+      }
+    }
+
+    // Fallback wenn immer noch leer
+    if (isPlaceholder(resolvedName)) resolvedName = resolvedUsername || String(subscriber_id)
+    if (isPlaceholder(resolvedUsername)) resolvedUsername = String(subscriber_id)
+
+    // Gender check
+    const gender = detectGender(resolvedName, resolvedUsername)
+
+    // ── Schritt 1: Konversation upserten ──────────────────────────────────────
+    let conv: any = null
+    try {
+      conv = await dbUpsertConversation({
+        manychat_contact_id: String(subscriber_id),
+        instagram_username: resolvedUsername,
+        display_name: resolvedName,
+        gender,
+        last_message_at: new Date().toISOString(),
+        last_message_preview: trigger_message.slice(0, 100),
+        updated_at: new Date().toISOString(),
+      })
+    } catch (e: any) {
+      console.error('Conv upsert threw:', e.message)
+    }
+
+    // Fallback: Konversation per manychat_contact_id nachschlagen
+    if (!conv?.id) {
+      console.log('Upsert gab kein id zurück — suche per manychat_contact_id')
+      const existing = await dbGet(
+        `dm_conversations?manychat_contact_id=eq.${encodeURIComponent(String(subscriber_id))}&limit=1`
+      )
+      conv = existing[0] || null
+      console.log('Fallback lookup:', conv ? `gefunden id=${conv.id}` : 'NICHT gefunden')
+    }
+
+    if (!conv?.id) {
+      console.error('Konversation konnte nicht erstellt/gefunden werden für subscriber_id:', subscriber_id)
+      return new Response(JSON.stringify({ reply: '', error: 'conv_not_found' }), {
+        headers: { ...CORS, 'Content-Type': 'application/json' }
+      })
+    }
+
+    // ── Schritt 2: Doppelte Nachrichten verhindern ────────────────────────────
+    // Prüfe ob exakt diese Nachricht in den letzten 10 Sekunden schon gespeichert wurde
+    const recentMsgs = await dbGet(
+      `dm_messages?conversation_id=eq.${conv.id}&direction=eq.inbound&order=created_at.desc&limit=3`
+    )
+    const isDuplicate = recentMsgs.some((m: any) => {
+      const ageSec = (Date.now() - new Date(m.created_at).getTime()) / 1000
+      return m.content === trigger_message && ageSec < 30
     })
 
-    if (!conv?.id) throw new Error('Failed to upsert conversation')
+    if (isDuplicate) {
+      console.log(`Duplikat erkannt innerhalb 30s, überspringe: "${trigger_message.slice(0, 40)}"`)
+      return new Response(JSON.stringify({ reply: '' }), {
+        headers: { ...CORS, 'Content-Type': 'application/json' }
+      })
+    }
 
-    // IMMER Nachricht speichern
+    // ── Schritt 3: Nachricht IMMER speichern ──────────────────────────────────
     await dbInsert('dm_messages', {
       conversation_id: conv.id,
       direction: 'inbound',
       content: trigger_message,
       sent_by: 'user',
     })
+    console.log(`Nachricht gespeichert für conv ${conv.id}: "${trigger_message.slice(0, 40)}"`)
 
-    // Lead Score Update
+    // ── Schritt 4: Lead Score Update ──────────────────────────────────────────
     let scoreIncrease = 0
     if (/preis|kosten|was kostet|wie viel|invest/i.test(trigger_message)) scoreIncrease += 20
     if (/interesse|interessiert|würde gerne|möchte|will/i.test(trigger_message)) scoreIncrease += 15
@@ -147,7 +223,7 @@ Deno.serve(async (req: Request) => {
       await dbPatch('dm_conversations', `id=eq.${conv.id}`, { lead_score: newScore, lead_heat: heat })
     }
 
-    // Ab hier: Claude nur wenn aktiv und nicht gesperrt
+    // ── Schritt 5: Claude nur wenn aktiv und nicht gesperrt ───────────────────
     if (config['global_claude_enabled'] !== 'true' || conv.claude_blocked || gender === 'female') {
       console.log(`Claude skipped for ${ig_username} (blocked/disabled/female)`)
       return new Response(JSON.stringify({ reply: '' }), {
@@ -205,9 +281,13 @@ VERKAUFSPHILOSOPHIE — Socratic Selling:
 - Link erst schicken wenn der Moment wirklich reif ist
 
 LEAD INFO:
+- Name: ${resolvedName}
 - Stage: ${conv.stage || 'qualification'}
 - Score: ${conv.lead_score || 0}/100
-
+${conv.notes ? `
+NOTIZEN ZU DIESEM LEAD (von Thomas persönlich hinterlegt — UNBEDINGT berücksichtigen, hat höchste Priorität):
+${conv.notes}
+` : ''}
 ABSOLUT WICHTIG:
 - Sei Thomas — schreib exakt wie er, nicht wie ein Bot
 - Kein "Als Coach..." oder formelle Sprache
