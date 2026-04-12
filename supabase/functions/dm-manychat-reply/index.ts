@@ -184,21 +184,40 @@ Deno.serve(async (req: Request) => {
       })
     }
 
-    // ── Schritt 2: Doppelte Nachrichten verhindern ────────────────────────────
-    // Prüfe ob exakt diese Nachricht in den letzten 10 Sekunden schon gespeichert wurde
+    // ── Schritt 2: Duplikat & Anti-Loop Check ────────────────────────────────
     const recentMsgs = await dbGet(
-      `dm_messages?conversation_id=eq.${conv.id}&direction=eq.inbound&order=created_at.desc&limit=3`
+      `dm_messages?conversation_id=eq.${conv.id}&order=created_at.desc&limit=5`
     )
+
+    // 2a: Exaktes Duplikat innerhalb 30s
     const isDuplicate = recentMsgs.some((m: any) => {
       const ageSec = (Date.now() - new Date(m.created_at).getTime()) / 1000
-      return m.content === trigger_message && ageSec < 30
+      return m.direction === 'inbound' && m.content === trigger_message && ageSec < 30
     })
-
     if (isDuplicate) {
-      console.log(`Duplikat erkannt innerhalb 30s, überspringe: "${trigger_message.slice(0, 40)}"`)
+      console.log(`Duplikat <30s: "${trigger_message.slice(0, 40)}"`)
       return new Response(JSON.stringify({ reply: '' }), {
         headers: { ...CORS, 'Content-Type': 'application/json' }
       })
+    }
+
+    // 2b: Anti-Loop für Mode C — wenn dieselbe Nachricht bereits existiert
+    // UND danach eine Outbound gespeichert wurde → sendFlow hat uns getriggert, kein echter User-Message
+    const lastInboundSame = recentMsgs.find((m: any) => m.direction === 'inbound' && m.content === trigger_message)
+    if (lastInboundSame) {
+      const ageSec = (Date.now() - new Date(lastInboundSame.created_at).getTime()) / 1000
+      if (ageSec < 600) { // Innerhalb 10 Minuten
+        const outboundAfter = recentMsgs.find((m: any) =>
+          m.direction === 'outbound' &&
+          new Date(m.created_at) > new Date(lastInboundSame.created_at)
+        )
+        if (outboundAfter) {
+          console.log(`Anti-Loop: sendFlow-Trigger erkannt für "${trigger_message.slice(0, 30)}", überspringe`)
+          return new Response(JSON.stringify({ reply: '' }), {
+            headers: { ...CORS, 'Content-Type': 'application/json' }
+          })
+        }
+      }
     }
 
     // ── Schritt 3: Nachricht IMMER speichern ──────────────────────────────────
@@ -333,7 +352,21 @@ ABSOLUT WICHTIG:
           const flowNs = config['manychat_flow_ns']
           if (!mcKey || !flowNs) throw new Error('ManyChat config fehlt')
 
-          // Feld setzen
+          // ERST in DB speichern — damit Anti-Loop greift wenn sendFlow uns wieder aufruft
+          await dbInsert('dm_messages', {
+            conversation_id: conv.id,
+            direction: 'outbound',
+            content: reply,
+            sent_by: 'claude',
+            status: 'sent',
+          })
+          await dbPatch('dm_conversations', `id=eq.${conv.id}`, {
+            last_message_at: new Date().toISOString(),
+            last_message_preview: reply.slice(0, 100),
+            updated_at: new Date().toISOString(),
+          })
+
+          // DANN via ManyChat senden
           const fieldRes = await fetch('https://api.manychat.com/fb/subscriber/setCustomFieldByName', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${mcKey}`, 'Content-Type': 'application/json' },
@@ -342,7 +375,6 @@ ABSOLUT WICHTIG:
           const fieldData = await fieldRes.json()
           if (fieldData.status !== 'success') throw new Error(`setCustomField: ${fieldData.message}`)
 
-          // Flow triggern
           await fetch('https://api.manychat.com/fb/sending/sendFlow', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${mcKey}`, 'Content-Type': 'application/json' },
@@ -355,20 +387,6 @@ ABSOLUT WICHTIG:
             method: 'POST',
             headers: { 'Authorization': `Bearer ${mcKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ subscriber_id: String(subscriber_id), field_name: 'claude_reply', field_value: '0' }),
-          })
-
-          // In DB speichern
-          await dbInsert('dm_messages', {
-            conversation_id: conv.id,
-            direction: 'outbound',
-            content: reply,
-            sent_by: 'claude',
-            status: 'sent',
-          })
-          await dbPatch('dm_conversations', `id=eq.${conv.id}`, {
-            last_message_at: new Date().toISOString(),
-            last_message_preview: reply.slice(0, 100),
-            updated_at: new Date().toISOString(),
           })
           console.log(`Verzögert gesendet (${delaySeconds}s) für ${resolvedUsername}`)
         } catch (e: any) {
