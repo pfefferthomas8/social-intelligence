@@ -321,21 +321,71 @@ ABSOLUT WICHTIG:
     if (!reply) throw new Error('Claude returned empty reply')
 
     if (autoSend) {
-      // Modus C: sofort senden + in DB speichern
-      await dbInsert('dm_messages', {
-        conversation_id: conv.id,
-        direction: 'outbound',
-        content: reply,
-        sent_by: 'claude',
-        status: 'sent',
-      })
-      await dbPatch('dm_conversations', `id=eq.${conv.id}`, {
-        last_message_at: new Date().toISOString(),
-        last_message_preview: reply.slice(0, 100),
-        updated_at: new Date().toISOString(),
-      })
-      console.log(`Auto-sent for ${ig_username}: ${reply.slice(0, 60)}...`)
-      return new Response(JSON.stringify({ reply }), {
+      // Modus C: verzögertes Senden (1-3 Minuten zufällig)
+      const delaySeconds = 60 + Math.floor(Math.random() * 120) // 60–180s
+      const delayMs = delaySeconds * 1000
+      console.log(`Mode C: sende in ${delaySeconds}s für ${resolvedUsername}: "${reply.slice(0, 40)}..."`)
+
+      const sendDelayed = async () => {
+        await new Promise(r => setTimeout(r, delayMs))
+        try {
+          const mcKey = config['manychat_api_key']
+          const flowNs = config['manychat_flow_ns']
+          if (!mcKey || !flowNs) throw new Error('ManyChat config fehlt')
+
+          // Feld setzen
+          const fieldRes = await fetch('https://api.manychat.com/fb/subscriber/setCustomFieldByName', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${mcKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subscriber_id: String(subscriber_id), field_name: 'claude_reply', field_value: reply }),
+          })
+          const fieldData = await fieldRes.json()
+          if (fieldData.status !== 'success') throw new Error(`setCustomField: ${fieldData.message}`)
+
+          // Flow triggern
+          await fetch('https://api.manychat.com/fb/sending/sendFlow', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${mcKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subscriber_id: String(subscriber_id), flow_ns: flowNs }),
+          })
+
+          // Feld nach 2s zurücksetzen
+          await new Promise(r => setTimeout(r, 2000))
+          await fetch('https://api.manychat.com/fb/subscriber/setCustomFieldByName', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${mcKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subscriber_id: String(subscriber_id), field_name: 'claude_reply', field_value: '0' }),
+          })
+
+          // In DB speichern
+          await dbInsert('dm_messages', {
+            conversation_id: conv.id,
+            direction: 'outbound',
+            content: reply,
+            sent_by: 'claude',
+            status: 'sent',
+          })
+          await dbPatch('dm_conversations', `id=eq.${conv.id}`, {
+            last_message_at: new Date().toISOString(),
+            last_message_preview: reply.slice(0, 100),
+            updated_at: new Date().toISOString(),
+          })
+          console.log(`Verzögert gesendet (${delaySeconds}s) für ${resolvedUsername}`)
+        } catch (e: any) {
+          console.error('Verzögerter Send fehlgeschlagen:', e.message)
+        }
+      }
+
+      // Im Hintergrund ausführen — Antwort sofort an ManyChat
+      // @ts-ignore
+      if (typeof EdgeRuntime !== 'undefined') {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(sendDelayed())
+      } else {
+        sendDelayed()
+      }
+
+      return new Response(JSON.stringify({ reply: '' }), {
         headers: { ...CORS, 'Content-Type': 'application/json' }
       })
     } else {
