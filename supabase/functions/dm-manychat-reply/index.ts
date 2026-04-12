@@ -110,23 +110,10 @@ Deno.serve(async (req: Request) => {
     const config: Record<string, string> = {}
     configRows.forEach((c: any) => { config[c.key] = c.value })
 
-    // Check global Claude toggle
-    if (config['global_claude_enabled'] !== 'true') {
-      return new Response(JSON.stringify({ reply: '' }), {
-        headers: { ...CORS, 'Content-Type': 'application/json' }
-      })
-    }
-
     // Gender check
     const gender = detectGender(display_name, ig_username)
-    if (gender === 'female') {
-      console.log(`Skipping female: ${display_name}`)
-      return new Response(JSON.stringify({ reply: '' }), {
-        headers: { ...CORS, 'Content-Type': 'application/json' }
-      })
-    }
 
-    // Upsert conversation
+    // IMMER Konversation speichern — unabhängig von Claude-Status
     const conv = await dbPost('dm_conversations', {
       manychat_contact_id: String(subscriber_id),
       instagram_username: ig_username || String(subscriber_id),
@@ -139,20 +126,34 @@ Deno.serve(async (req: Request) => {
 
     if (!conv?.id) throw new Error('Failed to upsert conversation')
 
-    // Check if manually blocked
-    if (conv.claude_blocked) {
-      return new Response(JSON.stringify({ reply: '' }), {
-        headers: { ...CORS, 'Content-Type': 'application/json' }
-      })
-    }
-
-    // Save inbound message
+    // IMMER Nachricht speichern
     await dbInsert('dm_messages', {
       conversation_id: conv.id,
       direction: 'inbound',
       content: trigger_message,
       sent_by: 'user',
     })
+
+    // Lead Score Update
+    let scoreIncrease = 0
+    if (/preis|kosten|was kostet|wie viel|invest/i.test(trigger_message)) scoreIncrease += 20
+    if (/interesse|interessiert|würde gerne|möchte|will/i.test(trigger_message)) scoreIncrease += 15
+    if (/abnehm|gewicht|kilo|kg|fett|muskel|training|coaching/i.test(trigger_message)) scoreIncrease += 10
+    if (/wann|start|anfangen|beginnen|wie geht/i.test(trigger_message)) scoreIncrease += 15
+    if (trigger_message.length > 100) scoreIncrease += 5
+    if (scoreIncrease > 0) {
+      const newScore = Math.min(100, (conv.lead_score || 0) + scoreIncrease)
+      const heat = newScore >= 70 ? 'hot' : newScore >= 40 ? 'warm' : 'cold'
+      await dbPatch('dm_conversations', `id=eq.${conv.id}`, { lead_score: newScore, lead_heat: heat })
+    }
+
+    // Ab hier: Claude nur wenn aktiv und nicht gesperrt
+    if (config['global_claude_enabled'] !== 'true' || conv.claude_blocked || gender === 'female') {
+      console.log(`Claude skipped for ${ig_username} (blocked/disabled/female)`)
+      return new Response(JSON.stringify({ reply: '' }), {
+        headers: { ...CORS, 'Content-Type': 'application/json' }
+      })
+    }
 
     // Load last 20 messages for context
     const msgs = await dbGet(`dm_messages?conversation_id=eq.${conv.id}&order=created_at.asc&limit=20`)
@@ -222,19 +223,6 @@ ABSOLUT WICHTIG:
 
     const reply = await callClaude(systemPrompt, history)
     if (!reply) throw new Error('Claude returned empty reply')
-
-    // Update lead score
-    let scoreIncrease = 0
-    if (/preis|kosten|was kostet|wie viel|invest/i.test(trigger_message)) scoreIncrease += 20
-    if (/interesse|interessiert|würde gerne|möchte|will/i.test(trigger_message)) scoreIncrease += 15
-    if (/abnehm|gewicht|kilo|kg|fett|muskel|training|coaching/i.test(trigger_message)) scoreIncrease += 10
-    if (/wann|start|anfangen|beginnen|wie geht/i.test(trigger_message)) scoreIncrease += 15
-    if (trigger_message.length > 100) scoreIncrease += 5
-    if (scoreIncrease > 0) {
-      const newScore = Math.min(100, (conv.lead_score || 0) + scoreIncrease)
-      const heat = newScore >= 70 ? 'hot' : newScore >= 40 ? 'warm' : 'cold'
-      await dbPatch('dm_conversations', `id=eq.${conv.id}`, { lead_score: newScore, lead_heat: heat })
-    }
 
     if (autoSend) {
       // Modus C: sofort senden + in DB speichern
