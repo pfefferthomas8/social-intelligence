@@ -284,6 +284,7 @@ LEAD INFO:
 - Name: ${resolvedName}
 - Stage: ${conv.stage || 'qualification'}
 - Score: ${conv.lead_score || 0}/100
+- Deal Status: ${conv.deal_status === 'won' ? '✅ Hat bereits gekauft' : conv.deal_status === 'lost' ? '❌ Hat nicht gekauft' : conv.deal_status === 'nurture' ? '🌱 Nurture' : '⏳ Noch offen'}
 ${conv.notes ? `
 NOTIZEN ZU DIESEM LEAD (von Thomas persönlich hinterlegt — UNBEDINGT berücksichtigen, hat höchste Priorität):
 ${conv.notes}

@@ -413,6 +413,20 @@ export default function DMCenter() {
                 }}
               />
 
+              {/* Sprachnotiz Button */}
+              <div style={{ marginBottom: 6, display: 'flex', gap: 6 }}>
+                <button onClick={() => {
+                  const note = prompt('Was hast du in der Sprachnachricht gesagt? (Kurze Zusammenfassung)')
+                  if (note?.trim()) {
+                    sendReply(`🎤 [Sprachnachricht: ${note.trim()}]`, 'thomas', null)
+                  }
+                }} style={{
+                  fontSize: 11, padding: '4px 10px', borderRadius: 4, cursor: 'pointer',
+                  background: 'var(--bg-card)', color: 'var(--text2)',
+                  border: '1px solid var(--border)', fontFamily: 'var(--font)',
+                }}>🎤 Sprachnotiz</button>
+              </div>
+
               <div style={{ display: 'flex', gap: 8 }}>
                 <textarea
                   value={customReply}
@@ -499,6 +513,33 @@ export default function DMCenter() {
                   Claude gesperrt
                 </span>
               )}
+            </div>
+
+            {/* Deal Status */}
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, letterSpacing: '0.05em', marginBottom: 6 }}>DEAL STATUS</div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {[
+                  { key: 'open', label: '⏳ Offen', color: '#555', active: '#555', bg: 'var(--bg-card)' },
+                  { key: 'won', label: '✅ Gekauft', color: '#22c55e', bg: 'rgba(34,197,94,0.1)' },
+                  { key: 'lost', label: '❌ Verloren', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' },
+                  { key: 'nurture', label: '🌱 Nurture', color: '#eab308', bg: 'rgba(234,179,8,0.1)' },
+                ].map(({ key, label, color, bg }) => {
+                  const isActive = (selectedConv.deal_status || 'open') === key
+                  return (
+                    <button key={key} onClick={async () => {
+                      await supabase.from('dm_conversations').update({ deal_status: key }).eq('id', selectedConv.id)
+                      setSelectedConv(prev => ({ ...prev, deal_status: key }))
+                    }} style={{
+                      flex: 1, fontSize: 10, padding: '4px 2px', borderRadius: 4, cursor: 'pointer',
+                      fontFamily: 'var(--font)', fontWeight: isActive ? 700 : 400,
+                      border: isActive ? `1px solid ${color}` : '1px solid var(--border)',
+                      background: isActive ? bg : 'var(--bg-card)',
+                      color: isActive ? color : 'var(--text3)',
+                    }}>{label}</button>
+                  )
+                })}
+              </div>
             </div>
           </div>
 

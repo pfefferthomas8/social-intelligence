@@ -63,7 +63,6 @@ const FEMALE_NAMES = new Set([
 ])
 
 function detectGender(name: string, username: string, manychatGender?: string): string {
-  // Prio 1: ManyChat explicit gender field
   if (manychatGender) {
     const g = manychatGender.toLowerCase()
     if (g === 'female' || g === 'f') return 'female'
@@ -73,30 +72,29 @@ function detectGender(name: string, username: string, manychatGender?: string): 
   const combined = `${name} ${username}`.toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
-  // Prio 2: Clear female title/prefix in name or username
   if (/\bmrs[\.\s]|^mrs$|\bms[\.\s]|^ms$|\bfrau\b|\blady\b|\bgirl\b|\bshe\b|\bher\b/.test(combined)) return 'female'
-  // Male titles
   if (/\bmr[\.\s]|^mr$|\bherr\b|\bsir\b|\bhe\b|\bhim\b/.test(combined)) return 'male'
-
-  // Prio 3: Female keywords in username
   if (/girl|woman|women|lady|mama|mami|mutti|mutter|queen|princess|beautymom|babygirl/.test(combined)) return 'female'
   if (/guy|man|boy|papa|daddy|king|prince|bro|bruder/.test(combined)) return 'male'
 
-  // Prio 4: First name from display name
   if (!name) return 'unknown'
   const firstName = name.trim().split(/[\s\.\_]/)[0].toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   if (FEMALE_NAMES.has(firstName)) return 'female'
 
-  return 'unknown' // besser unknown als falsch raten
+  return 'unknown'
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
+    // Extract campaign ID from URL query params
+    const url = new URL(req.url)
+    const campaignId = url.searchParams.get('campaign') || null
+
     const body = await req.json()
-    console.log('ManyChat webhook:', JSON.stringify(body).slice(0, 300))
+    console.log('ManyChat webhook:', JSON.stringify(body).slice(0, 300), 'campaign:', campaignId)
 
     const { type, data } = body
     if (type !== 'message' && type !== 'new_message') {
@@ -127,18 +125,18 @@ Deno.serve(async (req: Request) => {
     const gender = detectGender(displayName, username, manychatGender)
     const autoBlocked = gender === 'female'
 
-    // Load existing conversation to preserve manual overrides
+    // Load existing conversation
     const existing = await dbGet(`dm_conversations?manychat_contact_id=eq.${contactId}&limit=1`)
     const existingConv = existing[0] || null
 
     const finalGender = existingConv?.gender && existingConv.gender !== 'unknown'
       ? existingConv.gender : gender
     const claudeBlocked = existingConv !== null
-      ? existingConv.claude_blocked  // keep manual override
-      : autoBlocked                   // auto-set for new contacts
+      ? existingConv.claude_blocked
+      : autoBlocked
 
-    // Upsert conversation
-    const conv = await dbUpsert('dm_conversations', {
+    // Upsert conversation — tag with campaign_id if new and campaign present
+    const convData: any = {
       manychat_contact_id: contactId,
       instagram_username: username,
       display_name: displayName,
@@ -148,28 +146,42 @@ Deno.serve(async (req: Request) => {
       last_message_at: new Date().toISOString(),
       last_message_preview: messageText.slice(0, 100),
       updated_at: new Date().toISOString(),
-    }, 'manychat_contact_id')
+    }
+    // Only set campaign_id on new conversations (don't overwrite on existing)
+    if (!existingConv && campaignId) {
+      convData.campaign_id = campaignId
+    }
 
+    const conv = await dbUpsert('dm_conversations', convData, 'manychat_contact_id')
     if (!conv?.id) throw new Error('Failed to upsert conversation')
 
-    // If NEW conversation + inbound: prepend opening message as first outbound message
+    // If NEW conversation + inbound: look up opening message
+    // Priority: campaign opening message > no opening message (organic inbound)
     if (!existingConv && direction === 'inbound') {
-      const configRows = await dbGet('dm_config?select=key,value')
-      const cfg: Record<string, string> = {}
-      configRows.forEach((c: any) => { cfg[c.key] = c.value })
-      const openingMsg = cfg['opening_message'] || ''
-      if (openingMsg.trim()) {
+      let openingMsg = ''
+
+      if (campaignId) {
+        // Load campaign-specific opening message
+        const campaigns = await dbGet(`dm_campaigns?id=eq.${campaignId}&limit=1`)
+        const campaign = campaigns[0]
+        if (campaign?.opening_message?.trim()) {
+          openingMsg = campaign.opening_message.trim()
+        }
+      }
+      // No campaignId = organic inbound = no opening message (they wrote first)
+
+      if (openingMsg) {
         await dbPost('dm_messages', {
           conversation_id: conv.id,
           direction: 'outbound',
-          content: openingMsg.trim(),
+          content: openingMsg,
           sent_by: 'thomas',
           status: 'sent',
         })
       }
     }
 
-    // Insert inbound/outbound message
+    // Insert the actual message
     await dbPost('dm_messages', {
       conversation_id: conv.id,
       manychat_message_id: messageId || null,
@@ -204,7 +216,6 @@ Deno.serve(async (req: Request) => {
 
     if (claudeEnabled && direction === 'inbound') {
       const autonomyMode = conv.autonomy_mode || config['default_autonomy_mode'] || 'B'
-      // Fire and forget — don't await
       fetch(`${SUPABASE_URL}/functions/v1/dm-reply`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
@@ -212,7 +223,7 @@ Deno.serve(async (req: Request) => {
       }).catch(console.error)
     }
 
-    return new Response(JSON.stringify({ ok: true, conversation_id: conv.id, gender: finalGender }), {
+    return new Response(JSON.stringify({ ok: true, conversation_id: conv.id, gender: finalGender, campaign_id: campaignId }), {
       headers: { ...CORS, 'Content-Type': 'application/json' }
     })
 

@@ -149,6 +149,7 @@ LEAD INFO:
 - Name: ${conv.display_name || 'Unbekannt'}
 - Stage: ${conv.stage || 'qualification'}
 - Score: ${conv.lead_score || 0}/100
+- Deal Status: ${conv.deal_status === 'won' ? '✅ Hat bereits gekauft' : conv.deal_status === 'lost' ? '❌ Hat nicht gekauft (Grund analysieren)' : conv.deal_status === 'nurture' ? '🌱 Langfristig warmhalten' : '⏳ Noch offen'}
 ${conv.notes ? `
 NOTIZEN ZU DIESEM LEAD (von Thomas persönlich hinterlegt — UNBEDINGT berücksichtigen, hat höchste Priorität):
 ${conv.notes}
