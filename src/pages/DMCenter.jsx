@@ -158,7 +158,8 @@ export default function DMCenter() {
 
   async function approveClaudeSuggestion(message) {
     if (!message.claude_suggestion) return
-    await sendReply(message.claude_suggestion, 'claude')
+    // original_suggestion = gleicher Text → "war gut so" Signal für Claude
+    await sendReply(message.claude_suggestion, 'claude', message.claude_suggestion)
   }
 
   async function updateConvStage(stage) {

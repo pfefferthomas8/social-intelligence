@@ -99,17 +99,28 @@ Deno.serve(async (req: Request) => {
       content: m.content,
     }))
 
-    // Lade letzte Korrekturen von Thomas (wo er Claude-Vorschläge bearbeitet hat)
-    const correctionRows = await dbGet(
-      `dm_messages?original_suggestion=not.is.null&direction=eq.outbound&order=created_at.desc&limit=10&select=content,original_suggestion`
+    // Lade letzte Feedback-Daten (Approvals + Korrekturen)
+    const feedbackRows = await dbGet(
+      `dm_messages?original_suggestion=not.is.null&direction=eq.outbound&order=created_at.desc&limit=15&select=content,original_suggestion`
     )
-    const correctionContext = correctionRows.length > 0
-      ? `\nWAS THOMAS AN CLAUDE-VORSCHLÄGEN GEÄNDERT HAT (lerne daraus — das ist sein echter Stil):\n${
-          correctionRows.map((r: any, i: number) =>
-            `${i + 1}. Claude schlug vor: "${r.original_suggestion.slice(0, 120)}"\n   Thomas hat gesendet: "${r.content.slice(0, 120)}"`
-          ).join('\n')
-        }\n`
-      : ''
+    const approvals = feedbackRows.filter((r: any) => r.original_suggestion.trim() === r.content.trim())
+    const corrections = feedbackRows.filter((r: any) => r.original_suggestion.trim() !== r.content.trim())
+
+    let correctionContext = ''
+    if (corrections.length > 0) {
+      correctionContext += `\nWAS THOMAS KORRIGIERT HAT (so schreibt er NICHT — rechte Spalte ist sein echter Stil):\n${
+        corrections.slice(0, 8).map((r: any, i: number) =>
+          `${i + 1}. ✗ Claude: "${r.original_suggestion.slice(0, 100)}"\n   ✓ Thomas: "${r.content.slice(0, 100)}"`
+        ).join('\n')
+      }\n`
+    }
+    if (approvals.length > 0) {
+      correctionContext += `\nWAS THOMAS OHNE ÄNDERUNG ABGESENDET HAT (dieser Stil ist genau richtig — weiter so):\n${
+        approvals.slice(0, 5).map((r: any, i: number) =>
+          `${i + 1}. ✓ "${r.content.slice(0, 100)}"`
+        ).join('\n')
+      }\n`
+    }
 
     const systemPrompt = `Du bist Thomas Pfeffer, Fitness Coach aus Österreich. Du antwortest auf Instagram DMs von potenziellen männlichen Kunden.
 

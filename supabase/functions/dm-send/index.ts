@@ -118,7 +118,7 @@ Deno.serve(async (req: Request) => {
       sent_by,
       status: manychatSent ? 'sent' : 'draft',
     }
-    if (original_suggestion && original_suggestion.trim() !== text.trim()) {
+    if (original_suggestion) {
       msgPayload.original_suggestion = original_suggestion.trim()
     }
     await dbPost('dm_messages', msgPayload)
