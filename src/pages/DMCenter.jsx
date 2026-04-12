@@ -39,6 +39,11 @@ export default function DMCenter() {
   const [savedKey, setSavedKey] = useState(null)
   const [copiedId, setCopiedId] = useState(null)
   const messagesEndRef = useRef(null)
+  const selectedConvRef = useRef(null)
+
+  useEffect(() => {
+    selectedConvRef.current = selectedConv
+  }, [selectedConv])
 
   useEffect(() => {
     loadConversations()
@@ -50,9 +55,12 @@ export default function DMCenter() {
       .channel('dm_updates')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dm_conversations' }, () => loadConversations())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dm_messages' }, (payload) => {
-        if (selectedConv && payload.new?.conversation_id === selectedConv.id) {
-          loadMessages(selectedConv.id)
+        const current = selectedConvRef.current
+        if (current && payload.new?.conversation_id === current.id) {
+          loadMessages(current.id)
         }
+        // Konversationsliste immer aktualisieren (Preview-Text + Zeitstempel)
+        loadConversations()
       })
       .subscribe()
 
