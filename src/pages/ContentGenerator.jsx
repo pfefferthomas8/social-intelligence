@@ -198,6 +198,7 @@ export default function ContentGenerator() {
   const [progress, setProgress] = useState(0)
   const [deletingId, setDeletingId] = useState(null)
   const [ratings, setRatings] = useState({}) // id → 1 | -1
+  const [errorMsg, setErrorMsg] = useState('')
   const progressRef = useRef(null)
 
   useEffect(() => { loadHistory() }, [])
@@ -231,6 +232,7 @@ export default function ContentGenerator() {
     setGenerating(true)
     setResult(null)
     setProgress(0)
+    setErrorMsg('')
     let p = 0
     progressRef.current = setInterval(() => {
       p = Math.min(p + Math.random() * 8, 88)
@@ -246,7 +248,7 @@ export default function ContentGenerator() {
       setConfirmed(false)
       await loadHistory()
     } catch (e) {
-      alert('Fehler: ' + e.message)
+      setErrorMsg(e.message || 'Unbekannter Fehler beim Generieren.')
     } finally {
       clearInterval(progressRef.current)
       setGenerating(false)
@@ -364,8 +366,28 @@ export default function ContentGenerator() {
           </button>
 
           {generating && (
-            <div className="progress-bar" style={{ marginTop: 10 }}>
-              <div className="progress-fill" style={{ width: `${progress}%` }} />
+            <div style={{ marginTop: 10 }}>
+              <div className="progress-bar">
+                <div className="progress-fill" style={{ width: `${progress}%` }} />
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, textAlign: 'center' }}>
+                {progress < 30 ? 'Daten werden geladen…' : progress < 70 ? 'Claude analysiert & schreibt…' : 'Fast fertig…'}
+              </div>
+            </div>
+          )}
+
+          {errorMsg && !generating && (
+            <div style={{
+              marginTop: 10, padding: '10px 14px',
+              background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+              borderRadius: 'var(--r)', display: 'flex', alignItems: 'flex-start', gap: 10,
+            }}>
+              <span style={{ color: '#ef4444', fontSize: 14, flexShrink: 0 }}>✗</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#ef4444', marginBottom: 2 }}>Fehler beim Generieren</div>
+                <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>{errorMsg}</div>
+              </div>
+              <button onClick={() => setErrorMsg('')} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 14, padding: 0 }}>×</button>
             </div>
           )}
         </div>

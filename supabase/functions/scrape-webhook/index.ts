@@ -156,13 +156,16 @@ Deno.serve(async (req: Request) => {
       } catch { return null }
     }
 
-    // Bis zu 3 Versuche mit 5s Pause
+    // Bis zu 6 Versuche: erst 15s warten (Apify Dataset braucht Zeit), dann alle 10s
+    // Apify meldet SUCCEEDED oft bevor das Dataset vollständig geschrieben ist
     let items: Record<string, unknown>[] | null = null
-    for (let attempt = 0; attempt < 3; attempt++) {
-      if (attempt > 0) await new Promise(r => setTimeout(r, 5000))
+    await new Promise(r => setTimeout(r, 15000)) // Immer 15s warten bevor erster Versuch
+    for (let attempt = 0; attempt < 6; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, 10000))
       items = await fetchDataset()
-      if (items && items.length > 0) break
-      console.log(`Dataset attempt ${attempt + 1}: ${items ? 'empty array' : 'parse error'}`)
+      const valid = (items || []).filter((it: any) => it.shortCode || it.id || it.latestPosts)
+      if (valid.length > 0) { items = valid as Record<string, unknown>[]; break }
+      console.log(`Dataset attempt ${attempt + 1}/6: ${items?.length ?? 'null'} items`)
     }
 
     if (!items || items.length === 0) {

@@ -4,7 +4,17 @@ import { apiFetch } from '../lib/auth.js'
 import PostCard from '../components/PostCard.jsx'
 
 function formatNumber(n) {
-  if (!n) return '0'
+  if (n === null || n === undefined || n === 0 && n !== 0) return '—'
+  if (!n && n !== 0) return '—'
+  if (n === 0) return '0'
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
+  return String(n)
+}
+
+function formatFollowers(n) {
+  if (n === null || n === undefined) return '—'
+  if (n === 0) return 'Noch nicht gescrapt'
   if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'
   if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
   return String(n)
@@ -308,7 +318,10 @@ export default function Konkurrenten() {
                       </td>
                       <td style={{ color: 'var(--text3)' }}>{c.niche || '—'}</td>
                       <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 13 }}>
-                        {formatNumber(c.followers_count)}
+                        {c.followers_count
+                          ? formatNumber(c.followers_count)
+                          : <span style={{ color: 'var(--text4)', fontSize: 11, fontFamily: 'var(--font)', fontWeight: 400 }}>Scrape ausstehend</span>
+                        }
                       </td>
                       <td>
                         {isScrapingNow(c.id) ? (

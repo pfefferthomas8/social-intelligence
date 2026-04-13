@@ -6,7 +6,8 @@ import TopicCard from '../components/TopicCard.jsx'
 import PostCard from '../components/PostCard.jsx'
 
 function formatNumber(n) {
-  if (!n) return '0'
+  if (n === null || n === undefined) return '—'
+  if (n === 0) return '0'
   if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'
   if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
   return String(n)
@@ -36,7 +37,12 @@ export default function Dashboard() {
   const [scrapeLoading, setScrapeLoading] = useState(false)
   const [trendScout, setTrendScout] = useState([])
   const [trendLoading, setTrendLoading] = useState(false)
+  const [trendStatus, setTrendStatus] = useState('') // 'waiting' | 'processing' | 'done' | 'error'
+  const [trendElapsed, setTrendElapsed] = useState(0)
   const [lastTrendRun, setLastTrendRun] = useState(null)
+  const trendPollRef = useRef(null)
+  const trendTimerRef = useRef(null)
+  const trendJobIdRef = useRef(null)
 
   // Quick-Generator Panel
   const [quickOpen, setQuickOpen] = useState(false)
@@ -188,21 +194,80 @@ export default function Dashboard() {
     }
   }
 
+  function stopTrendPolling() {
+    if (trendPollRef.current) clearInterval(trendPollRef.current)
+    if (trendTimerRef.current) clearInterval(trendTimerRef.current)
+    trendPollRef.current = null
+    trendTimerRef.current = null
+    trendJobIdRef.current = null
+  }
+
   async function runTrendDiscovery() {
     setTrendLoading(true)
+    setTrendStatus('waiting')
+    setTrendElapsed(0)
+    stopTrendPolling()
+
     try {
-      await apiFetch('trend-discovery', { method: 'POST' })
-      // trend-webhook verarbeitet automatisch nach Apify-Abschluss (~5-8 Min)
-      // Kein manueller trend-process mehr — verhindert doppelte Claude-Calls
-      setTimeout(async () => {
-        await loadTrendScout()
-        setTrendLoading(false)
-      }, 6 * 60 * 1000)
+      const data = await apiFetch('trend-discovery', { method: 'POST' })
+      const jobId = data?.job_id
+      trendJobIdRef.current = jobId
+
+      // Sekunden-Timer für Anzeige
+      let elapsed = 0
+      trendTimerRef.current = setInterval(() => {
+        elapsed += 1
+        setTrendElapsed(elapsed)
+      }, 1000)
+
+      // Echtes Polling alle 20s — prüft scrape_jobs Status
+      trendPollRef.current = setInterval(async () => {
+        try {
+          // Neuesten trend_discovery Job prüfen
+          const { data: job } = await supabase
+            .from('scrape_jobs')
+            .select('status, error_msg, completed_at')
+            .eq('job_type', 'trend_discovery')
+            .order('started_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          if (!job) return
+
+          if (job.status === 'done') {
+            setTrendStatus('done')
+            stopTrendPolling()
+            await loadTrendScout()
+            setTrendLoading(false)
+          } else if (job.status === 'error') {
+            setTrendStatus('error')
+            stopTrendPolling()
+            setTrendLoading(false)
+            alert('Trend Discovery Fehler: ' + (job.error_msg || 'Unbekannter Fehler'))
+          } else if (job.status === 'running') {
+            setTrendStatus('processing')
+          }
+
+          // Timeout nach 12 Minuten
+          if (elapsed >= 720) {
+            stopTrendPolling()
+            setTrendLoading(false)
+            setTrendStatus('error')
+            alert('Trend Discovery hat zu lange gedauert. Versuche es erneut.')
+          }
+        } catch { /* Polling-Fehler ignorieren, weiter versuchen */ }
+      }, 20000)
+
     } catch (e) {
-      alert('Trend Discovery Fehler: ' + e.message)
+      stopTrendPolling()
       setTrendLoading(false)
+      setTrendStatus('')
+      alert('Trend Discovery Fehler: ' + e.message)
     }
   }
+
+  // Cleanup bei Unmount
+  useEffect(() => () => stopTrendPolling(), [])
 
   function handleTrendScoutSelect(post) {
     const caption = (post.caption || '').substring(0, 300)
@@ -646,12 +711,27 @@ export default function Dashboard() {
                 </span>
               )}
             </div>
-            <button onClick={runTrendDiscovery} disabled={trendLoading} className="btn btn-xs">
-              {trendLoading
-                ? <><span className="spinner" style={{ width: 10, height: 10 }} /> Läuft…</>
-                : '⚡ Discovery starten'
-              }
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {trendLoading && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                  <span style={{ fontSize: 10, color: 'var(--text3)' }}>
+                    {trendStatus === 'waiting' && 'Apify startet…'}
+                    {trendStatus === 'processing' && 'Analysiert Posts…'}
+                    {trendStatus === 'done' && '✓ Fertig'}
+                    {trendStatus === 'error' && '✗ Fehler'}
+                  </span>
+                  <span style={{ fontSize: 10, color: 'var(--text4)', fontFamily: 'var(--font-mono)' }}>
+                    {Math.floor(trendElapsed / 60)}:{String(trendElapsed % 60).padStart(2, '0')} min
+                  </span>
+                </div>
+              )}
+              <button onClick={runTrendDiscovery} disabled={trendLoading} className="btn btn-xs">
+                {trendLoading
+                  ? <><span className="spinner" style={{ width: 10, height: 10 }} /> Läuft…</>
+                  : '⚡ Discovery starten'
+                }
+              </button>
+            </div>
           </div>
 
           {trendScout.length === 0 ? (
