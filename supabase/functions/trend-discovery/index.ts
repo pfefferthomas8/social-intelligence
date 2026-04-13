@@ -1,7 +1,6 @@
-// Trend Discovery — scrapt kuratierte Fitness-Accounts nach viral performenden Posts
-// Nutzt denselben bewährten instagram-scraper wie Competitor-Scrapes (funktioniert 100%)
-// Strategie: 8 Accounts pro Run, rotierend nach ältestem Scrape
-// Webhook → trend-webhook → Viral Score + Claude-Analyse → trend_posts
+// Trend Discovery — scrapt DACH-relevante Fitness-Hashtags nach viral performenden Posts
+// Statt fester US-Accounts: DACH-Hashtags für Männer 30+ (krafttraining, muskelaufbau etc.)
+// Strategie: 5 zufällige Hashtags pro Run aus Pool von 10 → variierende Perspektiven
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -14,6 +13,20 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 const DASHBOARD_TOKEN = Deno.env.get('DASHBOARD_TOKEN') || ''
 const APIFY_KEY = Deno.env.get('APIFY_API_KEY') || ''
 
+// DACH Fitness Hashtags für Männer 30+
+const DACH_HASHTAGS = [
+  'https://www.instagram.com/explore/tags/krafttraining/',
+  'https://www.instagram.com/explore/tags/muskelaufbau/',
+  'https://www.instagram.com/explore/tags/abnehmen/',
+  'https://www.instagram.com/explore/tags/intermittierendesfasten/',
+  'https://www.instagram.com/explore/tags/onlinecoaching/',
+  'https://www.instagram.com/explore/tags/personaltrainer/',
+  'https://www.instagram.com/explore/tags/fitnessover40/',
+  'https://www.instagram.com/explore/tags/ernaehrung/',
+  'https://www.instagram.com/explore/tags/krafttraining40/',
+  'https://www.instagram.com/explore/tags/fitnessueber40/',
+]
+
 function dbHeaders() {
   return {
     'Content-Type': 'application/json',
@@ -21,6 +34,12 @@ function dbHeaders() {
     'apikey': SERVICE_KEY,
     'Prefer': 'return=representation'
   }
+}
+
+// Zufällig n Elemente aus Array auswählen
+function pickRandom<T>(arr: T[], n: number): T[] {
+  const shuffled = [...arr].sort(() => Math.random() - 0.5)
+  return shuffled.slice(0, n)
 }
 
 Deno.serve(async (req: Request) => {
@@ -31,33 +50,9 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...CORS, 'Content-Type': 'application/json' } })
   }
 
-  // Competitor-Usernames laden → vom Trend-Scrape ausschließen (werden separat getrackt)
-  const compRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/competitor_profiles?select=username&is_active=eq.true`,
-    { headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY } }
-  )
-  const competitors: any[] = await compRes.json()
-  const knownHandles = new Set((competitors || []).map((c: any) => c.username.toLowerCase()))
-
-  // Trend-Accounts laden — älteste Scrapes zuerst (Rotation)
-  const accountsRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/trend_accounts?is_active=eq.true&select=username,last_scraped_at&order=last_scraped_at.asc.nullsfirst&limit=12`,
-    { headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY } }
-  )
-  const accounts: any[] = await accountsRes.json()
-
-  if (!Array.isArray(accounts) || accounts.length === 0) {
-    return new Response(JSON.stringify({ error: 'Keine Trend-Accounts konfiguriert' }), { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } })
-  }
-
-  // Bereits bekannte Competitors aus der Liste filtern
-  const toScrape = accounts.filter((a: any) => !knownHandles.has(a.username.toLowerCase()))
-  if (toScrape.length === 0) {
-    return new Response(JSON.stringify({ error: 'Alle Accounts bereits als Competitors erfasst' }), { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } })
-  }
-
-  const usernames = toScrape.map((a: any) => a.username)
-  const directUrls = usernames.map((u: string) => `https://www.instagram.com/${u}/`)
+  // 5 zufällige Hashtags aus Pool wählen → jeder Run bringt andere Perspektiven
+  const directUrls = pickRandom(DACH_HASHTAGS, 5)
+  const hashtagLabels = directUrls.map(u => u.split('/tags/')[1]?.replace('/', '') || u)
 
   // Job anlegen
   const jobRes = await fetch(`${SUPABASE_URL}/rest/v1/scrape_jobs`, {
@@ -65,7 +60,7 @@ Deno.serve(async (req: Request) => {
     headers: dbHeaders(),
     body: JSON.stringify({
       job_type: 'trend_discovery',
-      target: usernames.join(','),
+      target: hashtagLabels.join(','),
       status: 'pending',
     })
   })
@@ -74,15 +69,6 @@ Deno.serve(async (req: Request) => {
   if (!job?.id) {
     return new Response(JSON.stringify({ error: 'Job konnte nicht angelegt werden' }), { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } })
   }
-
-  // last_scraped_at für alle Accounts sofort aktualisieren (verhindert Doppelscrape)
-  await Promise.all(usernames.map((u: string) =>
-    fetch(`${SUPABASE_URL}/rest/v1/trend_accounts?username=eq.${u}`, {
-      method: 'PATCH',
-      headers: { ...dbHeaders(), 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ last_scraped_at: new Date().toISOString() })
-    })
-  ))
 
   // Webhook-Config
   const webhooksParam = btoa(JSON.stringify([{
@@ -93,6 +79,7 @@ Deno.serve(async (req: Request) => {
   }]))
 
   // instagram-scraper — identisch mit scrape-profile (bewährt, funktioniert)
+  // Hashtag-URLs werden als directUrls übergeben — identisches Setup wie Account-Scraping
   const apifyRes = await fetch(
     `https://api.apify.com/v2/acts/apify~instagram-scraper/runs?token=${APIFY_KEY}&webhooks=${webhooksParam}`,
     {
@@ -101,7 +88,7 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         directUrls,
         resultsType: 'posts',
-        resultsLimit: 15,   // 15 Posts pro Account × 12 Accounts = max 180 Kandidaten
+        resultsLimit: 20,   // 20 Posts pro Hashtag × 5 Hashtags = max 100 Kandidaten
         proxyConfiguration: {
           useApifyProxy: true,
           apifyProxyGroups: ['RESIDENTIAL']
@@ -131,7 +118,7 @@ Deno.serve(async (req: Request) => {
     ok: true,
     job_id: job.id,
     run_id: runId,
-    accounts: usernames,
-    message: `Trend Discovery gestartet — ${usernames.length}/50 Accounts werden gescrapt: ${usernames.join(', ')}`
+    hashtags: hashtagLabels,
+    message: `Trend Discovery gestartet — ${hashtagLabels.length} DACH-Hashtags werden gescrapt: ${hashtagLabels.join(', ')}`
   }), { headers: { ...CORS, 'Content-Type': 'application/json' } })
 })

@@ -55,9 +55,11 @@ export default function Dashboard() {
   const [compRemixResults, setCompRemixResults] = useState({}) // postId → result
   const [compRemixOpen, setCompRemixOpen] = useState({})  // postId → bool
 
-  // Reddit Insights
-  const [redditSignals, setRedditSignals] = useState([])
-  const [redditLoading, setRedditLoading] = useState(false)
+  // Dashboard Posts (12 datengetriebene Content-Ideen)
+  const [dashPosts, setDashPosts] = useState([])
+  const [dashLoading, setDashLoading] = useState(false)
+  const [dashCopied, setDashCopied] = useState({}) // postIndex → bool
+  const [dashExpanded, setDashExpanded] = useState({}) // postIndex → bool
 
   // Quick-Generator Panel
   const [quickOpen, setQuickOpen] = useState(false)
@@ -76,29 +78,21 @@ export default function Dashboard() {
 
   async function loadAll() {
     setLoading(true)
-    await Promise.all([loadProfile(), loadPosts(), loadCompetitors(), loadTopics(), loadStats(), loadPillars(), loadTrendScout(), loadRedditSignals()])
+    await Promise.all([loadProfile(), loadPosts(), loadCompetitors(), loadTopics(), loadStats(), loadPillars(), loadTrendScout()])
     setLoading(false)
   }
 
-  async function loadRedditSignals() {
-    const { data } = await supabase
-      .from('external_signals')
-      .select('*')
-      .gte('relevance_score', 70)
-      .order('fetched_at', { ascending: false })
-      .limit(8)
-    setRedditSignals(data || [])
-  }
-
-  async function fetchReddit() {
-    setRedditLoading(true)
+  async function generateDashboardPosts() {
+    setDashLoading(true)
     try {
-      await apiFetch('fetch-reddit', { method: 'POST' })
-      await loadRedditSignals()
+      const data = await apiFetch('generate-dashboard-posts', { method: 'POST' })
+      setDashPosts(data.posts || [])
+      setDashCopied({})
+      setDashExpanded({})
     } catch (e) {
-      alert('Reddit Fehler: ' + e.message)
+      alert('Fehler: ' + e.message)
     } finally {
-      setRedditLoading(false)
+      setDashLoading(false)
     }
   }
 
@@ -739,6 +733,136 @@ export default function Dashboard() {
           )}
         </div>
 
+        {/* ── DASHBOARD POSTS ──────────────────────────────────────── */}
+        <div style={{ marginBottom: 24 }}>
+          <div className="section-header" style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span className="section-title">Content Intelligence</span>
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: '#ee4f00', background: 'rgba(238,79,0,0.1)', padding: '2px 7px', borderRadius: 100 }}>DATENGETRIEBEN</span>
+            </div>
+            <button
+              onClick={generateDashboardPosts}
+              disabled={dashLoading}
+              className="btn btn-sm btn-primary"
+            >
+              {dashLoading
+                ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Analysiert alle Daten…</>
+                : dashPosts.length > 0 ? '↺ Neue 12 generieren' : '⚡ 12 Post-Ideen generieren'
+              }
+            </button>
+          </div>
+
+          {dashPosts.length === 0 && !dashLoading && (
+            <div style={{
+              background: 'var(--bg-card)', border: '1px dashed var(--border-strong)',
+              borderRadius: 'var(--r-lg)', padding: '32px', textAlign: 'center'
+            }}>
+              <p style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>
+                Claude analysiert Trends, Competitors und Community-Signale und erstellt 12 datengetriebene Content-Ideen speziell für Thomas.
+              </p>
+              <button onClick={generateDashboardPosts} className="btn btn-sm btn-primary">
+                ⚡ Jetzt generieren
+              </button>
+            </div>
+          )}
+
+          {dashPosts.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              {dashPosts.map((post, i) => {
+                const PILLAR_C = { haltung: '#ee4f00', transformation: '#3b82f6', mehrwert: '#22c55e', verkauf: '#a855f7' }
+                const FORMAT_ICON = { video_script: '🎬', b_roll: '⚡', single_post: '📝', carousel: '📋' }
+                const pc = PILLAR_C[post.pillar] || 'var(--text3)'
+                const isExp = dashExpanded[i]
+                const isCopied = dashCopied[i]
+                const scoreColor = post.score >= 80 ? '#22c55e' : post.score >= 60 ? '#ee4f00' : 'var(--text3)'
+                return (
+                  <div key={i} style={{
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
+                    borderTop: `2px solid ${pc}`,
+                    borderRadius: 'var(--r-lg)',
+                    overflow: 'hidden',
+                    display: 'flex', flexDirection: 'column',
+                  }}>
+                    <div style={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {/* Header: Format + Pillar + Score */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 10, color: 'var(--text3)' }}>{FORMAT_ICON[post.format]} {post.format?.replace(/_/g,' ')}</span>
+                        <span style={{ fontSize: 8, fontWeight: 700, color: pc, background: `${pc}18`, padding: '2px 6px', borderRadius: 100, marginLeft: 'auto' }}>{post.pillar?.toUpperCase()}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: scoreColor, fontFamily: 'var(--font-mono)' }}>{post.score}</span>
+                      </div>
+
+                      {/* Hook */}
+                      <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', lineHeight: 1.4, margin: 0 }}>
+                        {post.hook}
+                      </p>
+
+                      {/* Preview */}
+                      <p style={{
+                        fontSize: 11.5, color: 'var(--text2)', lineHeight: 1.55, margin: 0,
+                        overflow: 'hidden', display: '-webkit-box',
+                        WebkitLineClamp: isExp ? 20 : 3, WebkitBoxOrient: 'vertical',
+                      }}>
+                        {post.preview}
+                      </p>
+
+                      {/* Datengrundlage */}
+                      {post.sources && post.sources.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text4)', letterSpacing: '0.08em' }}>DATENGRUNDLAGE</div>
+                          {post.sources.map((s, si) => (
+                            <div key={si} style={{ display: 'flex', alignItems: 'flex-start', gap: 5 }}>
+                              <span style={{
+                                fontSize: 8, fontWeight: 700, padding: '2px 5px', borderRadius: 4,
+                                background: s.ref?.startsWith('T') ? 'rgba(238,79,0,0.12)' : s.ref?.startsWith('S') ? 'rgba(255,69,0,0.12)' : 'rgba(59,130,246,0.12)',
+                                color: s.ref?.startsWith('T') ? '#ee4f00' : s.ref?.startsWith('S') ? '#ff4500' : '#3b82f6',
+                                flexShrink: 0, marginTop: 1,
+                              }}>
+                                {s.ref?.startsWith('T') ? 'TREND' : s.ref?.startsWith('S') ? 'COMMUNITY' : 'COMP'}
+                              </span>
+                              <span style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.4 }}>{s.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Why it works */}
+                      {post.why_it_works && (
+                        <div style={{ padding: '7px 9px', background: 'rgba(255,255,255,0.03)', borderRadius: 6, borderLeft: '2px solid var(--accent)' }}>
+                          <p style={{ fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.5, margin: 0 }}>{post.why_it_works}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div style={{ padding: '8px 12px 12px', display: 'flex', gap: 5 }}>
+                      <button
+                        onClick={() => navigate('/generator', {
+                          state: { topic: post.hook, suggestedType: post.format, additionalInfo: post.preview }
+                        })}
+                        className="btn btn-xs btn-primary"
+                        style={{ flex: 1, justifyContent: 'center' }}
+                      >Im Generator →</button>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(`${post.hook}\n\n${post.preview}`)
+                          setDashCopied(prev => ({ ...prev, [i]: true }))
+                          setTimeout(() => setDashCopied(prev => ({ ...prev, [i]: false })), 2000)
+                        }}
+                        className="btn btn-xs"
+                      >{isCopied ? '✓' : 'Copy'}</button>
+                      <button
+                        onClick={() => setDashExpanded(prev => ({ ...prev, [i]: !prev[i] }))}
+                        className="btn btn-xs"
+                      >{isExp ? '▲' : '▼'}</button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Content Säulen */}
         {(() => {
           const total = Object.values(pillars).reduce((a, b) => a + b, 0)
@@ -1140,95 +1264,6 @@ export default function Dashboard() {
             )}
           </div>
         </div>
-
-        {/* ── REDDIT INSIGHTS ────────────────────────────────────────────────── */}
-        {(redditSignals.length > 0 || redditLoading) && (
-          <div style={{ marginBottom: 24 }}>
-            <div className="section-header" style={{ marginBottom: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span className="section-title">Community Insights</span>
-                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: '#ff4500', background: 'rgba(255,69,0,0.1)', padding: '2px 7px', borderRadius: 100 }}>REDDIT</span>
-                {redditSignals.length > 0 && (
-                  <span style={{ fontSize: 11, color: 'var(--text3)' }}>{redditSignals.length} Signale</span>
-                )}
-              </div>
-              <button onClick={fetchReddit} disabled={redditLoading} className="btn btn-xs">
-                {redditLoading ? <><span className="spinner" style={{ width: 10, height: 10 }} /> Lädt…</> : '⟳ Aktualisieren'}
-              </button>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-              {redditSignals.map(signal => {
-                const TYPE_C = { pain_point: '#ef4444', question: '#3b82f6', trending_topic: '#ee4f00', success_story: '#22c55e', controversy: '#a855f7' }
-                const TYPE_LABEL = { pain_point: 'PAIN POINT', question: 'FRAGE', trending_topic: 'TRENDING', success_story: 'ERFOLG', controversy: 'KONTROVERS' }
-                const c = TYPE_C[signal.signal_type] || 'var(--text3)'
-                return (
-                  <div key={signal.id} style={{
-                    background: 'var(--bg-card)', border: '1px solid var(--border)',
-                    borderTop: `2px solid ${c}`,
-                    borderRadius: 'var(--r-lg)', padding: '12px',
-                    display: 'flex', flexDirection: 'column', gap: 6,
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <span style={{ fontSize: 8, fontWeight: 800, color: c, letterSpacing: '0.08em' }}>
-                        {TYPE_LABEL[signal.signal_type] || signal.signal_type?.toUpperCase()}
-                      </span>
-                      <span style={{ fontSize: 9, color: 'var(--text4)', fontFamily: 'var(--font-mono)' }}>{signal.relevance_score}%</span>
-                    </div>
-                    <p style={{
-                      fontSize: 11.5, color: 'var(--text)', lineHeight: 1.45, fontWeight: 500,
-                      overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
-                    }}>
-                      {signal.title}
-                    </p>
-                    {signal.body && (
-                      <p style={{
-                        fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.45,
-                        overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                      }}>
-                        {signal.body}
-                      </p>
-                    )}
-                    {signal.claude_insight && (
-                      <p style={{ fontSize: 10, color: 'var(--accent)', lineHeight: 1.4, borderTop: '1px solid var(--border)', paddingTop: 6 }}>
-                        → {signal.claude_insight}
-                      </p>
-                    )}
-                    <button
-                      onClick={() => navigate('/generator', {
-                        state: {
-                          topic: signal.title.substring(0, 80),
-                          additionalInfo: `Community-Signal aus Reddit: "${signal.body || signal.title}"\n${signal.claude_insight ? 'Content-Angle: ' + signal.claude_insight : ''}`,
-                          suggestedType: 'single_post',
-                        }
-                      })}
-                      className="btn btn-xs"
-                      style={{ marginTop: 2 }}
-                    >Content erstellen →</button>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Reddit Fetch Button wenn noch keine Signale */}
-        {redditSignals.length === 0 && !redditLoading && (
-          <div style={{
-            marginBottom: 24, background: 'var(--bg-card)',
-            border: '1px dashed var(--border-strong)', borderRadius: 'var(--r-lg)',
-            padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          }}>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Community Insights</div>
-              <div style={{ fontSize: 12, color: 'var(--text3)' }}>
-                Aktuelle Pain Points & Fragen aus Fitness-Subreddits (r/fitness, r/bodybuilding u.a.)
-              </div>
-            </div>
-            <button onClick={fetchReddit} className="btn btn-sm btn-primary">
-              Reddit laden →
-            </button>
-          </div>
-        )}
 
         {/* Competitors Table */}
         {competitors.length > 0 && (
