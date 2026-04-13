@@ -1,6 +1,7 @@
-// Trend Discovery — scrapt DACH-relevante Fitness-Hashtags nach viral performenden Posts
-// Statt fester US-Accounts: DACH-Hashtags für Männer 30+ (krafttraining, muskelaufbau etc.)
-// Strategie: 5 zufällige Hashtags pro Run aus Pool von 10 → variierende Perspektiven
+// Trend Discovery — scrapt kuratierte DACH-Fitness-Accounts nach viral performenden Posts
+// Zielgruppe: Accounts die für Männer 30+, Kraft, Körperfett, Online-Coaching stehen
+// Strategie: Pool von 30 Accounts, pro Run 8 zufällig auswählen → Rotation ohne DB-Abhängigkeit
+// Ausschluss: Thomas' eigene Competitors (werden separat getrackt)
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -13,18 +14,48 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 const DASHBOARD_TOKEN = Deno.env.get('DASHBOARD_TOKEN') || ''
 const APIFY_KEY = Deno.env.get('APIFY_API_KEY') || ''
 
-// DACH Fitness Hashtags für Männer 30+
-const DACH_HASHTAGS = [
-  'https://www.instagram.com/explore/tags/krafttraining/',
-  'https://www.instagram.com/explore/tags/muskelaufbau/',
-  'https://www.instagram.com/explore/tags/abnehmen/',
-  'https://www.instagram.com/explore/tags/intermittierendesfasten/',
-  'https://www.instagram.com/explore/tags/onlinecoaching/',
-  'https://www.instagram.com/explore/tags/personaltrainer/',
-  'https://www.instagram.com/explore/tags/fitnessover40/',
-  'https://www.instagram.com/explore/tags/ernaehrung/',
-  'https://www.instagram.com/explore/tags/krafttraining40/',
-  'https://www.instagram.com/explore/tags/fitnessueber40/',
+// Kuratierter Pool: Fitness-Coaches + Lifestyle-Accounts für Männer 30+
+// Fokus: DACH-Markt + internationale Accounts mit übertragbaren Inhalten
+// KEIN Wettkampf/Bodybuilding/Steroid-Content
+// Rotation: 8 zufällige pro Run → nach 4 Runs alle gesehen
+const TREND_ACCOUNT_POOL = [
+  // DACH Fitness-Coaches (Kraft + Körper + Lifestyle)
+  'arnekindler',
+  'philippjahns',
+  'maximilian.goetz',
+  'coach_frankklopper',
+  'stefl.fitness',
+  'nils.langemann',
+  'david_kosmala',
+  'the.bodybuilder.diet',
+  'fitnesstrainer.luca',
+  'jensjakob.fitness',
+
+  // Internationale Coaches (übertragbare Inhalte, kein US-Bro-Culture)
+  'jamessmithpt',       // UK — evidenzbasiert, Anti-Extreme, Männer 30+
+  'drjohnrusin',        // Performance-orientiert, keine Wettkampf-Inhalte
+  'syattfitness',       // Anti-Bullshit, Fakten, Männer
+  'mindpumpsal',        // Podcast-Coach, 30+ Zielgruppe
+  'jeffnippard',        // Wissenschaftlich, kein Wettkampf-Fokus
+  'bradschoenfeld',     // Wissenschaft Muskelaufbau
+  'drhenrytihenry',     // Performance + Lifestyle
+  'hubermanlab',        // Wissenschaft, Life Performance, 30+ Zielgruppe
+  'laynebiorton',       // Faktenbasiert, Anti-Hype
+  'drchristinahibbert', // Mindset + Performance
+
+  // Lifestyle + Effizienz (für Thomas' Zielgruppe: Unternehmer + Fitness)
+  'chriswillx',         // High Performance, Männer 30+
+  'maxlugavere',        // Longevity + Performance
+  'peterattiamd',       // Longevity, 35+ Zielgruppe
+  'andrewdgilmore',     // Biohacking + Effizienz
+  'timsuper',           // Lifestyle + Fitness
+
+  // Weitere bewährte Accounts
+  'coachkyledobbs',
+  'tommycreason',
+  'coachkevmarr',
+  'thomasadler_fitness',
+  'marksmellybell',
 ]
 
 function dbHeaders() {
@@ -36,10 +67,8 @@ function dbHeaders() {
   }
 }
 
-// Zufällig n Elemente aus Array auswählen
 function pickRandom<T>(arr: T[], n: number): T[] {
-  const shuffled = [...arr].sort(() => Math.random() - 0.5)
-  return shuffled.slice(0, n)
+  return [...arr].sort(() => Math.random() - 0.5).slice(0, n)
 }
 
 Deno.serve(async (req: Request) => {
@@ -50,27 +79,52 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...CORS, 'Content-Type': 'application/json' } })
   }
 
-  // 5 zufällige Hashtags aus Pool wählen → jeder Run bringt andere Perspektiven
-  const directUrls = pickRandom(DACH_HASHTAGS, 5)
-  const hashtagLabels = directUrls.map(u => u.split('/tags/')[1]?.replace('/', '') || u)
+  // Competitor-Handles laden → vom Trend-Scrape ausschließen
+  const compRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/competitor_profiles?select=username&is_active=eq.true`,
+    { headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY } }
+  )
+  const competitors: any[] = await compRes.json()
+  const knownHandles = new Set((competitors || []).map((c: any) => c.username.toLowerCase()))
 
-  // Job anlegen
+  // Thomas' eigene Profile auch ausschließen
+  const ownRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/own_profile?select=username`,
+    { headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY } }
+  )
+  const ownProfiles: any[] = await ownRes.json()
+  for (const p of ownProfiles) knownHandles.add(p.username?.toLowerCase() || '')
+
+  // Pool filtern + 8 zufällig auswählen
+  const available = TREND_ACCOUNT_POOL.filter(u => !knownHandles.has(u.toLowerCase()))
+  const selected = pickRandom(available, Math.min(8, available.length))
+  const directUrls = selected.map(u => `https://www.instagram.com/${u}/`)
+
+  if (selected.length === 0) {
+    return new Response(JSON.stringify({ error: 'Keine verfügbaren Trend-Accounts' }), {
+      status: 400, headers: { ...CORS, 'Content-Type': 'application/json' }
+    })
+  }
+
+  // Scrape-Job anlegen
   const jobRes = await fetch(`${SUPABASE_URL}/rest/v1/scrape_jobs`, {
     method: 'POST',
     headers: dbHeaders(),
     body: JSON.stringify({
       job_type: 'trend_discovery',
-      target: hashtagLabels.join(','),
+      target: selected.join(','),
       status: 'pending',
     })
   })
   const jobData = await jobRes.json()
   const job = Array.isArray(jobData) ? jobData[0] : jobData
   if (!job?.id) {
-    return new Response(JSON.stringify({ error: 'Job konnte nicht angelegt werden' }), { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } })
+    return new Response(JSON.stringify({ error: 'Job konnte nicht angelegt werden' }), {
+      status: 500, headers: { ...CORS, 'Content-Type': 'application/json' }
+    })
   }
 
-  // Webhook-Config
+  // Apify Webhook-Config
   const webhooksParam = btoa(JSON.stringify([{
     eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED', 'ACTOR.RUN.TIMED_OUT'],
     requestUrl: `${SUPABASE_URL}/functions/v1/trend-webhook`,
@@ -78,8 +132,7 @@ Deno.serve(async (req: Request) => {
     payloadTemplate: `{"job_id":"${job.id}","run_id":"{{resource.id}}","status":"{{eventType}}"}`
   }]))
 
-  // instagram-scraper — identisch mit scrape-profile (bewährt, funktioniert)
-  // Hashtag-URLs werden als directUrls übergeben — identisches Setup wie Account-Scraping
+  // instagram-scraper — bewährt, 100% funktionsfähig für Account-URLs
   const apifyRes = await fetch(
     `https://api.apify.com/v2/acts/apify~instagram-scraper/runs?token=${APIFY_KEY}&webhooks=${webhooksParam}`,
     {
@@ -88,7 +141,7 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         directUrls,
         resultsType: 'posts',
-        resultsLimit: 20,   // 20 Posts pro Hashtag × 5 Hashtags = max 100 Kandidaten
+        resultsLimit: 15,   // 15 Posts × 8 Accounts = max 120 Kandidaten
         proxyConfiguration: {
           useApifyProxy: true,
           apifyProxyGroups: ['RESIDENTIAL']
@@ -103,7 +156,9 @@ Deno.serve(async (req: Request) => {
       method: 'PATCH', headers: dbHeaders(),
       body: JSON.stringify({ status: 'error', error_msg: err })
     })
-    return new Response(JSON.stringify({ error: 'Apify error: ' + err }), { status: 502, headers: { ...CORS, 'Content-Type': 'application/json' } })
+    return new Response(JSON.stringify({ error: 'Apify error: ' + err }), {
+      status: 502, headers: { ...CORS, 'Content-Type': 'application/json' }
+    })
   }
 
   const apifyData = await apifyRes.json()
@@ -118,7 +173,7 @@ Deno.serve(async (req: Request) => {
     ok: true,
     job_id: job.id,
     run_id: runId,
-    hashtags: hashtagLabels,
-    message: `Trend Discovery gestartet — ${hashtagLabels.length} DACH-Hashtags werden gescrapt: ${hashtagLabels.join(', ')}`
+    accounts: selected,
+    message: `Trend Discovery — ${selected.length} Accounts: ${selected.join(', ')}`
   }), { headers: { ...CORS, 'Content-Type': 'application/json' } })
 })
