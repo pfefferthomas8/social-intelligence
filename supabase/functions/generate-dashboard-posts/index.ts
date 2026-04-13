@@ -103,46 +103,32 @@ ${dna('style_rule') || '• Kurze Sätze\n• Sachlich, faktenbasiert\n• Keine
 
 ${ratedBlock ? `THOMAS' POSITIV-BEWERTETER CONTENT (Stilreferenz):\n${ratedBlock}` : ''}`
 
-  const userPrompt = `Erstelle 12 fertige Content-Ideen für Thomas. Jede basiert auf den gegebenen Daten.
+  const userPrompt = `Erstelle 6 Content-Ideen für Thomas basierend auf den Daten.
 
 VERFÜGBARE DATEN:
 
-[TREND-POSTS AUS INSTAGRAM]
+[TREND-POSTS]
 ${trendBlock}
 
-[COMPETITOR-POSTS TOP VIEWS]
+[COMPETITOR TOP POSTS]
 ${compBlock}
 
-[COMMUNITY-SIGNALE (REDDIT + SOCIAL)]
+[COMMUNITY-SIGNALE]
 ${signalBlock}
 
-Gib EXAKT dieses JSON-Array zurück — 12 Objekte, kein anderer Text:
-[
-  {
-    "hook": "Der erste Satz der den Scroll stoppt (max 12 Wörter, konkret, auf Deutsch)",
-    "format": "video_script",
-    "pillar": "mehrwert",
-    "preview": "Die ersten 3-4 Sätze des Contents (auf Deutsch, Thomas' Stil, echte Substanz)",
-    "score": 87,
-    "sources": [
-      {"ref": "T3", "label": "@username · 2.1M Views · DACH-Lücke"},
-      {"ref": "S2", "label": "Reddit pain_point 91% · Männer klagen über Plateau"}
-    ],
-    "why_it_works": "1-2 Sätze: welcher psychologische Trigger + warum für Thomas' Zielgruppe"
-  }
-]
+Antworte NUR mit diesem JSON-Array — 6 Objekte, kein anderer Text, keine Markdown-Blöcke:
+[{"hook":"max 10 Wörter auf Deutsch","format":"video_script","pillar":"mehrwert","preview":"2 Sätze Kern-Aussage auf Deutsch","score":87,"sources":[{"ref":"T3","label":"@username · 2.1M Views"}],"why_it_works":"1 Satz Trigger + warum für Thomas"}]
 
-format: "video_script" | "b_roll" | "single_post" | "carousel"
-pillar: "haltung" | "transformation" | "mehrwert" | "verkauf"
-score: 1-100 (geschätzte Viral-Wahrscheinlichkeit für Thomas)
-sources: max 3 Quellen — referenziere T1-T12 (Trends), C1-C8 (Competitors), S1-S8 (Signale)
-Verteile gleichmäßig über alle 4 Säulen und alle 4 Formate.
-NUR JSON — kein erklärender Text davor oder danach.`
+format: video_script | b_roll | single_post | carousel
+pillar: haltung | transformation | mehrwert | verkauf
+score: 1-100
+sources: max 2 — T1-T12 (Trends), C1-C8 (Competitors), S1-S8 (Signale)
+Verteile über alle 4 Säulen. KEIN Text außerhalb des JSON-Arrays.`
 
   // Claude-Call mit Retry bei Overloaded (max 3 Versuche, exponentielles Backoff)
   const claudeBody = JSON.stringify({
     model: CLAUDE_MODEL,
-    max_tokens: 4000,
+    max_tokens: 2500,
     system: systemPrompt,
     messages: [{ role: 'user', content: userPrompt }]
   })
@@ -186,12 +172,15 @@ NUR JSON — kein erklärender Text davor oder danach.`
     })
   }
 
+  // Markdown-Code-Blöcke wegstreifen (```json ... ```)
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
+
   let posts: any[] = []
   try {
-    const match = raw.match(/\[[\s\S]*\]/)
+    const match = cleaned.match(/\[[\s\S]*\]/)
     if (match) posts = JSON.parse(match[0])
   } catch {
-    return new Response(JSON.stringify({ error: 'Parse error', raw: raw.substring(0, 500) }), { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } })
+    return new Response(JSON.stringify({ error: 'Parse error', raw: raw.substring(0, 300) }), { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } })
   }
 
   return new Response(JSON.stringify({ posts, generated_at: new Date().toISOString() }), {

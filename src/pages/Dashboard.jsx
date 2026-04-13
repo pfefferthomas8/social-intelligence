@@ -39,7 +39,7 @@ export default function Dashboard() {
   const trendPollRef = useRef(null)
   const trendTimerRef = useRef(null)
 
-  // Content Intelligence — 12 datengetriebene Posts
+  // Content Intelligence — 6 datengetriebene Posts
   const [dashPosts, setDashPosts] = useState([])
   const [dashLoading, setDashLoading] = useState(false)
   const [dashCopied, setDashCopied] = useState({})
@@ -412,7 +412,7 @@ export default function Dashboard() {
               <button onClick={generateDashboardPosts} disabled={dashLoading} className="btn btn-sm btn-primary">
                 {dashLoading
                   ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Analysiert…</>
-                  : dashPosts.length > 0 ? '↺ Neu generieren' : '⚡ 12 Posts generieren'
+                  : dashPosts.length > 0 ? '↺ Neu generieren' : '⚡ 6 Posts generieren'
                 }
               </button>
             </div>
@@ -420,7 +420,7 @@ export default function Dashboard() {
 
           {dashPosts.length === 0 && !dashLoading && (
             <div style={{ background: 'var(--bg-card)', border: '1px dashed var(--border-strong)', borderRadius: 'var(--r-lg)', padding: '40px', textAlign: 'center' }}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text2)', marginBottom: 6 }}>12 datengetriebene Content-Ideen</p>
+              <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text2)', marginBottom: 6 }}>6 datengetriebene Content-Ideen</p>
               <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 16, maxWidth: 420, margin: '0 auto 16px' }}>
                 Claude analysiert Trends, Competitor-Posts und Community-Signale und erstellt 12 Post-Ideen mit Quellenangabe und Viral-Score.
               </p>
