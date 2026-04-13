@@ -352,6 +352,13 @@ Deno.serve(async (req: Request) => {
     }).filter(Boolean)
 
     if (toInsert.length > 0) {
+      // Alte Trend-Posts aufräumen VOR dem Insert (älter als 7 Tage → löschen → frische Posts)
+      const cutoff = new Date(Date.now() - 7 * 86400000).toISOString()
+      await fetch(`${SUPABASE_URL}/rest/v1/trend_posts?discovered_at=lt.${cutoff}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY, 'Prefer': 'return=minimal' }
+      })
+
       // Upsert — gleicher Post kann nicht doppelt landen
       const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/trend_posts`, {
         method: 'POST',
@@ -363,13 +370,6 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify(toInsert)
       })
       if (insertRes.ok) savedCount = toInsert.length
-
-      // Alte Trend-Posts aufräumen (älter als 30 Tage → löschen)
-      const cutoff = new Date(Date.now() - 30 * 86400000).toISOString()
-      await fetch(`${SUPABASE_URL}/rest/v1/trend_posts?discovered_at=lt.${cutoff}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY, 'Prefer': 'return=minimal' }
-      })
     }
 
     await fetch(`${SUPABASE_URL}/rest/v1/scrape_jobs?id=eq.${job_id}`, {

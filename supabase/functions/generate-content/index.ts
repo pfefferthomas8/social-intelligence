@@ -83,13 +83,14 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'topic + content_type required' }), { status: 400, headers: CORS })
   }
 
-  const [ownPosts, topCompPosts, customPosts, thomasDna, trendPosts, topRated] = await Promise.all([
+  const [ownPosts, topCompPosts, customPosts, thomasDna, trendPosts, topRated, externalSignals] = await Promise.all([
     dbQuery('instagram_posts?select=caption,transcript,post_type,likes_count,views_count&source=eq.own&caption=not.is.null&order=views_count.desc&limit=30'),
     dbQuery('instagram_posts?select=caption,transcript,post_type,likes_count,views_count&source=eq.competitor&order=views_count.desc&limit=20'),
     dbQuery('instagram_posts?select=caption,transcript,post_type&source=eq.custom&limit=10'),
     dbQuery('thomas_dna?select=category,insight,confidence&order=confidence.desc&limit=20'),
     dbQuery('trend_posts?select=caption,visual_text,username,viral_score,recommendation&order=viral_score.desc&limit=10'),
     dbQuery('generated_content?select=topic,content_type,content,content_pillar&user_rating=eq.1&order=created_at.desc&limit=8'),
+    dbQuery('external_signals?select=title,body,signal_type,source,relevance_score,claude_insight&relevance_score=gte.70&order=fetched_at.desc&limit=10'),
   ])
 
   // ── DNA nach Kategorie gruppieren ──────────────────────────────────────────
@@ -207,6 +208,19 @@ Orientiere dich an Ton, Struktur und Stil dieser Beispiele:
 ${topRated.map((r: any) => {
   const preview = clean(r.content).substring(0, 200)
   return `[${r.content_type}${r.content_pillar ? ' · ' + r.content_pillar : ''}] Thema: "${r.topic}"\n"${preview}…"`
+}).join('\n\n')}` : ''}
+
+${externalSignals.length > 0 ? `═══════════════════════════════════════════════════════
+[9] AKTUELLE COMMUNITY-SIGNALE (Reddit + Social) — WAS DIE ZIELGRUPPE GERADE BESCHÄFTIGT
+═══════════════════════════════════════════════════════
+Diese Themen werden in Fitness-Communities GERADE aktiv diskutiert — das sind echte Pain Points und Fragen der Zielgruppe.
+Wenn das Thema des Nutzers damit zusammenhängt, nutze diese Insights um den Content relevanter zu machen.
+
+${externalSignals.map((s: any) => {
+  const type = s.signal_type?.replace(/_/g, ' ') || 'signal'
+  const body = clean(s.body).substring(0, 150)
+  const insight = s.claude_insight ? ` → ${s.claude_insight}` : ''
+  return `[${s.source?.toUpperCase()} · ${type.toUpperCase()}] "${clean(s.title)}"${body ? `\n${body}` : ''}${insight}`
 }).join('\n\n')}` : ''}
 
 ═══════════════════════════════════════════════════════

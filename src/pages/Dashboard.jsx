@@ -36,13 +36,28 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [scrapeLoading, setScrapeLoading] = useState(false)
   const [trendScout, setTrendScout] = useState([])
+  const [trendScoutPool, setTrendScoutPool] = useState([])
   const [trendLoading, setTrendLoading] = useState(false)
-  const [trendStatus, setTrendStatus] = useState('') // 'waiting' | 'processing' | 'done' | 'error'
+  const [trendStatus, setTrendStatus] = useState('')
   const [trendElapsed, setTrendElapsed] = useState(0)
   const [lastTrendRun, setLastTrendRun] = useState(null)
   const trendPollRef = useRef(null)
   const trendTimerRef = useRef(null)
   const trendJobIdRef = useRef(null)
+
+  // Remix-State: welcher Post wird gerade remixed + Ergebnis
+  const [remixing, setRemixing] = useState({}) // postId → true/false
+  const [remixResults, setRemixResults] = useState({}) // postId → {why, thomas_version, format}
+  const [remixOpen, setRemixOpen] = useState({}) // postId → bool (aufgeklappt)
+
+  // Competitor Remix (per-post, wie Trend Scout)
+  const [compRemixing, setCompRemixing] = useState({})    // postId → bool
+  const [compRemixResults, setCompRemixResults] = useState({}) // postId → result
+  const [compRemixOpen, setCompRemixOpen] = useState({})  // postId → bool
+
+  // Reddit Insights
+  const [redditSignals, setRedditSignals] = useState([])
+  const [redditLoading, setRedditLoading] = useState(false)
 
   // Quick-Generator Panel
   const [quickOpen, setQuickOpen] = useState(false)
@@ -61,8 +76,97 @@ export default function Dashboard() {
 
   async function loadAll() {
     setLoading(true)
-    await Promise.all([loadProfile(), loadPosts(), loadCompetitors(), loadTopics(), loadStats(), loadPillars(), loadTrendScout()])
+    await Promise.all([loadProfile(), loadPosts(), loadCompetitors(), loadTopics(), loadStats(), loadPillars(), loadTrendScout(), loadRedditSignals()])
     setLoading(false)
+  }
+
+  async function loadRedditSignals() {
+    const { data } = await supabase
+      .from('external_signals')
+      .select('*')
+      .gte('relevance_score', 70)
+      .order('fetched_at', { ascending: false })
+      .limit(8)
+    setRedditSignals(data || [])
+  }
+
+  async function fetchReddit() {
+    setRedditLoading(true)
+    try {
+      await apiFetch('fetch-reddit', { method: 'POST' })
+      await loadRedditSignals()
+    } catch (e) {
+      alert('Reddit Fehler: ' + e.message)
+    } finally {
+      setRedditLoading(false)
+    }
+  }
+
+  async function remixPost(post) {
+    const id = post.id || post.instagram_post_id
+    setRemixing(prev => ({ ...prev, [id]: true }))
+    setRemixOpen(prev => ({ ...prev, [id]: true }))
+    try {
+      const data = await apiFetch('remix-post', {
+        method: 'POST',
+        body: JSON.stringify({
+          caption: post.caption,
+          visual_text: post.visual_text,
+          username: post.username,
+          views_count: post.views_count,
+          likes_count: post.likes_count,
+          post_type: post.post_type,
+          content_pillar: post.content_pillar,
+          claude_notes: post.claude_notes,
+          viral_score: post.viral_score,
+          source: 'trend',
+          preferred_format: post.post_type === 'reel' ? 'video_script' : 'single_post',
+        })
+      })
+      setRemixResults(prev => ({ ...prev, [id]: data }))
+    } catch (e) {
+      setRemixResults(prev => ({ ...prev, [id]: { error: e.message } }))
+    } finally {
+      setRemixing(prev => ({ ...prev, [id]: false }))
+    }
+  }
+
+  async function remixCompetitorPost(post) {
+    const id = post.id
+    setCompRemixing(prev => ({ ...prev, [id]: true }))
+    setCompRemixOpen(prev => ({ ...prev, [id]: true }))
+    try {
+      const data = await apiFetch('remix-post', {
+        method: 'POST',
+        body: JSON.stringify({
+          caption: post.caption,
+          visual_text: null,
+          username: post.competitor_username || post.competitor_profiles?.username,
+          views_count: post.views_count,
+          likes_count: post.likes_count,
+          post_type: post.post_type,
+          content_pillar: post.content_pillar,
+          claude_notes: null,
+          viral_score: null,
+          source: 'competitor',
+          preferred_format: post.post_type === 'reel' ? 'video_script' : 'single_post',
+        })
+      })
+      setCompRemixResults(prev => ({ ...prev, [id]: data }))
+    } catch (e) {
+      setCompRemixResults(prev => ({ ...prev, [id]: { error: e.message } }))
+    } finally {
+      setCompRemixing(prev => ({ ...prev, [id]: false }))
+    }
+  }
+
+  function shuffleTrendScout() {
+    if (trendScoutPool.length === 0) return
+    const shuffled = [...trendScoutPool].sort(() => Math.random() - 0.5)
+    setTrendScout(shuffled.slice(0, 12))
+    // Remix-States zurücksetzen für neue Posts
+    setRemixResults({})
+    setRemixOpen({})
   }
 
   async function loadProfile() {
@@ -132,14 +236,14 @@ export default function Dashboard() {
     }
   }
 
-  async function loadTrendScout() {
-    const [{ data }, { data: lastJob }] = await Promise.all([
+  async function loadTrendScout(shuffleNew = false) {
+    const [{ data: all }, { data: lastJob }] = await Promise.all([
       supabase
         .from('trend_posts')
         .select('*')
         .in('recommendation', ['sofort', 'beobachten'])
         .order('viral_score', { ascending: false })
-        .limit(12),
+        .limit(60), // Mehr laden → Rotation möglich
       supabase
         .from('scrape_jobs')
         .select('completed_at, started_at')
@@ -148,7 +252,13 @@ export default function Dashboard() {
         .limit(1)
         .maybeSingle()
     ])
-    setTrendScout(data || [])
+    const posts = all || []
+    // Shuffle für Rotation — immer andere Posts zeigen
+    const shuffled = shuffleNew
+      ? [...posts].sort(() => Math.random() - 0.5)
+      : posts
+    setTrendScout(shuffled.slice(0, 12))
+    setTrendScoutPool(posts) // Alle verfügbaren Posts merken
     setLastTrendRun(lastJob?.completed_at || lastJob?.started_at || null)
   }
 
@@ -694,163 +804,162 @@ export default function Dashboard() {
           <div className="section-header" style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span className="section-title">Trend Scout</span>
-              <span style={{
-                fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
-                color: '#ee4f00', background: 'rgba(238,79,0,0.1)',
-                padding: '2px 7px', borderRadius: 100,
-              }}>
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: '#ee4f00', background: 'rgba(238,79,0,0.1)', padding: '2px 7px', borderRadius: 100 }}>
                 KI-GEFILTERT
               </span>
+              {trendScoutPool.length > 12 && (
+                <span style={{ fontSize: 11, color: 'var(--text3)' }}>{trendScoutPool.length} Posts im Pool</span>
+              )}
               {lastTrendRun && (
                 <span style={{ fontSize: 11, color: 'var(--text3)' }}>
-                  {(() => {
-                    const d = new Date(lastTrendRun)
-                    const pad = n => String(n).padStart(2, '0')
-                    return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())} Uhr`
-                  })()}
+                  {(() => { const d = new Date(lastTrendRun); const pad = n => String(n).padStart(2,'0'); return `${pad(d.getDate())}.${pad(d.getMonth()+1)}. ${pad(d.getHours())}:${pad(d.getMinutes())}` })()}
                 </span>
               )}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               {trendLoading && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
                   <span style={{ fontSize: 10, color: 'var(--text3)' }}>
                     {trendStatus === 'waiting' && 'Apify startet…'}
                     {trendStatus === 'processing' && 'Analysiert Posts…'}
-                    {trendStatus === 'done' && '✓ Fertig'}
-                    {trendStatus === 'error' && '✗ Fehler'}
                   </span>
                   <span style={{ fontSize: 10, color: 'var(--text4)', fontFamily: 'var(--font-mono)' }}>
-                    {Math.floor(trendElapsed / 60)}:{String(trendElapsed % 60).padStart(2, '0')} min
+                    {Math.floor(trendElapsed / 60)}:{String(trendElapsed % 60).padStart(2, '0')}
                   </span>
                 </div>
               )}
+              {trendScoutPool.length > 12 && !trendLoading && (
+                <button onClick={shuffleTrendScout} className="btn btn-xs" title="Andere Posts zeigen">
+                  🔀 Andere zeigen
+                </button>
+              )}
               <button onClick={runTrendDiscovery} disabled={trendLoading} className="btn btn-xs">
-                {trendLoading
-                  ? <><span className="spinner" style={{ width: 10, height: 10 }} /> Läuft…</>
-                  : '⚡ Discovery starten'
-                }
+                {trendLoading ? <><span className="spinner" style={{ width: 10, height: 10 }} /> Läuft…</> : '⚡ Neu scannen'}
               </button>
             </div>
           </div>
 
           {trendScout.length === 0 ? (
-            <div style={{
-              background: 'var(--bg-card)', border: '1px dashed var(--border-strong)',
-              borderRadius: 'var(--r-lg)', padding: '32px', textAlign: 'center',
-            }}>
+            <div style={{ background: 'var(--bg-card)', border: '1px dashed var(--border-strong)', borderRadius: 'var(--r-lg)', padding: '32px', textAlign: 'center' }}>
               <p style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 12 }}>
-                Noch keine Trend-Daten. Starte die Discovery um viral performende Posts aus 50 kuratierten Fitness-Accounts zu analysieren.
+                Noch keine Trend-Daten. Starte den Scan um viral performende Posts aus 40 kuratierten Fitness-Accounts zu analysieren.
               </p>
               <button onClick={runTrendDiscovery} disabled={trendLoading} className="btn btn-sm btn-primary">
-                {trendLoading ? 'Läuft…' : '⚡ Jetzt starten'}
+                {trendLoading ? 'Läuft…' : '⚡ Jetzt scannen'}
               </button>
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, minWidth: 0 }}>
               {trendScout.map(post => {
+                const id = post.id
                 const isHot = post.recommendation === 'sofort'
-                const pillarColors = { haltung: '#ee4f00', transformation: '#3b82f6', mehrwert: '#22c55e', verkauf: '#a855f7' }
-                const pillarColor = pillarColors[post.content_pillar] || 'var(--text3)'
-                return (
-                  <div
-                    key={post.id}
-                    onClick={() => handleTrendScoutSelect(post)}
-                    style={{
-                      background: 'var(--bg-card)',
-                      border: `1px solid ${isHot ? 'rgba(238,79,0,0.3)' : 'var(--border)'}`,
-                      borderRadius: 'var(--r-lg)',
-                      padding: '14px',
-                      cursor: 'pointer',
-                      minWidth: 0,
-                      borderTop: `2px solid ${isHot ? '#ee4f00' : 'var(--border)'}`,
-                      transition: 'all 0.12s',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.background = 'var(--bg-card-hover)' }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = isHot ? 'rgba(238,79,0,0.3)' : 'var(--border)'; e.currentTarget.style.background = 'var(--bg-card)' }}
-                  >
-                    {/* Header */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                      {isHot && (
-                        <span style={{ fontSize: 9, fontWeight: 700, color: '#ee4f00', background: 'rgba(238,79,0,0.1)', padding: '1px 6px', borderRadius: 100, letterSpacing: '0.07em' }}>
-                          SOFORT
-                        </span>
-                      )}
-                      {post.dach_gap && (
-                        <span style={{ fontSize: 9, fontWeight: 700, color: '#22c55e', background: 'rgba(34,197,94,0.1)', padding: '1px 6px', borderRadius: 100, letterSpacing: '0.07em' }}>
-                          DACH-LÜCKE
-                        </span>
-                      )}
-                      {post.content_pillar && (
-                        <span style={{ fontSize: 9, fontWeight: 700, color: pillarColor, background: `${pillarColor}18`, padding: '1px 6px', borderRadius: 100, letterSpacing: '0.06em', marginLeft: 'auto' }}>
-                          {post.content_pillar.toUpperCase()}
-                        </span>
-                      )}
-                    </div>
+                const PILLAR_C = { haltung: '#ee4f00', transformation: '#3b82f6', mehrwert: '#22c55e', verkauf: '#a855f7' }
+                const pc = PILLAR_C[post.content_pillar] || 'var(--text3)'
+                const isOpen = remixOpen[id]
+                const isRemixing = remixing[id]
+                const remix = remixResults[id]
 
-                    {/* Account + Score */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text2)' }}>@{post.username}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>Score</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: isHot ? '#ee4f00' : 'var(--text)', fontFamily: 'var(--font-mono)' }}>
-                          {post.viral_score}
-                        </span>
+                return (
+                  <div key={id} style={{
+                    background: 'var(--bg-card)',
+                    border: `1px solid ${isHot ? 'rgba(238,79,0,0.3)' : 'var(--border)'}`,
+                    borderTop: `2px solid ${isHot ? '#ee4f00' : 'var(--border-strong)'}`,
+                    borderRadius: 'var(--r-lg)', minWidth: 0,
+                    overflow: 'hidden',
+                  }}>
+                    {/* ─ ORIGINAL PART ─ */}
+                    <div style={{ padding: '14px 14px 10px' }}>
+                      {/* Badges */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8, flexWrap: 'wrap' }}>
+                        {isHot && <span style={{ fontSize: 8, fontWeight: 800, color: '#ee4f00', background: 'rgba(238,79,0,0.12)', padding: '2px 6px', borderRadius: 100, letterSpacing: '0.08em' }}>SOFORT</span>}
+                        {post.dach_gap && <span style={{ fontSize: 8, fontWeight: 800, color: '#22c55e', background: 'rgba(34,197,94,0.1)', padding: '2px 6px', borderRadius: 100, letterSpacing: '0.08em' }}>DACH-LÜCKE</span>}
+                        {post.content_pillar && <span style={{ fontSize: 8, fontWeight: 700, color: pc, background: `${pc}18`, padding: '2px 6px', borderRadius: 100, marginLeft: 'auto' }}>{post.content_pillar.toUpperCase()}</span>}
+                      </div>
+
+                      {/* Account + Stats */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <div>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>@{post.username}</span>
+                          {post.hook_strength && <span style={{ fontSize: 10, color: 'var(--text3)', marginLeft: 6 }}>Hook {post.hook_strength}/10</span>}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          {post.views_count > 0 && <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>{formatNumber(post.views_count)}</span>}
+                          <span style={{ fontSize: 11, fontWeight: 700, color: isHot ? '#ee4f00' : 'var(--text2)', fontFamily: 'var(--font-mono)' }}>#{post.viral_score}</span>
+                        </div>
+                      </div>
+
+                      {/* Original Caption */}
+                      {(post.caption || post.visual_text) && (
+                        <div style={{ marginBottom: 8 }}>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text4)', letterSpacing: '0.08em', marginBottom: 4 }}>ORIGINAL</div>
+                          <p style={{ fontSize: 11.5, color: 'var(--text2)', lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: isOpen ? 20 : 2, WebkitBoxOrient: 'vertical' }}>
+                            {post.caption || post.visual_text}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* KI-Analyse */}
+                      {post.claude_notes && (
+                        <div style={{ marginBottom: 10, padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 6, borderLeft: '2px solid var(--accent)' }}>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.08em', marginBottom: 3 }}>WARUM ES FUNKTIONIERT</div>
+                          <p style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5, margin: 0 }}>{post.claude_notes}</p>
+                        </div>
+                      )}
+
+                      {/* Buttons */}
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          onClick={() => { if (!remix && !isRemixing) remixPost(post); else setRemixOpen(prev => ({ ...prev, [id]: !prev[id] })) }}
+                          disabled={isRemixing}
+                          className="btn btn-xs btn-primary"
+                          style={{ flex: 1, justifyContent: 'center' }}
+                        >
+                          {isRemixing ? <><span className="spinner" style={{ width: 9, height: 9 }} /> Baut um…</> :
+                           remix ? (isOpen ? '▲ Meine Version' : '▼ Meine Version') : '⚡ Für meinen Feed'}
+                        </button>
+                        <button
+                          onClick={() => navigate('/generator', { state: { topic: (post.caption || '').split(/[\n.!?]/)[0].trim().substring(0, 80) || `Trending @${post.username}`, additionalInfo: `Viral @${post.username} | ${formatNumber(post.views_count)} Views\n${post.caption || ''}`, suggestedType: post.post_type === 'reel' ? 'video_script' : 'single_post' } })}
+                          className="btn btn-xs"
+                        >Generator</button>
                       </div>
                     </div>
 
-                    {/* Caption */}
-                    {post.caption && (
-                      <p style={{
-                        fontSize: 11.5, color: 'var(--text2)', lineHeight: 1.45,
-                        overflow: 'hidden', display: '-webkit-box',
-                        WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                        marginBottom: 8,
-                      }}>
-                        {post.caption}
-                      </p>
+                    {/* ─ THOMAS VERSION (aufklappbar) ─ */}
+                    {isOpen && (
+                      <div style={{ borderTop: '1px solid var(--border)', background: 'rgba(238,79,0,0.04)' }}>
+                        {isRemixing ? (
+                          <div style={{ padding: '20px', textAlign: 'center' }}>
+                            <span className="spinner" style={{ width: 18, height: 18 }} />
+                            <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8 }}>Claude analysiert & schreibt um…</p>
+                          </div>
+                        ) : remix?.error ? (
+                          <div style={{ padding: '12px 14px' }}>
+                            <p style={{ fontSize: 11, color: '#ef4444' }}>Fehler: {remix.error}</p>
+                            <button onClick={() => { setRemixResults(prev => { const n = {...prev}; delete n[id]; return n }); remixPost(post) }} className="btn btn-xs" style={{ marginTop: 6 }}>Nochmal</button>
+                          </div>
+                        ) : remix ? (
+                          <div style={{ padding: '14px' }}>
+                            <div style={{ fontSize: 9, fontWeight: 800, color: '#ee4f00', letterSpacing: '0.1em', marginBottom: 10 }}>
+                              THOMAS' VERSION — {(remix.format || '').replace(/_/g,' ').toUpperCase()}
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.7, whiteSpace: 'pre-wrap', marginBottom: 12 }}>
+                              {remix.thomas_version}
+                            </div>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button
+                                onClick={() => navigator.clipboard.writeText(remix.thomas_version)}
+                                className="btn btn-xs btn-primary"
+                                style={{ flex: 1, justifyContent: 'center' }}
+                              >Kopieren</button>
+                              <button
+                                onClick={() => navigate('/generator', { state: { topic: (post.caption || '').substring(0, 80), additionalInfo: remix.thomas_version, suggestedType: remix.format } })}
+                                className="btn btn-xs"
+                              >Im Generator →</button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
                     )}
-
-                    {/* Claude Notes */}
-                    {post.claude_notes && (
-                      <p style={{
-                        fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.4,
-                        overflow: 'hidden', display: '-webkit-box',
-                        WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                        marginBottom: 8, fontStyle: 'italic',
-                      }}>
-                        {post.claude_notes}
-                      </p>
-                    )}
-
-                    {/* Stats */}
-                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                      {post.views_count > 0 && (
-                        <span style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" strokeWidth="2"/>
-                            <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
-                          </svg>
-                          {formatNumber(post.views_count)}
-                        </span>
-                      )}
-                      {post.likes_count > 0 && (
-                        <span style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" stroke="currentColor" strokeWidth="2"/>
-                          </svg>
-                          {formatNumber(post.likes_count)}
-                        </span>
-                      )}
-                      {post.hook_strength && (
-                        <span style={{ fontSize: 10, color: 'var(--text3)', marginLeft: 'auto' }}>
-                          Hook {post.hook_strength}/10
-                        </span>
-                      )}
-                      <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 2, marginLeft: post.hook_strength ? 0 : 'auto' }}>
-                        In Generator →
-                      </span>
-                    </div>
                   </div>
                 )
               })}
@@ -889,7 +998,7 @@ export default function Dashboard() {
 
           {/* Trending bei Competitors */}
           <div style={{ minWidth: 0 }}>
-            <div className="section-header">
+            <div className="section-header" style={{ marginBottom: 10 }}>
               <span className="section-title">Trending bei Competitors</span>
               <span style={{ fontSize: 11, color: 'var(--text3)' }}>letzte 30 Tage</span>
             </div>
@@ -898,17 +1007,228 @@ export default function Dashboard() {
                 background: 'var(--bg-card)', border: '1px solid var(--border)',
                 borderRadius: 'var(--r-lg)', padding: '32px', textAlign: 'center'
               }}>
-                <p style={{ fontSize: 13, color: 'var(--text3)' }}>Keine Trending Posts. Füge Competitors hinzu.</p>
+                <p style={{ fontSize: 13, color: 'var(--text3)' }}>Keine Trending Posts. Füge Competitors hinzu und scrape sie.</p>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {trendingPosts.map(post => (
-                  <PostCard key={post.id} post={post} compact onClick={() => handleTrendingSelect(post)} />
-                ))}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {trendingPosts.map(post => {
+                  const id = post.id
+                  const isOpen = compRemixOpen[id]
+                  const isRemixing = compRemixing[id]
+                  const remix = compRemixResults[id]
+                  const PILLAR_C = { haltung: '#ee4f00', transformation: '#3b82f6', mehrwert: '#22c55e', verkauf: '#a855f7' }
+                  const pc = PILLAR_C[post.content_pillar] || 'var(--text3)'
+                  const caption = post.caption || post.transcript || ''
+                  return (
+                    <div key={id} style={{
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      borderTop: '2px solid var(--border-strong)',
+                      borderRadius: 'var(--r-lg)',
+                      overflow: 'hidden',
+                    }}>
+                      {/* Post Info */}
+                      <div style={{ padding: '12px 14px 10px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+                            @{post.competitor_username || '?'}
+                          </span>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            {post.views_count > 0 && (
+                              <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
+                                {formatNumber(post.views_count)}
+                              </span>
+                            )}
+                            {post.content_pillar && (
+                              <span style={{ fontSize: 8, fontWeight: 700, color: pc, background: `${pc}18`, padding: '2px 6px', borderRadius: 100 }}>
+                                {post.content_pillar.toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {caption && (
+                          <p style={{
+                            fontSize: 11.5, color: 'var(--text2)', lineHeight: 1.5,
+                            overflow: 'hidden', display: '-webkit-box',
+                            WebkitLineClamp: isOpen ? 20 : 2, WebkitBoxOrient: 'vertical',
+                            marginBottom: 10,
+                          }}>
+                            {caption}
+                          </p>
+                        )}
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button
+                            onClick={() => {
+                              if (!remix && !isRemixing) remixCompetitorPost(post)
+                              else setCompRemixOpen(prev => ({ ...prev, [id]: !prev[id] }))
+                            }}
+                            disabled={isRemixing}
+                            className="btn btn-xs btn-primary"
+                            style={{ flex: 1, justifyContent: 'center' }}
+                          >
+                            {isRemixing
+                              ? <><span className="spinner" style={{ width: 9, height: 9 }} /> Baut um…</>
+                              : remix
+                                ? (isOpen ? '▲ Meine Version' : '▼ Meine Version')
+                                : '⚡ Für meinen Feed'
+                            }
+                          </button>
+                          <button
+                            onClick={() => navigate('/generator', {
+                              state: {
+                                topic: caption.split(/[\n.!?]/)[0].trim().substring(0, 80) || `Post von @${post.competitor_username}`,
+                                additionalInfo: `Top Post von @${post.competitor_username} | ${formatNumber(post.views_count)} Views\n${caption}`,
+                                suggestedType: post.post_type === 'reel' ? 'video_script' : 'single_post',
+                              }
+                            })}
+                            className="btn btn-xs"
+                          >Generator</button>
+                        </div>
+                      </div>
+
+                      {/* Thomas-Version aufgeklappt */}
+                      {isOpen && (
+                        <div style={{ borderTop: '1px solid var(--border)', background: 'rgba(238,79,0,0.04)' }}>
+                          {isRemixing ? (
+                            <div style={{ padding: '16px', textAlign: 'center' }}>
+                              <span className="spinner" style={{ width: 16, height: 16 }} />
+                              <p style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8 }}>Claude analysiert & schreibt um…</p>
+                            </div>
+                          ) : remix?.error ? (
+                            <div style={{ padding: '12px 14px' }}>
+                              <p style={{ fontSize: 11, color: '#ef4444' }}>Fehler: {remix.error}</p>
+                              <button
+                                onClick={() => { setCompRemixResults(prev => { const n = {...prev}; delete n[id]; return n }); remixCompetitorPost(post) }}
+                                className="btn btn-xs" style={{ marginTop: 6 }}
+                              >Nochmal</button>
+                            </div>
+                          ) : remix ? (
+                            <div style={{ padding: '12px 14px' }}>
+                              {remix.why_it_works && (
+                                <div style={{ marginBottom: 10, padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 6, borderLeft: '2px solid var(--accent)' }}>
+                                  <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.08em', marginBottom: 3 }}>WARUM ES FUNKTIONIERT</div>
+                                  <p style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5, margin: 0 }}>{remix.why_it_works}</p>
+                                </div>
+                              )}
+                              <div style={{ fontSize: 9, fontWeight: 800, color: '#ee4f00', letterSpacing: '0.1em', marginBottom: 8 }}>
+                                THOMAS' VERSION — {(remix.format || '').replace(/_/g, ' ').toUpperCase()}
+                              </div>
+                              <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.7, whiteSpace: 'pre-wrap', marginBottom: 10 }}>
+                                {remix.thomas_version}
+                              </div>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <button
+                                  onClick={() => navigator.clipboard.writeText(remix.thomas_version)}
+                                  className="btn btn-xs btn-primary"
+                                  style={{ flex: 1, justifyContent: 'center' }}
+                                >Kopieren</button>
+                                <button
+                                  onClick={() => navigate('/generator', {
+                                    state: { topic: caption.substring(0, 80), additionalInfo: remix.thomas_version, suggestedType: remix.format }
+                                  })}
+                                  className="btn btn-xs"
+                                >Im Generator →</button>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
         </div>
+
+        {/* ── REDDIT INSIGHTS ────────────────────────────────────────────────── */}
+        {(redditSignals.length > 0 || redditLoading) && (
+          <div style={{ marginBottom: 24 }}>
+            <div className="section-header" style={{ marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="section-title">Community Insights</span>
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: '#ff4500', background: 'rgba(255,69,0,0.1)', padding: '2px 7px', borderRadius: 100 }}>REDDIT</span>
+                {redditSignals.length > 0 && (
+                  <span style={{ fontSize: 11, color: 'var(--text3)' }}>{redditSignals.length} Signale</span>
+                )}
+              </div>
+              <button onClick={fetchReddit} disabled={redditLoading} className="btn btn-xs">
+                {redditLoading ? <><span className="spinner" style={{ width: 10, height: 10 }} /> Lädt…</> : '⟳ Aktualisieren'}
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+              {redditSignals.map(signal => {
+                const TYPE_C = { pain_point: '#ef4444', question: '#3b82f6', trending_topic: '#ee4f00', success_story: '#22c55e', controversy: '#a855f7' }
+                const TYPE_LABEL = { pain_point: 'PAIN POINT', question: 'FRAGE', trending_topic: 'TRENDING', success_story: 'ERFOLG', controversy: 'KONTROVERS' }
+                const c = TYPE_C[signal.signal_type] || 'var(--text3)'
+                return (
+                  <div key={signal.id} style={{
+                    background: 'var(--bg-card)', border: '1px solid var(--border)',
+                    borderTop: `2px solid ${c}`,
+                    borderRadius: 'var(--r-lg)', padding: '12px',
+                    display: 'flex', flexDirection: 'column', gap: 6,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <span style={{ fontSize: 8, fontWeight: 800, color: c, letterSpacing: '0.08em' }}>
+                        {TYPE_LABEL[signal.signal_type] || signal.signal_type?.toUpperCase()}
+                      </span>
+                      <span style={{ fontSize: 9, color: 'var(--text4)', fontFamily: 'var(--font-mono)' }}>{signal.relevance_score}%</span>
+                    </div>
+                    <p style={{
+                      fontSize: 11.5, color: 'var(--text)', lineHeight: 1.45, fontWeight: 500,
+                      overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
+                    }}>
+                      {signal.title}
+                    </p>
+                    {signal.body && (
+                      <p style={{
+                        fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.45,
+                        overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                      }}>
+                        {signal.body}
+                      </p>
+                    )}
+                    {signal.claude_insight && (
+                      <p style={{ fontSize: 10, color: 'var(--accent)', lineHeight: 1.4, borderTop: '1px solid var(--border)', paddingTop: 6 }}>
+                        → {signal.claude_insight}
+                      </p>
+                    )}
+                    <button
+                      onClick={() => navigate('/generator', {
+                        state: {
+                          topic: signal.title.substring(0, 80),
+                          additionalInfo: `Community-Signal aus Reddit: "${signal.body || signal.title}"\n${signal.claude_insight ? 'Content-Angle: ' + signal.claude_insight : ''}`,
+                          suggestedType: 'single_post',
+                        }
+                      })}
+                      className="btn btn-xs"
+                      style={{ marginTop: 2 }}
+                    >Content erstellen →</button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Reddit Fetch Button wenn noch keine Signale */}
+        {redditSignals.length === 0 && !redditLoading && (
+          <div style={{
+            marginBottom: 24, background: 'var(--bg-card)',
+            border: '1px dashed var(--border-strong)', borderRadius: 'var(--r-lg)',
+            padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Community Insights</div>
+              <div style={{ fontSize: 12, color: 'var(--text3)' }}>
+                Aktuelle Pain Points & Fragen aus Fitness-Subreddits (r/fitness, r/bodybuilding u.a.)
+              </div>
+            </div>
+            <button onClick={fetchReddit} className="btn btn-sm btn-primary">
+              Reddit laden →
+            </button>
+          </div>
+        )}
 
         {/* Competitors Table */}
         {competitors.length > 0 && (
