@@ -1,7 +1,9 @@
-// Trend Discovery — scrapt kuratierte DACH-Fitness-Accounts nach viral performenden Posts
-// Zielgruppe: Accounts die für Männer 30+, Kraft, Körperfett, Online-Coaching stehen
-// Strategie: Pool von 30 Accounts, pro Run 8 zufällig auswählen → Rotation ohne DB-Abhängigkeit
-// Ausschluss: Thomas' eigene Competitors (werden separat getrackt)
+// Trend Discovery — scrapt Online Fitness Coaches für Männer nach viral performenden Posts
+//
+// Account-Pool kommt aus discovered_coaches Tabelle (dynamisch durch discover-coaches befüllt).
+// Rotation: Accounts mit ältestem last_scraped_at kommen zuerst → jeder Run zeigt neue Gesichter.
+// Mindest-Follower: 10.000 (in DB bereits gefiltert bei Discovery).
+// Ausschluss: Thomas' eigene Competitors (werden separat getrackt).
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -14,50 +16,6 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 const DASHBOARD_TOKEN = Deno.env.get('DASHBOARD_TOKEN') || ''
 const APIFY_KEY = Deno.env.get('APIFY_API_KEY') || ''
 
-// Kuratierter Pool: Fitness-Coaches + Lifestyle-Accounts für Männer 30+
-// Fokus: DACH-Markt + internationale Accounts mit übertragbaren Inhalten
-// KEIN Wettkampf/Bodybuilding/Steroid-Content
-// Rotation: 8 zufällige pro Run → nach 4 Runs alle gesehen
-const TREND_ACCOUNT_POOL = [
-  // DACH Fitness-Coaches (Kraft + Körper + Lifestyle)
-  'arnekindler',
-  'philippjahns',
-  'maximilian.goetz',
-  'coach_frankklopper',
-  'stefl.fitness',
-  'nils.langemann',
-  'david_kosmala',
-  'the.bodybuilder.diet',
-  'fitnesstrainer.luca',
-  'jensjakob.fitness',
-
-  // Internationale Coaches (übertragbare Inhalte, kein US-Bro-Culture)
-  'jamessmithpt',       // UK — evidenzbasiert, Anti-Extreme, Männer 30+
-  'drjohnrusin',        // Performance-orientiert, keine Wettkampf-Inhalte
-  'syattfitness',       // Anti-Bullshit, Fakten, Männer
-  'mindpumpsal',        // Podcast-Coach, 30+ Zielgruppe
-  'jeffnippard',        // Wissenschaftlich, kein Wettkampf-Fokus
-  'bradschoenfeld',     // Wissenschaft Muskelaufbau
-  'drhenrytihenry',     // Performance + Lifestyle
-  'hubermanlab',        // Wissenschaft, Life Performance, 30+ Zielgruppe
-  'laynebiorton',       // Faktenbasiert, Anti-Hype
-  'drchristinahibbert', // Mindset + Performance
-
-  // Lifestyle + Effizienz (für Thomas' Zielgruppe: Unternehmer + Fitness)
-  'chriswillx',         // High Performance, Männer 30+
-  'maxlugavere',        // Longevity + Performance
-  'peterattiamd',       // Longevity, 35+ Zielgruppe
-  'andrewdgilmore',     // Biohacking + Effizienz
-  'timsuper',           // Lifestyle + Fitness
-
-  // Weitere bewährte Accounts
-  'coachkyledobbs',
-  'tommycreason',
-  'coachkevmarr',
-  'thomasadler_fitness',
-  'marksmellybell',
-]
-
 function dbHeaders() {
   return {
     'Content-Type': 'application/json',
@@ -65,10 +23,6 @@ function dbHeaders() {
     'apikey': SERVICE_KEY,
     'Prefer': 'return=representation'
   }
-}
-
-function pickRandom<T>(arr: T[], n: number): T[] {
-  return [...arr].sort(() => Math.random() - 0.5).slice(0, n)
 }
 
 Deno.serve(async (req: Request) => {
@@ -79,29 +33,44 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...CORS, 'Content-Type': 'application/json' } })
   }
 
-  // Competitor-Handles laden → vom Trend-Scrape ausschließen
-  const compRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/competitor_profiles?select=username&is_active=eq.true`,
+  // Competitor-Handles laden → ausschließen
+  const [compRes, ownRes] = await Promise.all([
+    fetch(`${SUPABASE_URL}/rest/v1/competitor_profiles?select=username&is_active=eq.true`, {
+      headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY }
+    }),
+    fetch(`${SUPABASE_URL}/rest/v1/own_profile?select=username`, {
+      headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY }
+    }),
+  ])
+
+  const [competitors, ownProfiles] = await Promise.all([compRes.json(), ownRes.json()])
+  const excludeHandles = new Set([
+    ...(competitors || []).map((c: any) => c.username.toLowerCase()),
+    ...(ownProfiles || []).map((p: any) => p.username?.toLowerCase() || ''),
+  ])
+
+  // Coaches aus DB laden: ≥10K Follower, älteste last_scraped_at zuerst (Rotation)
+  const coachRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/discovered_coaches?is_active=eq.true&followers_count=gte.10000&select=username,followers_count&order=last_scraped_at.asc.nullsfirst&limit=20`,
     { headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY } }
   )
-  const competitors: any[] = await compRes.json()
-  const knownHandles = new Set((competitors || []).map((c: any) => c.username.toLowerCase()))
+  const allCoaches: any[] = await coachRes.json()
 
-  // Thomas' eigene Profile auch ausschließen
-  const ownRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/own_profile?select=username`,
-    { headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY } }
-  )
-  const ownProfiles: any[] = await ownRes.json()
-  for (const p of ownProfiles) knownHandles.add(p.username?.toLowerCase() || '')
+  if (!Array.isArray(allCoaches) || allCoaches.length === 0) {
+    return new Response(JSON.stringify({
+      error: 'Kein Coach-Pool vorhanden. Zuerst discover-coaches ausführen.',
+      hint: 'POST /functions/v1/discover-coaches'
+    }), { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } })
+  }
 
-  // Pool filtern + 8 zufällig auswählen
-  const available = TREND_ACCOUNT_POOL.filter(u => !knownHandles.has(u.toLowerCase()))
-  const selected = pickRandom(available, Math.min(8, available.length))
-  const directUrls = selected.map(u => `https://www.instagram.com/${u}/`)
+  // Bekannte Handles ausfiltern + 8 auswählen
+  const available = allCoaches.filter((c: any) => !excludeHandles.has(c.username.toLowerCase()))
+  const selected = available.slice(0, 8) // Bereits nach oldest-first sortiert
+  const usernames = selected.map((c: any) => c.username)
+  const directUrls = usernames.map((u: string) => `https://www.instagram.com/${u}/`)
 
   if (selected.length === 0) {
-    return new Response(JSON.stringify({ error: 'Keine verfügbaren Trend-Accounts' }), {
+    return new Response(JSON.stringify({ error: 'Keine verfügbaren Coaches nach Filterung' }), {
       status: 400, headers: { ...CORS, 'Content-Type': 'application/json' }
     })
   }
@@ -112,7 +81,7 @@ Deno.serve(async (req: Request) => {
     headers: dbHeaders(),
     body: JSON.stringify({
       job_type: 'trend_discovery',
-      target: selected.join(','),
+      target: usernames.join(','),
       status: 'pending',
     })
   })
@@ -124,6 +93,15 @@ Deno.serve(async (req: Request) => {
     })
   }
 
+  // last_scraped_at sofort aktualisieren → verhindert Doppelscrape bei parallelen Runs
+  await Promise.all(usernames.map((u: string) =>
+    fetch(`${SUPABASE_URL}/rest/v1/discovered_coaches?username=eq.${u}`, {
+      method: 'PATCH',
+      headers: { ...dbHeaders(), 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ last_scraped_at: new Date().toISOString() })
+    })
+  ))
+
   // Apify Webhook-Config
   const webhooksParam = btoa(JSON.stringify([{
     eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED', 'ACTOR.RUN.TIMED_OUT'],
@@ -132,7 +110,7 @@ Deno.serve(async (req: Request) => {
     payloadTemplate: `{"job_id":"${job.id}","run_id":"{{resource.id}}","status":"{{eventType}}"}`
   }]))
 
-  // instagram-scraper — bewährt, 100% funktionsfähig für Account-URLs
+  // instagram-scraper — bewährter Actor, Account-URLs funktionieren zuverlässig
   const apifyRes = await fetch(
     `https://api.apify.com/v2/acts/apify~instagram-scraper/runs?token=${APIFY_KEY}&webhooks=${webhooksParam}`,
     {
@@ -141,7 +119,7 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         directUrls,
         resultsType: 'posts',
-        resultsLimit: 15,   // 15 Posts × 8 Accounts = max 120 Kandidaten
+        resultsLimit: 15,
         proxyConfiguration: {
           useApifyProxy: true,
           apifyProxyGroups: ['RESIDENTIAL']
@@ -173,7 +151,8 @@ Deno.serve(async (req: Request) => {
     ok: true,
     job_id: job.id,
     run_id: runId,
-    accounts: selected,
-    message: `Trend Discovery — ${selected.length} Accounts: ${selected.join(', ')}`
+    accounts: usernames,
+    pool_size: allCoaches.length,
+    message: `Trend Discovery — ${usernames.length} Coaches aus Pool von ${allCoaches.length}: ${usernames.join(', ')}`
   }), { headers: { ...CORS, 'Content-Type': 'application/json' } })
 })

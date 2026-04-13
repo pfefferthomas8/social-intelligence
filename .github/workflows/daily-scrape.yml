@@ -8,6 +8,8 @@ on:
     - cron: '30 6 * * *'
     # Trend Scout jeden Montag + Donnerstag 07:00 UTC
     - cron: '0 7 * * 1,4'
+    # Coach Discovery jeden Sonntag 05:00 UTC — findet neue Online-Coaching Accounts
+    - cron: '0 5 * * 0'
   # Manuell triggern möglich
   workflow_dispatch:
     inputs:
@@ -20,6 +22,7 @@ on:
           - own
           - competitors
           - trends
+          - discover
 
 jobs:
   scrape-own:
@@ -83,4 +86,24 @@ jobs:
           if [ "$http_code" -ge 400 ]; then
             echo "::error::Trend discovery failed with status $http_code"
             exit 1
+          fi
+
+  discover-coaches:
+    name: Neue Coaches entdecken
+    runs-on: ubuntu-latest
+    # Jeden Sonntag + manuell
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'discover' || github.event.schedule == '0 5 * * 0'
+    steps:
+      - name: Trigger coach discovery
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/discover-coaches" \
+            -H "Authorization: Bearer ${{ secrets.DASHBOARD_TOKEN }}" \
+            -H "Content-Type: application/json")
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | head -1)
+          echo "Response: $body"
+          echo "HTTP Status: $http_code"
+          if [ "$http_code" -ge 400 ]; then
+            echo "::warning::Coach discovery returned $http_code (Hashtag-Scraping kann geblockt sein)"
           fi
