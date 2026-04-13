@@ -139,24 +139,52 @@ sources: max 3 Quellen — referenziere T1-T12 (Trends), C1-C8 (Competitors), S1
 Verteile gleichmäßig über alle 4 Säulen und alle 4 Formate.
 NUR JSON — kein erklärender Text davor oder danach.`
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: 4000,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }]
-    })
+  // Claude-Call mit Retry bei Overloaded (max 3 Versuche, exponentielles Backoff)
+  const claudeBody = JSON.stringify({
+    model: CLAUDE_MODEL,
+    max_tokens: 4000,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userPrompt }]
   })
 
-  if (!res.ok) {
-    const err = await res.text()
-    return new Response(JSON.stringify({ error: 'Claude error: ' + err }), { status: 502, headers: { ...CORS, 'Content-Type': 'application/json' } })
+  let raw = ''
+  let lastErr = ''
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) {
+      const delay = attempt === 1 ? 8000 : 20000  // 8s, dann 20s
+      await new Promise(r => setTimeout(r, delay))
+    }
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: claudeBody
+    })
+
+    if (res.ok) {
+      const data = await res.json()
+      raw = data.content?.[0]?.text || ''
+      break
+    }
+
+    const errText = await res.text()
+    lastErr = errText
+
+    // Nur bei Overloaded oder 529 retry — bei anderen Fehlern sofort abbrechen
+    let errType = ''
+    try { errType = JSON.parse(errText)?.error?.type || '' } catch { /* */ }
+    if (errType !== 'overloaded_error' && res.status !== 529 && res.status !== 529) {
+      return new Response(JSON.stringify({ error: 'Claude error: ' + errText }), {
+        status: 502, headers: { ...CORS, 'Content-Type': 'application/json' }
+      })
+    }
   }
 
-  const data = await res.json()
-  const raw = data.content?.[0]?.text || ''
+  if (!raw) {
+    return new Response(JSON.stringify({ error: 'Claude überlastet. Bitte in 1-2 Minuten nochmal versuchen.', detail: lastErr }), {
+      status: 503, headers: { ...CORS, 'Content-Type': 'application/json' }
+    })
+  }
 
   let posts: any[] = []
   try {

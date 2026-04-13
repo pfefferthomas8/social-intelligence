@@ -241,20 +241,31 @@ ${FORMAT_INSTRUCTIONS[content_type] || 'Freie Form.'}
 
 Gib NUR den fertigen Content aus — keine Analyse, keine Erklärungen, keine Meta-Kommentare.`
 
-  const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 3000, messages: [{ role: 'user', content: userPrompt }], system: systemPrompt })
-  })
-
-  if (!claudeRes.ok) {
-    const err = await claudeRes.text()
-    return new Response(JSON.stringify({ error: 'Claude error: ' + err }), { status: 502, headers: CORS })
+  // Claude-Call mit Retry bei Overloaded
+  const claudeBody = JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 3000, messages: [{ role: 'user', content: userPrompt }], system: systemPrompt })
+  let content = ''
+  let lastErrContent = ''
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, attempt === 1 ? 8000 : 20000))
+    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: claudeBody
+    })
+    if (claudeRes.ok) {
+      const claudeData = await claudeRes.json()
+      content = claudeData.content?.[0]?.text || ''
+      break
+    }
+    const errText = await claudeRes.text()
+    lastErrContent = errText
+    let errType = ''
+    try { errType = JSON.parse(errText)?.error?.type || '' } catch { /* */ }
+    if (errType !== 'overloaded_error' && claudeRes.status !== 529) {
+      return new Response(JSON.stringify({ error: 'Claude error: ' + errText }), { status: 502, headers: CORS })
+    }
   }
-
-  const claudeData = await claudeRes.json()
-  const content = claudeData.content?.[0]?.text
-  if (!content) return new Response(JSON.stringify({ error: 'Leere Antwort von Claude.' }), { status: 500, headers: CORS })
+  if (!content) return new Response(JSON.stringify({ error: 'Claude überlastet. Bitte nochmal versuchen.', detail: lastErrContent }), { status: 503, headers: CORS })
 
   // Content-Säule klassifizieren (Haiku — günstig, schnell)
   let content_pillar: string | null = null
