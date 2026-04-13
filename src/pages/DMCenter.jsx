@@ -620,10 +620,31 @@ export default function DMCenter() {
             <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, letterSpacing: '0.05em', marginBottom: 8 }}>
               GESCHLECHT / CLAUDE
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 500 }}>Erkannt: <GenderBadge gender={selectedConv.gender} inline /></div>
-                <div style={{ fontSize: 11, color: 'var(--text2)' }}>Claude automatisch gesperrt für Frauen</div>
+            {/* Gender Override */}
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 6 }}>
+                Erkannt: <GenderBadge gender={selectedConv.gender} inline /> — manuell korrigieren:
+              </div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {[
+                  { key: 'male', label: '♂ Männlich', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+                  { key: 'female', label: '♀ Weiblich', color: '#ec4899', bg: 'rgba(236,72,153,0.1)' },
+                  { key: 'unknown', label: '? Unbekannt', color: '#555', bg: 'var(--bg-card)' },
+                ].map(({ key, label, color, bg }) => {
+                  const isActive = selectedConv.gender === key
+                  return (
+                    <button key={key} onClick={async () => {
+                      await supabase.from('dm_conversations').update({ gender: key }).eq('id', selectedConv.id)
+                      setSelectedConv(prev => ({ ...prev, gender: key }))
+                    }} style={{
+                      flex: 1, fontSize: 10, padding: '4px 2px', borderRadius: 4, cursor: 'pointer',
+                      fontFamily: 'var(--font)', fontWeight: isActive ? 700 : 400,
+                      border: isActive ? `1px solid ${color}` : '1px solid var(--border)',
+                      background: isActive ? bg : 'var(--bg-card)',
+                      color: isActive ? color : 'var(--text3)',
+                    }}>{label}</button>
+                  )
+                })}
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -631,7 +652,7 @@ export default function DMCenter() {
                 <div style={{ fontSize: 13, fontWeight: 500, color: selectedConv.claude_blocked ? '#ef4444' : 'var(--text)' }}>
                   {selectedConv.claude_blocked ? '🚫 Claude gesperrt' : '✓ Claude erlaubt'}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text2)' }}>Manuell überschreiben</div>
+                <div style={{ fontSize: 11, color: 'var(--text2)' }}>Manuell sperren</div>
               </div>
               <Toggle
                 value={!selectedConv.claude_blocked}
@@ -837,6 +858,30 @@ function SettingsPanel({ config, onUpdate, onStyleDna, styleDnaLoading }) {
             width: '100%', background: 'var(--bg-input)', color: 'var(--text)',
             border: '1px solid var(--border)', borderRadius: 'var(--r)',
             padding: '6px 10px', fontSize: 13, fontFamily: 'var(--font)', outline: 'none',
+          }}
+        />
+      </div>
+
+      <div style={{ height: 1, background: 'var(--border)' }} />
+
+      <div>
+        <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, letterSpacing: '0.05em', marginBottom: 6 }}>
+          BLOCKLIST — CLAUDE ANTWORTET NIE
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 8 }}>
+          Instagram Usernames (einer pro Zeile, ohne @). Archivierte Kontakte werden automatisch blockiert.
+        </div>
+        <textarea
+          key="blocked_usernames"
+          defaultValue={config['blocked_usernames'] || ''}
+          onBlur={e => onUpdate('blocked_usernames', e.target.value)}
+          placeholder={'max.mustermann\nanna.fitness\njohn_doe'}
+          rows={5}
+          style={{
+            width: '100%', background: 'var(--bg-input)', color: 'var(--text)',
+            border: '1px solid var(--border)', borderRadius: 'var(--r)',
+            padding: '8px 10px', fontSize: 12, fontFamily: 'var(--font)',
+            resize: 'vertical', outline: 'none',
           }}
         />
       </div>

@@ -74,23 +74,65 @@ async function callClaude(system: string, messages: any[]): Promise<string> {
 }
 
 const FEMALE_NAMES = new Set([
-  'anna','maria','laura','julia','sarah','lisa','katharina','sandra','andrea','stefanie',
+  // Deutsch/Österreich
+  'anna','marie','maria','laura','julia','sarah','lisa','katharina','sandra','andrea','stefanie',
   'nicole','petra','claudia','martina','jessica','jennifer','christina','melanie','franziska',
   'barbara','susanne','monika','bianca','sabrina','vanessa','lena','lea','emma','mia','hannah',
-  'sophie','charlotte','marie','kathrin','michaela','daniela','verena','simone','marina',
-  'magdalena','theresa','teresa','eva','jasmin','nina','carina','natalie','tanja','sonja',
-  'britta','silvia','gabi','gabriele','renate','ursula','hilde','elke','inge','helga','gisela',
-  'christa','karin','bettina','nadine','manuela','anja','anne','antonia','alina','amelie',
-  'emilia','luisa','louisa','valentina','viktoria','victoria','nathalie','anika','annika',
-  'jana','kim','tina','vera','yvonne','zoe','stella','isabella','johanna','veronika',
+  'sophie','charlotte','kathrin','michaela','daniela','verena','simone','marina','magdalena',
+  'theresa','teresa','eva','jasmin','nina','carina','natalie','tanja','sonja','britta','silvia',
+  'gabi','gabriele','renate','ursula','hilde','elke','inge','helga','gisela','christa','karin',
+  'bettina','nadine','manuela','anja','anne','antonia','alina','amelie','emilia','luisa','louisa',
+  'valentina','viktoria','victoria','nathalie','anika','annika','jana','kim','tina','vera',
+  'yvonne','zoe','stella','isabella','johanna','veronika','lisa','kathrin','steffi','susi',
+  'rosi','trudi','heidi','elli','uta','ina','ida','pia','mia','lea','nea','fea',
+  // International/English
+  'jennifer','jessica','ashley','amanda','stephanie','nicole','melissa','michelle','kimberly',
+  'amy','angela','helen','diana','linda','patricia','margaret','elizabeth','mary','barbara',
+  'susan','dorothy','karen','betty','ruth','sharon','deborah','carol','virginia','patricia',
+  'chloe','madison','olivia','sophia','isabella','ava','mia','abigail','emily','charlotte',
+  'harper','amelia','evelyn','sofia','scarlett','victoria','camila','aria','penelope','luna',
+  'layla','riley','zoey','nora','lily','eleanor','hannah','lillian','addison','aubrey','grace',
+  'leah','savannah','natalie','audrey','brooklyn','bella','claire','skylar','lucy','anna','aaliyah',
+  // Türkisch/Arabisch/Südeuropäisch
+  'fatima','fatme','ayse','zeynep','elif','merve','selin','melis','esra','nour','sara','lara',
+  'yasmin','yasmina','amira','laila','leila','nadia','sofia','giulia','chiara','francesca',
+  'valentina','alessia','martina','beatrice','elena','paola','silvia','roberta','cristina',
+  // Osteuropäisch
+  'katerina','katarina','katarzyna','monika','agnieszka','joanna','anna','marta','natalia',
+  'olga','tatiana','irina','svetlana','elena','ekaterina','anastasia','daria','maria','oksana',
 ])
 
+const FEMALE_USERNAME_PATTERNS = /girl|woman|women|lady|mama|mami|queen|princess|babygirl|itsgirl|shes|girly|babe|she_|_she|her_|_her|ms\.|mrs\.|frau|madame|señorita|belle|femme|dame|miss|goddess/i
+const FEMALE_NAME_PATTERNS = /\b(mrs|ms|miss|frau|lady|signora|madame|señora)\b/i
+
+function normalize(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_.\-]/g, ' ').trim()
+}
+
 function detectGender(name: string, username: string): string {
-  const combined = `${name} ${username}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  if (/\bmrs[\.\s]|^mrs$|\bms[\.\s]|^ms$|\bfrau\b|\blady\b|\bgirl\b/.test(combined)) return 'female'
-  if (/girl|woman|women|lady|mama|mami|queen|princess|babygirl/.test(combined)) return 'female'
-  const firstName = name.trim().split(/[\s\.\_]/)[0].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  if (FEMALE_NAMES.has(firstName)) return 'female'
+  const normName = normalize(name)
+  const normUser = normalize(username)
+  const combined = `${normName} ${normUser}`
+
+  // Klare weibliche Indikatoren im Username oder Namen
+  if (FEMALE_NAME_PATTERNS.test(combined)) return 'female'
+  if (FEMALE_USERNAME_PATTERNS.test(combined)) return 'female'
+
+  // Klare männliche Indikatoren
+  if (/\b(mr|herr|señor|signor)\b|boy|guy|man_|_man|bro_|_bro|lad_/.test(combined)) return 'male'
+
+  // Vorname gegen Liste prüfen — alle Wortteile des Namens
+  const nameParts = normName.split(/\s+/)
+  for (const part of nameParts) {
+    if (part.length > 2 && FEMALE_NAMES.has(part)) return 'female'
+  }
+
+  // Username-Teile prüfen (z.B. "laura.fit" → "laura")
+  const userParts = normUser.split(/\s+/)
+  for (const part of userParts) {
+    if (part.length > 2 && FEMALE_NAMES.has(part)) return 'female'
+  }
+
   return 'unknown'
 }
 
@@ -250,8 +292,24 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Schritt 5: Claude nur wenn aktiv und nicht gesperrt ───────────────────
-    if (config['global_claude_enabled'] !== 'true' || conv.claude_blocked || gender === 'female') {
-      console.log(`Claude skipped for ${ig_username} (blocked/disabled/female)`)
+    // Blocklist aus Config prüfen
+    const blockedUsernames = (config['blocked_usernames'] || '')
+      .split(/[\n,]/).map((u: string) => u.trim().toLowerCase().replace('@', '')).filter(Boolean)
+    const isBlocked = blockedUsernames.includes(resolvedUsername.toLowerCase())
+
+    if (
+      config['global_claude_enabled'] !== 'true' ||
+      conv.claude_blocked ||
+      conv.lead_heat === 'archived' ||
+      isBlocked ||
+      gender === 'female'
+    ) {
+      console.log(`Claude skipped for ${resolvedUsername} (reason: ${
+        config['global_claude_enabled'] !== 'true' ? 'global_off' :
+        conv.claude_blocked ? 'manually_blocked' :
+        conv.lead_heat === 'archived' ? 'archived' :
+        isBlocked ? 'blocklist' : 'female'
+      })`)
       return new Response(JSON.stringify({ reply: '' }), {
         headers: { ...CORS, 'Content-Type': 'application/json' }
       })
