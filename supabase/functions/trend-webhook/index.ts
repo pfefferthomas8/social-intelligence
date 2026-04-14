@@ -233,9 +233,32 @@ Deno.serve(async (req: Request) => {
     for (let attempt = 0; attempt < 5; attempt++) {
       if (attempt > 0) await new Promise(r => setTimeout(r, 10000))
       items = await fetchDataset()
-      // Echtdaten haben shortCode oder id — error-only Arrays ignorieren
-      const realItems = (items || []).filter((it: any) => it.shortCode || it.id)
+      // Echtdaten: entweder direkte Posts (shortCode/id) oder Profile mit latestPosts
+      const realItems = (items || []).filter((it: any) => it.shortCode || it.id || it.latestPosts)
       if (realItems.length > 0) { items = realItems; break }
+    }
+
+    // Profil-Modus (instagram-profile-scraper): latestPosts aus jedem Profil flattenen
+    // Posts-Modus (legacy instagram-scraper): direkte Post-Items
+    const isProfileMode = items && items.length > 0 && !!(items[0] as any).latestPosts
+    let flatPosts: Record<string, unknown>[]
+    if (isProfileMode) {
+      flatPosts = []
+      for (const profile of (items || [])) {
+        const profileUsername = (profile as any).username || ''
+        const followersCount = Number((profile as any).followersCount) || 0
+        const latestPosts = ((profile as any).latestPosts || []) as Record<string, unknown>[]
+        for (const post of latestPosts) {
+          flatPosts.push({
+            ...post,
+            // Follower-Zahl und Username vom Profil injizieren (für Viral Score + Dedup)
+            ownerUsername: (post as any).ownerUsername || profileUsername,
+            ownerFollowersCount: (post as any).ownerFollowersCount || followersCount,
+          })
+        }
+      }
+      // items mit den flattened Posts ersetzen für den Rest der Verarbeitung
+      items = flatPosts.filter((it: any) => it.shortCode || it.id) as Record<string, unknown>[]
     }
 
     if (!items || items.length === 0) {

@@ -110,15 +110,15 @@ Deno.serve(async (req: Request) => {
     payloadTemplate: `{"job_id":"${job.id}","run_id":"{{resource.id}}","status":"{{eventType}}"}`
   }]))
 
-  // instagram-scraper — bewährter Actor, Account-URLs funktionieren zuverlässig
+  // instagram-profile-scraper — stabiler als instagram-scraper für Profil-Posts
+  // instagram-scraper mit directUrls+resultsType:'posts' gibt leere Datasets seit April 2026
   const apifyRes = await fetch(
-    `https://api.apify.com/v2/acts/apify~instagram-scraper/runs?token=${APIFY_KEY}&webhooks=${webhooksParam}`,
+    `https://api.apify.com/v2/acts/apify~instagram-profile-scraper/runs?token=${APIFY_KEY}&webhooks=${webhooksParam}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        directUrls,
-        resultsType: 'posts',
+        usernames,
         resultsLimit: 15,
         proxyConfiguration: {
           useApifyProxy: true,

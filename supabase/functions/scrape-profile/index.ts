@@ -61,15 +61,15 @@ Deno.serve(async (req: Request) => {
     payloadTemplate: `{"job_id":"${job.id}","run_id":"{{resource.id}}","status":"{{eventType}}"}`
   }]))
 
-  // Apify Run starten — instagram-scraper gibt bis zu 50 Posts direkt zurück (~5-8 Min)
+  // Apify Run starten — instagram-profile-scraper ist stabiler für Profil+Posts (~3-8 Min)
+  // instagram-scraper mit directUrls+resultsType:'posts' schlägt seit April 2026 für Einzelprofile fehl
   const apifyRes = await fetch(
-    `https://api.apify.com/v2/acts/apify~instagram-scraper/runs?token=${APIFY_KEY}&webhooks=${webhooksParam}`,
+    `https://api.apify.com/v2/acts/apify~instagram-profile-scraper/runs?token=${APIFY_KEY}&webhooks=${webhooksParam}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        directUrls: [`https://www.instagram.com/${username}/`],
-        resultsType: 'posts',
+        usernames: [username],
         resultsLimit: 50,
         proxyConfiguration: {
           useApifyProxy: true,
