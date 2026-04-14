@@ -110,7 +110,8 @@ Deno.serve(async (req: Request) => {
     payloadTemplate: `{"job_id":"${job.id}","run_id":"{{resource.id}}","status":"{{eventType}}"}`
   }]))
 
-  const proxyConfig = { useApifyProxy: true, apifyProxyGroups: ['RESIDENTIAL'] }
+  // RESIDENTIAL oft nicht verfügbar → Standard Apify Datacenter Proxy
+  const proxyConfig = { useApifyProxy: true }
 
   // Beide Actors parallel — trend-webhook verarbeitet wer zuerst valide Posts liefert
   async function tryRun(actor: string, input: Record<string, unknown>): Promise<string | null> {

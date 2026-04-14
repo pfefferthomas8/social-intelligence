@@ -64,11 +64,13 @@ function parseTimestamp(ts: unknown): string | null {
 }
 
 function detectPostType(post: Record<string, unknown>): string {
-  if (post.productType === 'clips' || post.type === 'Reel') return 'reel'
+  const t = String(post.type || post.media_type || '').toLowerCase()
+  const pt = String(post.productType || post.product_type || '').toLowerCase()
+  if (pt === 'clips' || t === 'reel' || t === 'reels') return 'reel'
   if (post.isVideo && (Number(post.videoViewCount) > 0 || Number(post.videoPlayCount) > 0)) return 'reel'
-  if (post.type === 'Video' || post.isVideo) return 'video'
+  if (t === 'video' || post.isVideo || post.is_video) return 'video'
   if (Array.isArray(post.childPosts) && post.childPosts.length > 0) return 'carousel'
-  if (post.type === 'Sidecar') return 'carousel'
+  if (t === 'sidecar' || t === 'carousel' || t === 'album') return 'carousel'
   return 'image'
 }
 
@@ -78,10 +80,12 @@ async function getCompetitorId(username: string): Promise<string | null> {
 }
 
 async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competitorId: string | null): Promise<boolean> {
-  const videoUrl = (post.videoUrl || post.videoPlaybackUrl || null) as string | null
-  const thumbUrl = (post.displayUrl || post.thumbnailUrl || null) as string | null
-  // shortCode bevorzugen — stabil und kein Integer-Precision-Problem
-  const postId = (post.shortCode || post.id) ? String(post.shortCode || post.id) : null
+  const videoUrl = (post.videoUrl || post.videoPlaybackUrl || post.video_url || null) as string | null
+  const thumbUrl = (post.displayUrl || post.thumbnailUrl || post.thumbnail_url || post.image_url || null) as string | null
+  // shortCode / code / id — verschiedene Actors nutzen verschiedene Feldnamen
+  const postId = post.shortCode || post.code || post.id
+    ? String(post.shortCode || post.code || post.id)
+    : null
   if (!postId) return false
 
   const res = await fetch(
@@ -99,14 +103,14 @@ async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competi
         competitor_id: competitorId,
         instagram_post_id: postId,
         post_type: detectPostType(post),
-        caption: (post.caption as string) || null,
-        likes_count: Number(post.likesCount) || 0,
-        comments_count: Number(post.commentsCount) || 0,
-        views_count: Number(post.videoViewCount) || Number(post.videoPlayCount) || 0,
+        caption: (post.caption || post.text || null) as string | null,
+        likes_count: Number(post.likesCount || post.likes_count || post.edge_media_preview_like?.count || 0),
+        comments_count: Number(post.commentsCount || post.comments_count || 0),
+        views_count: Number(post.videoViewCount || post.videoPlayCount || post.video_view_count || post.plays || 0),
         video_url: videoUrl,
         thumbnail_url: thumbUrl,
-        published_at: parseTimestamp(post.timestamp || post.takenAt),
-        url: (post.url as string) || (post.shortCode ? `https://www.instagram.com/p/${post.shortCode}/` : null),
+        published_at: parseTimestamp(post.timestamp || post.takenAt || post.taken_at || post.created_at),
+        url: (post.url as string) || (post.shortCode || post.code ? `https://www.instagram.com/p/${post.shortCode || post.code}/` : null),
         transcript_status: videoUrl ? 'pending' : 'none',
         visual_text_status: thumbUrl ? 'pending' : 'none'
       })
@@ -196,9 +200,10 @@ Deno.serve(async (req: Request) => {
 
     const isOwn = job.job_type === 'own_profile'
     const firstItem = items[0]
-    // Posts-Modus: instagram-scraper gibt direkte Post-Items (haben shortCode + ownerUsername, KEIN latestPosts[])
-    // Profile-Modus: instagram-profile-scraper gibt Profil-Objekte mit latestPosts[]
-    const isPostsMode = !!(firstItem.shortCode || firstItem.id) && !firstItem.latestPosts && !!(firstItem.ownerUsername || firstItem.ownerId)
+    // Posts-Modus: direkte Post-Items (shortCode/id vorhanden, KEIN latestPosts-Array)
+    // Profile-Modus: Profil-Objekte mit latestPosts[]
+    // Fast-Scraper kann ownerUsername weglassen → nicht mehr als Pflichtfeld prüfen
+    const isPostsMode = !!(firstItem.shortCode || firstItem.id || firstItem.code) && !firstItem.latestPosts
     console.log(`Mode: ${isPostsMode ? 'posts (instagram-scraper)' : 'profile (profile-scraper)'}, items: ${items.length}, isOwn: ${isOwn}`)
 
     let savedCount = 0
