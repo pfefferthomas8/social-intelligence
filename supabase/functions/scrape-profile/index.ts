@@ -90,41 +90,45 @@ Deno.serve(async (req: Request) => {
   const proxyConfig = { useApifyProxy: true }
   const profileUrl = `https://www.instagram.com/${username}/`
 
-  // Cookies-Input wenn vorhanden → übergibt Instagram-Session an alle Actors
-  const cookieInput = IG_COOKIES.length > 0 ? { loginCookies: IG_COOKIES } : {}
+  // Cookie-Varianten für verschiedene Actor-Parameter-Namen
+  const hasCookies = IG_COOKIES.length > 0
+  // apify~instagram-scraper: Parameter heißt 'cookies'
+  const cookiesParam = hasCookies ? { cookies: IG_COOKIES } : {}
+  // apify~instagram-profile-scraper: Parameter heißt 'loginCookies'
+  const loginCookiesParam = hasCookies ? { loginCookies: IG_COOKIES } : {}
 
   // 4 Actors parallel — wer zuerst valide Posts liefert, gewinnt
-  // scrape-webhook ignoriert alle weiteren Webhooks sobald result_count > 0
-  // WICHTIG: loginCookies erforderlich seit Instagram Login-Wall (ab April 2026)
+  // WICHTIG: Cookies seit Instagram Login-Wall (ab April 2026) erforderlich
   const [runId1, runId2, runId3, runId4] = await Promise.all([
-    // Actor 1: Instagram Profile Scraper (mit optional. Cookies)
+    // Actor 1: Instagram Profile Scraper
     startRun('apify~instagram-profile-scraper', {
       usernames: [username],
       resultsLimit: 50,
       proxyConfiguration: proxyConfig,
-      ...cookieInput
+      ...loginCookiesParam
     }, webhooksParam),
-    // Actor 2: Instagram Scraper (directUrls + posts mode, mit optional. Cookies)
+    // Actor 2: Instagram Scraper (loginRequired → Apify managed sessions)
     startRun('apify~instagram-scraper', {
       directUrls: [profileUrl],
       resultsType: 'posts',
       resultsLimit: 50,
       proxyConfiguration: proxyConfig,
-      ...cookieInput
+      loginRequired: true,
+      ...cookiesParam
     }, webhooksParam),
-    // Actor 3: Instagram API Scraper (7M Runs)
+    // Actor 3: Instagram API Scraper
     startRun('apify~instagram-api-scraper', {
       startUrls: [{ url: profileUrl }],
       resultsLimit: 50,
       proxyConfiguration: proxyConfig,
-      ...cookieInput
+      ...cookiesParam
     }, webhooksParam),
     // Actor 4: Fast Instagram Post Scraper (178K+ Runs)
     startRun('instagram-scraper~fast-instagram-post-scraper', {
       username: username,
       resultsLimit: 50,
       proxyConfiguration: proxyConfig,
-      ...cookieInput
+      ...cookiesParam
     }, webhooksParam),
   ])
 

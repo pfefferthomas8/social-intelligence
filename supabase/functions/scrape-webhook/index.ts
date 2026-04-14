@@ -69,6 +69,8 @@ function detectPostType(post: Record<string, unknown>): string {
   if (pt === 'clips' || t === 'reel' || t === 'reels') return 'reel'
   if (post.isVideo && (Number(post.videoViewCount) > 0 || Number(post.videoPlayCount) > 0)) return 'reel'
   if (t === 'video' || post.isVideo || post.is_video) return 'video'
+  // fast-post-scraper: carousel_media_count > 1 oder carousel_media Array
+  if (Number(post.carousel_media_count) > 1 || (Array.isArray(post.carousel_media) && (post.carousel_media as unknown[]).length > 1)) return 'carousel'
   if (Array.isArray(post.childPosts) && post.childPosts.length > 0) return 'carousel'
   if (t === 'sidecar' || t === 'carousel' || t === 'album') return 'carousel'
   return 'image'
@@ -80,13 +82,24 @@ async function getCompetitorId(username: string): Promise<string | null> {
 }
 
 async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competitorId: string | null): Promise<boolean> {
-  const videoUrl = (post.videoUrl || post.videoPlaybackUrl || post.video_url || null) as string | null
-  const thumbUrl = (post.displayUrl || post.thumbnailUrl || post.thumbnail_url || post.image_url || null) as string | null
-  // shortCode / code / id — verschiedene Actors nutzen verschiedene Feldnamen
-  const postId = post.shortCode || post.code || post.id
-    ? String(post.shortCode || post.code || post.id)
-    : null
+  // Video-URL: verschiedene Feldnamen je nach Actor
+  // fast-post-scraper: video_versions[0].url
+  const videoVersions = Array.isArray(post.video_versions) ? post.video_versions : []
+  const videoFromVersions = videoVersions.length > 0 ? (videoVersions[0] as Record<string, unknown>)?.url as string : null
+  const videoUrl = (post.videoUrl || post.videoPlaybackUrl || post.video_url || videoFromVersions || null) as string | null
+
+  // Thumbnail: fast-post-scraper nutzt 'image' Feld
+  const thumbUrl = (post.displayUrl || post.thumbnailUrl || post.thumbnail_url || post.image_url || post.image || null) as string | null
+
+  // PostID: shortCode (camelCase) | shortcode (lowercase, fast-scraper) | code | id | pk
+  const rawId = post.shortCode || post.shortcode || post.code || post.id || post.pk
+  const postId = rawId ? String(rawId) : null
   if (!postId) return false
+
+  // URL: post_url (fast-scraper) | url | aus shortCode/shortcode ableiten
+  const shortCodeForUrl = (post.shortCode || post.shortcode || post.code) as string | undefined
+  const postUrl = (post.url || post.post_url) as string | null
+    || (shortCodeForUrl ? `https://www.instagram.com/p/${shortCodeForUrl}/` : null)
 
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/instagram_posts?on_conflict=instagram_post_id,source`,
@@ -104,13 +117,15 @@ async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competi
         instagram_post_id: postId,
         post_type: detectPostType(post),
         caption: (post.caption || post.text || null) as string | null,
-        likes_count: Number(post.likesCount || post.likes_count || post.edge_media_preview_like?.count || 0),
-        comments_count: Number(post.commentsCount || post.comments_count || 0),
-        views_count: Number(post.videoViewCount || post.videoPlayCount || post.video_view_count || post.plays || 0),
+        // fast-post-scraper: like_count, view_count, comment_count (snake_case)
+        likes_count: Number(post.likesCount || post.likes_count || post.like_count || post.edge_media_preview_like?.count || 0),
+        comments_count: Number(post.commentsCount || post.comments_count || post.comment_count || 0),
+        views_count: Number(post.videoViewCount || post.videoPlayCount || post.video_view_count || post.view_count || post.plays || 0),
         video_url: videoUrl,
         thumbnail_url: thumbUrl,
-        published_at: parseTimestamp(post.timestamp || post.takenAt || post.taken_at || post.created_at),
-        url: (post.url as string) || (post.shortCode || post.code ? `https://www.instagram.com/p/${post.shortCode || post.code}/` : null),
+        // fast-post-scraper: 'date' Feld statt 'timestamp'
+        published_at: parseTimestamp(post.timestamp || post.takenAt || post.taken_at || post.created_at || post.date),
+        url: postUrl,
         transcript_status: videoUrl ? 'pending' : 'none',
         visual_text_status: thumbUrl ? 'pending' : 'none'
       })
@@ -133,10 +148,10 @@ Deno.serve(async (req: Request) => {
     }
 
     const payload = await req.json()
-    const { job_id, run_id, status } = payload
+    const { job_id, run_id: webhookRunId, status } = payload
     if (!job_id) return new Response('no job_id', { status: 400 })
 
-    // Fehler-Events
+    // Fehler-Events — NUR wenn Apify korrekt substituiert (nicht "{{eventType}}")
     if (status === 'ACTOR.RUN.FAILED' || status === 'ACTOR.RUN.TIMED_OUT') {
       await dbUpdate('scrape_jobs', `id=eq.${job_id}`, {
         status: 'error', error_msg: status, completed_at: new Date().toISOString()
@@ -157,10 +172,36 @@ Deno.serve(async (req: Request) => {
       })
     }
 
-    // Dataset von Apify holen — mit Retry (Race Condition: Apify meldet SUCCEEDED bevor Dataset ready ist)
-    async function fetchDataset(): Promise<Record<string, unknown>[] | null> {
+    // Run-IDs ermitteln: Apify substituiert {{resource.id}} nicht zuverlässig im payloadTemplate.
+    // Daher: Alle bekannten Run-IDs aus der DB lesen (apify_run_id + error_msg "dual: id1,id2,...")
+    function parseStoredRunIds(j: any): string[] {
+      const ids: string[] = []
+      // Zuerst den Webhook-run_id versuchen (falls Apify es mal korrekt substituiert)
+      if (webhookRunId && webhookRunId !== '{{resource.id}}' && webhookRunId.length > 10) {
+        ids.push(webhookRunId)
+      }
+      // apify_run_id aus DB
+      if (j.apify_run_id && !ids.includes(j.apify_run_id)) {
+        ids.push(j.apify_run_id)
+      }
+      // Alle Run-IDs aus error_msg — Apify Run-IDs sind 17-18 alphanumerische Zeichen
+      // Funktioniert für alle error_msg Formate: "dual: id1, id2", "empty (tried: id1,id2)", usw.
+      const msg = j.error_msg || ''
+      const apifyIdRegex = /\b[A-Za-z0-9]{17,18}\b/g
+      const matches = msg.match(apifyIdRegex) || []
+      for (const id of matches) {
+        if (!ids.includes(id)) ids.push(id)
+      }
+      return ids
+    }
+
+    const allRunIds = parseStoredRunIds(job)
+    console.log(`Job ${job_id}: ${allRunIds.length} Run-IDs zu prüfen: ${allRunIds.join(', ')}`)
+
+    // Dataset von Apify holen — probiert alle bekannten Run-IDs
+    async function fetchDataset(runId: string): Promise<Record<string, unknown>[] | null> {
       const res = await fetch(
-        `https://api.apify.com/v2/actor-runs/${run_id}/dataset/items?token=${APIFY_KEY}&limit=200`
+        `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${APIFY_KEY}&limit=200`
       )
       const text = await res.text()
       try {
@@ -169,22 +210,57 @@ Deno.serve(async (req: Request) => {
       } catch { return null }
     }
 
-    // Bis zu 6 Versuche: erst 15s warten (Apify Dataset braucht Zeit), dann alle 10s
-    // Apify meldet SUCCEEDED oft bevor das Dataset vollständig geschrieben ist
+    // Datasets aller bekannten Run-IDs holen — erst direkt, dann mit Retries
+    // Apify substituiert {{resource.id}} nicht zuverlässig → wir nutzen gespeicherte IDs
     let items: Record<string, unknown>[] | null = null
-    await new Promise(r => setTimeout(r, 15000)) // Immer 15s warten bevor erster Versuch
+    let successfulRunId = ''
+
+    // Hilfsfunktion: alle Run-IDs einmalig direkt abrufen (kein Wait)
+    async function tryAllRunIds(): Promise<Record<string, unknown>[] | null> {
+      for (const rid of allRunIds) {
+        const data = await fetchDataset(rid)
+        const valid = (data || []).filter((it: any) =>
+          it.shortCode || it.shortcode || it.code || it.id || it.pk || it.latestPosts || it.username
+        )
+        if (valid.length > 0) {
+          console.log(`Dataset gefunden: run_id=${rid}, ${valid.length} Items`)
+          successfulRunId = rid
+          return valid as Record<string, unknown>[]
+        }
+      }
+      return null
+    }
+
+    // Sofort versuchen (kein Wait bei erstem Versuch), dann bis zu 5 Retries mit 10s Pause
     for (let attempt = 0; attempt < 6; attempt++) {
       if (attempt > 0) await new Promise(r => setTimeout(r, 10000))
-      items = await fetchDataset()
-      const valid = (items || []).filter((it: any) => it.shortCode || it.id || it.latestPosts)
-      if (valid.length > 0) { items = valid as Record<string, unknown>[]; break }
-      console.log(`Dataset attempt ${attempt + 1}/6: ${items?.length ?? 'null'} items`)
+
+      // Race-Condition Guard: hat ein anderer Actor bereits Ergebnisse gespeichert?
+      const freshJob = await dbGet('scrape_jobs', `id=eq.${job_id}`)
+      if (freshJob && (freshJob.result_count || 0) > 0) {
+        console.log(`Job ${job_id} bereits erfolgreich durch anderen Actor (${freshJob.result_count} Posts), Retry abgebrochen`)
+        return new Response(JSON.stringify({ ok: true, skipped: 'other_actor_succeeded', count: freshJob.result_count }), {
+          headers: { 'Content-Type': 'application/json' }
+        })
+      }
+
+      items = await tryAllRunIds()
+      if (items && items.length > 0) break
+      console.log(`Attempt ${attempt + 1}/6: Alle ${allRunIds.length} Datasets leer, RunIDs: ${allRunIds.join(',')}`)
     }
 
     if (!items || items.length === 0) {
       const now = new Date().toISOString()
+      // Nochmals prüfen ob ein anderer Actor inzwischen Erfolg hatte
+      const freshJob = await dbGet('scrape_jobs', `id=eq.${job_id}`)
+      if (freshJob && (freshJob.result_count || 0) > 0) {
+        console.log(`Job ${job_id} bereits erfolgreich (${freshJob.result_count} Posts), kein Überschreiben`)
+        return new Response(JSON.stringify({ ok: true, skipped: 'other_actor_succeeded' }), {
+          headers: { 'Content-Type': 'application/json' }
+        })
+      }
       await dbUpdate('scrape_jobs', `id=eq.${job_id}`, {
-        status: 'done', result_count: 0, error_msg: 'empty dataset after retries', completed_at: now
+        status: 'done', result_count: 0, error_msg: `empty dataset after retries (tried: ${allRunIds.join(',')})`, completed_at: now
       })
       // last_scraped_at auch bei leerem Ergebnis setzen — damit UI nicht "Nie" zeigt
       if (job.job_type === 'own_profile') {
@@ -203,7 +279,9 @@ Deno.serve(async (req: Request) => {
     // Posts-Modus: direkte Post-Items (shortCode/id vorhanden, KEIN latestPosts-Array)
     // Profile-Modus: Profil-Objekte mit latestPosts[]
     // Fast-Scraper kann ownerUsername weglassen → nicht mehr als Pflichtfeld prüfen
-    const isPostsMode = !!(firstItem.shortCode || firstItem.id || firstItem.code) && !firstItem.latestPosts
+    // Posts-Modus: direkte Post-Items (shortCode/shortcode/id/pk vorhanden, KEIN latestPosts-Array)
+    // Achtung: fast-post-scraper nutzt 'shortcode' (lowercase) statt 'shortCode'
+    const isPostsMode = !!(firstItem.shortCode || firstItem.shortcode || firstItem.id || firstItem.pk || firstItem.code) && !firstItem.latestPosts
     console.log(`Mode: ${isPostsMode ? 'posts (instagram-scraper)' : 'profile (profile-scraper)'}, items: ${items.length}, isOwn: ${isOwn}`)
 
     let savedCount = 0
@@ -214,8 +292,10 @@ Deno.serve(async (req: Request) => {
 
       // Sicherheits-Check: Apify hat den richtigen Account gescrapet?
       // Passiert wenn Username-URL kaputt ist → Apify scrapt empfohlene Accounts statt Ziel-Account
+      // fast-post-scraper: ownerUsername in user.username oder owner.username
       if (!isOwn) {
-        const scrapedUsername = ((firstItem.ownerUsername as string) || '').toLowerCase().trim()
+        const fastUser = (firstItem.user as any)?.username || (firstItem.owner as any)?.username || ''
+        const scrapedUsername = ((firstItem.ownerUsername as string) || fastUser || '').toLowerCase().trim()
         const targetUsername = ((job.target as string) || '').toLowerCase().trim()
         if (scrapedUsername && targetUsername && scrapedUsername !== targetUsername) {
           console.error(`Wrong account scraped: got @${scrapedUsername}, expected @${targetUsername}`)
@@ -275,11 +355,18 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    await dbUpdate('scrape_jobs', `id=eq.${job_id}`, {
-      status: 'done', result_count: savedCount, completed_at: new Date().toISOString()
-    })
+    // Race-Condition Guard: nicht überschreiben wenn ein anderer Actor mehr Posts gespeichert hat
+    const jobBeforeFinish = await dbGet('scrape_jobs', `id=eq.${job_id}`)
+    const currentCount = jobBeforeFinish?.result_count || 0
+    const finalCount = Math.max(savedCount, currentCount)
+    if (savedCount > 0 || currentCount === 0) {
+      await dbUpdate('scrape_jobs', `id=eq.${job_id}`, {
+        status: 'done', result_count: finalCount, completed_at: new Date().toISOString()
+      })
+    }
+    console.log(`Job ${job_id} abgeschlossen: savedCount=${savedCount}, currentCount=${currentCount}, finalCount=${finalCount}`)
 
-    if (savedCount > 0) {
+    if (finalCount > 0) {
       // Visuelle Texte aus Thumbnails extrahieren (fire & forget)
       fetch(`${SUPABASE_URL}/functions/v1/process-visual-text`, {
         method: 'POST',
