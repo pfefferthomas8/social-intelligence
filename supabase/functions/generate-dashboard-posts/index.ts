@@ -43,8 +43,8 @@ Deno.serve(async (req: Request) => {
   // Alle Datenquellen parallel laden
   const [thomasDna, ownTopPosts, competitorPosts, trendPosts, externalSignals, topRated] = await Promise.all([
     dbQuery('thomas_dna?select=category,insight,confidence&order=confidence.desc&limit=20'),
-    dbQuery('instagram_posts?select=caption,transcript,views_count,likes_count,post_type&source=eq.own&caption=not.is.null&order=views_count.desc&limit=10'),
-    dbQuery('instagram_posts?select=caption,transcript,views_count,post_type,content_pillar&source=eq.competitor&order=views_count.desc&limit=15'),
+    dbQuery('instagram_posts?select=caption,transcript,visual_text,views_count,likes_count,post_type&source=eq.own&order=views_count.desc&limit=10'),
+    dbQuery('instagram_posts?select=caption,transcript,visual_text,views_count,post_type,content_pillar&source=eq.competitor&order=views_count.desc&limit=15'),
     dbQuery('trend_posts?select=username,caption,visual_text,viral_score,claude_notes,content_pillar,dach_gap,recommendation,views_count&in=(recommendation,("sofort","beobachten"))&order=viral_score.desc&limit=12'),
     dbQuery('external_signals?select=title,body,signal_type,source,relevance_score,claude_insight&relevance_score=gte.70&order=fetched_at.desc&limit=8'),
     dbQuery('generated_content?select=topic,content_type,content,content_pillar&user_rating=eq.1&order=created_at.desc&limit=5'),
@@ -67,10 +67,18 @@ Deno.serve(async (req: Request) => {
       }).join('\n\n')
     : 'Noch keine Trend-Daten'
 
+  // Eigene Top Posts (Stilreferenz für Claude)
+  const ownBlock = ownTopPosts.length > 0
+    ? ownTopPosts.slice(0, 5).map((p: any, i: number) => {
+        const text = clean([p.caption, p.visual_text].filter(Boolean).join(' | '))
+        return `E${i+1}: [${(p.views_count||0).toLocaleString()} Views] ${p.post_type||'post'}: "${text}"`
+      }).join('\n\n')
+    : ''
+
   // Competitor Posts aufbereiten
   const compBlock = competitorPosts.length > 0
     ? competitorPosts.slice(0, 8).map((p: any, i: number) => {
-        const text = clean([p.caption, p.transcript].filter(Boolean).join(' | '))
+        const text = clean([p.caption, p.transcript, p.visual_text].filter(Boolean).join(' | '))
         return `C${i+1}: [${(p.views_count||0).toLocaleString()} Views] ${p.post_type||'post'}: "${text}"`
       }).join('\n\n')
     : 'Keine Competitor-Posts'
@@ -113,6 +121,7 @@ ${trendBlock}
 [COMPETITOR TOP POSTS]
 ${compBlock}
 
+${ownBlock ? `[THOMAS' EIGENE TOP POSTS — Caption + B-Roll-Text]\n${ownBlock}\n` : ''}
 [COMMUNITY-SIGNALE]
 ${signalBlock}
 

@@ -54,9 +54,6 @@ export default function Dashboard() {
   const [quickCopied, setQuickCopied] = useState(false)
   const quickInputRef = useRef(null)
 
-  // Daily Brief
-  const [dailyBrief, setDailyBrief] = useState(null)
-  const [briefLoading, setBriefLoading] = useState(false)
 
   useEffect(() => { loadAll() }, [])
 
@@ -190,22 +187,6 @@ export default function Dashboard() {
     setTimeout(() => quickInputRef.current?.focus(), 100)
   }
 
-  async function generateDailyBrief(pillar) {
-    setBriefLoading(true)
-    setDailyBrief(null)
-    try {
-      const data = await apiFetch('daily-brief', {
-        method: 'POST',
-        body: JSON.stringify(pillar ? { pillar } : {})
-      })
-      setDailyBrief(data)
-    } catch (e) {
-      alert('Daily Brief Fehler: ' + e.message)
-    } finally {
-      setBriefLoading(false)
-    }
-  }
-
   async function refreshOwnProfile() {
     if (!ownProfile?.username) return
     setScrapeLoading(true)
@@ -220,10 +201,8 @@ export default function Dashboard() {
     ? (topOwnPosts.reduce((s, p) => s + ((p.likes_count || 0) + (p.comments_count || 0)), 0) / topOwnPosts.length / (ownProfile.followers_count || 1) * 100).toFixed(2)
     : null
 
-  const PILLAR_ROTATION = ['haltung', 'mehrwert', 'transformation', 'verkauf', 'haltung', 'mehrwert', 'transformation']
   const PILLAR_LABELS = { haltung: 'Haltung', mehrwert: 'Mehrwert', transformation: 'Transformation', verkauf: 'Verkauf' }
   const PILLAR_COLORS = { haltung: '#ee4f00', mehrwert: '#22c55e', transformation: '#3b82f6', verkauf: '#a855f7' }
-  const todayPillar = PILLAR_ROTATION[new Date().getDay()]
 
   if (loading) {
     return (
@@ -342,58 +321,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Daily Brief */}
-        <div style={{ background: 'linear-gradient(135deg, rgba(238,79,0,0.08) 0%, rgba(0,0,0,0) 60%)', border: '1px solid rgba(238,79,0,0.2)', borderRadius: 'var(--r-lg)', padding: '20px 24px', marginBottom: 24 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: dailyBrief ? 16 : 0 }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 16, fontWeight: 700 }}>Daily Brief</span>
-                <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', color: PILLAR_COLORS[todayPillar], background: `${PILLAR_COLORS[todayPillar]}18`, padding: '2px 7px', borderRadius: 100 }}>
-                  {PILLAR_LABELS[todayPillar]?.toUpperCase()}
-                </span>
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text3)' }}>3 fertige Content-Ideen auf Knopfdruck</div>
-            </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: 4 }}>
-                {['haltung', 'mehrwert', 'transformation', 'verkauf'].map(p => (
-                  <button key={p} onClick={() => generateDailyBrief(p)} disabled={briefLoading} className="btn btn-xs"
-                    style={{ color: PILLAR_COLORS[p], border: `1px solid ${PILLAR_COLORS[p]}40`, background: dailyBrief?.pillar === p ? `${PILLAR_COLORS[p]}15` : 'transparent', fontSize: 10 }}
-                    title={PILLAR_LABELS[p]}>{p[0].toUpperCase()}</button>
-                ))}
-              </div>
-              <button onClick={() => generateDailyBrief()} disabled={briefLoading} className="btn btn-sm btn-primary" style={{ minWidth: 130 }}>
-                {briefLoading ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Generiert…</> : '⚡ Brief generieren'}
-              </button>
-            </div>
-          </div>
-          {dailyBrief && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-              {[
-                { key: 'video_script', label: '🎬 Video Script', content: dailyBrief.video_script, type: 'video_script' },
-                { key: 'b_roll', label: '⚡ B-Roll', content: dailyBrief.b_roll, type: 'b_roll' },
-                { key: 'single_post', label: '📝 Single Post', content: dailyBrief.single_post, type: 'single_post' },
-              ].map(item => {
-                const lines = item.content?.split('\n') || []
-                const thema = lines.find(l => l.startsWith('THEMA:'))?.replace('THEMA:', '').trim()
-                return (
-                  <div key={item.key} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.05em' }}>{item.label}</div>
-                    {thema && <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: 1.4 }}>{thema}</div>}
-                    <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.55, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
-                      {item.content?.replace(/^THEMA:.*\n?/m, '').trim()}
-                    </div>
-                    <button onClick={() => navigate('/generator', { state: { topic: thema || '', suggestedType: item.type } })} className="btn btn-xs btn-primary" style={{ alignSelf: 'flex-start' }}>
-                      Im Generator →
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Content Intelligence — 12 datengetriebene Posts */}
+        {/* Content Intelligence — 6 datengetriebene Posts */}
         <div style={{ marginBottom: 24 }}>
           <div className="section-header" style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
