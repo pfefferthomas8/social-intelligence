@@ -26,7 +26,11 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS })
   }
 
-  const { username, source, competitor_id } = await req.json()
+  const body = await req.json()
+  const source = body.source
+  const competitor_id = body.competitor_id
+  // Leerzeichen + Sonderzeichen entfernen — verhindert kaputte Apify-URLs
+  const username = (body.username || '').trim().replace(/\s+/g, '').replace(/[^a-zA-Z0-9_.]/g, '').toLowerCase()
   if (!username || !source) {
     return new Response(JSON.stringify({ error: 'username + source required' }), { status: 400, headers: CORS })
   }

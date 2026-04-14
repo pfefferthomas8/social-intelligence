@@ -197,6 +197,28 @@ Deno.serve(async (req: Request) => {
     if (isPostsMode) {
       // Posts-Modus — job.target ist zuverlässiger als ownerUsername (exakt wie in DB gespeichert)
       const username = (job.target || firstItem.ownerUsername) as string
+
+      // Sicherheits-Check: Apify hat den richtigen Account gescrapet?
+      // Passiert wenn Username-URL kaputt ist → Apify scrapt empfohlene Accounts statt Ziel-Account
+      if (!isOwn) {
+        const scrapedUsername = ((firstItem.ownerUsername as string) || '').toLowerCase().trim()
+        const targetUsername = ((job.target as string) || '').toLowerCase().trim()
+        if (scrapedUsername && targetUsername && scrapedUsername !== targetUsername) {
+          console.error(`Wrong account scraped: got @${scrapedUsername}, expected @${targetUsername}`)
+          await dbUpdate('scrape_jobs', `id=eq.${job_id}`, {
+            status: 'error',
+            error_msg: `Wrong account scraped: got @${scrapedUsername}, expected @${targetUsername}`,
+            completed_at: new Date().toISOString()
+          })
+          return new Response(JSON.stringify({
+            ok: false,
+            error: 'wrong_account',
+            got: scrapedUsername,
+            expected: targetUsername
+          }), { headers: { 'Content-Type': 'application/json' } })
+        }
+      }
+
       if (isOwn) {
         const own = await dbGet('own_profile', 'limit=1')
         if (own) await dbUpdate('own_profile', `id=eq.${own.id}`, { last_scraped_at: new Date().toISOString() })

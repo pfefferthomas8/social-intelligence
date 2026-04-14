@@ -99,7 +99,7 @@ export default function Konkurrenten() {
     if (!addingUsername.trim()) return
     setAdding(true)
     try {
-      const username = addingUsername.trim().replace('@', '').toLowerCase()
+      const username = addingUsername.trim().replace('@', '').replace(/\s+/g, '').toLowerCase()
       const { data: existing } = await supabase.from('competitor_profiles').select('id').eq('username', username).maybeSingle()
       let competitorId
       if (existing) {
@@ -123,7 +123,7 @@ export default function Konkurrenten() {
 
   async function saveOwnProfile() {
     if (!ownUsername.trim()) return
-    const username = ownUsername.trim().replace('@', '').toLowerCase()
+    const username = ownUsername.trim().replace('@', '').replace(/\s+/g, '').toLowerCase()
     if (ownProfile) {
       await supabase.from('own_profile').update({ username }).eq('id', ownProfile.id)
     } else {
