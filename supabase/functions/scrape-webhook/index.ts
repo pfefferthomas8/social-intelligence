@@ -144,6 +144,15 @@ Deno.serve(async (req: Request) => {
     const job = await dbGet('scrape_jobs', `id=eq.${job_id}`)
     if (!job) return new Response('job not found', { status: 404 })
 
+    // Dual-Actor: Wenn Job bereits erfolgreich abgeschlossen (result_count > 0),
+    // kommt der zweite Actor zu spät → ignorieren
+    if (job.status === 'done' && (job.result_count || 0) > 0) {
+      console.log(`Job ${job_id} bereits erfolgreich (${job.result_count} Posts), ignoriere zweiten Actor-Webhook`)
+      return new Response(JSON.stringify({ ok: true, skipped: 'already_done' }), {
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
+
     // Dataset von Apify holen — mit Retry (Race Condition: Apify meldet SUCCEEDED bevor Dataset ready ist)
     async function fetchDataset(): Promise<Record<string, unknown>[] | null> {
       const res = await fetch(

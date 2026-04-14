@@ -18,6 +18,28 @@ function dbHeaders() {
   }
 }
 
+async function startRun(actor: string, input: Record<string, unknown>, webhooksParam: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://api.apify.com/v2/acts/${actor}/runs?token=${APIFY_KEY}&webhooks=${webhooksParam}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input)
+      }
+    )
+    if (!res.ok) {
+      console.error(`${actor} start failed: ${res.status}`)
+      return null
+    }
+    const data = await res.json()
+    return data.data?.id || null
+  } catch (e) {
+    console.error(`${actor} error:`, e)
+    return null
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS })
 
@@ -28,7 +50,6 @@ Deno.serve(async (req: Request) => {
 
   const body = await req.json()
   const source = body.source
-  const competitor_id = body.competitor_id
   // Leerzeichen + Sonderzeichen entfernen — verhindert kaputte Apify-URLs
   const username = (body.username || '').trim().replace(/\s+/g, '').replace(/[^a-zA-Z0-9_.]/g, '').toLowerCase()
   if (!username || !source) {
@@ -53,7 +74,7 @@ Deno.serve(async (req: Request) => {
 
   const webhookUrl = `${SUPABASE_URL}/functions/v1/scrape-webhook`
 
-  // Webhooks als Base64 URL-Parameter — NICHT im Body (wird dort als Actor-Input ignoriert)
+  // Beide Actors bekommen denselben Webhook → scrape-webhook nimmt wer zuerst Daten liefert
   const webhooksParam = btoa(JSON.stringify([{
     eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED', 'ACTOR.RUN.TIMED_OUT'],
     requestUrl: webhookUrl,
@@ -61,47 +82,53 @@ Deno.serve(async (req: Request) => {
     payloadTemplate: `{"job_id":"${job.id}","run_id":"{{resource.id}}","status":"{{eventType}}"}`
   }]))
 
-  // Apify Run starten — instagram-profile-scraper ist stabiler für Profil+Posts (~3-8 Min)
-  // instagram-scraper mit directUrls+resultsType:'posts' schlägt seit April 2026 für Einzelprofile fehl
-  const apifyRes = await fetch(
-    `https://api.apify.com/v2/acts/apify~instagram-profile-scraper/runs?token=${APIFY_KEY}&webhooks=${webhooksParam}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        usernames: [username],
-        resultsLimit: 50,
-        proxyConfiguration: {
-          useApifyProxy: true,
-          apifyProxyGroups: ['RESIDENTIAL']
-        }
-      })
-    }
-  )
+  const proxyConfig = {
+    useApifyProxy: true,
+    apifyProxyGroups: ['RESIDENTIAL']
+  }
 
-  if (!apifyRes.ok) {
-    const err = await apifyRes.text()
+  // Beide Actors parallel starten — Instagram bricht einzelne Actors regelmäßig
+  // Wer zuerst valide Daten liefert, gewinnt. scrape-webhook ignoriert den zweiten.
+  const [runId1, runId2] = await Promise.all([
+    startRun('apify~instagram-profile-scraper', {
+      usernames: [username],
+      resultsLimit: 50,
+      proxyConfiguration: proxyConfig
+    }, webhooksParam),
+    startRun('apify~instagram-scraper', {
+      directUrls: [`https://www.instagram.com/${username}/`],
+      resultsType: 'posts',
+      resultsLimit: 50,
+      proxyConfiguration: proxyConfig
+    }, webhooksParam),
+  ])
+
+  const startedRuns = [runId1, runId2].filter(Boolean)
+  if (startedRuns.length === 0) {
     await fetch(`${SUPABASE_URL}/rest/v1/scrape_jobs?id=eq.${job.id}`, {
       method: 'PATCH',
       headers: dbHeaders(),
-      body: JSON.stringify({ status: 'error', error_msg: err })
+      body: JSON.stringify({ status: 'error', error_msg: 'Beide Apify-Actors konnten nicht gestartet werden' })
     })
-    return new Response(JSON.stringify({ error: 'Apify error: ' + err }), { status: 502, headers: CORS })
+    return new Response(JSON.stringify({ error: 'Apify actors failed to start' }), { status: 502, headers: CORS })
   }
-
-  const apifyData = await apifyRes.json()
-  const runId = apifyData.data?.id
 
   await fetch(`${SUPABASE_URL}/rest/v1/scrape_jobs?id=eq.${job.id}`, {
     method: 'PATCH',
     headers: dbHeaders(),
-    body: JSON.stringify({ status: 'running', apify_run_id: runId })
+    body: JSON.stringify({
+      status: 'running',
+      apify_run_id: startedRuns[0],
+      // Beide Run-IDs im error_msg für Debugging
+      error_msg: startedRuns.length > 1 ? `dual: ${startedRuns.join(', ')}` : null
+    })
   })
 
   return new Response(JSON.stringify({
     job_id: job.id,
-    run_id: runId,
+    run_ids: startedRuns,
+    actors_started: startedRuns.length,
     status: 'running',
-    message: `Scraping @${username} gestartet.`
+    message: `Scraping @${username} gestartet (${startedRuns.length} Actor${startedRuns.length > 1 ? 's' : ''}).`
   }), { headers: { ...CORS, 'Content-Type': 'application/json' } })
 })

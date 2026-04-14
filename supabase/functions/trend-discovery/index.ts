@@ -110,47 +110,52 @@ Deno.serve(async (req: Request) => {
     payloadTemplate: `{"job_id":"${job.id}","run_id":"{{resource.id}}","status":"{{eventType}}"}`
   }]))
 
-  // instagram-profile-scraper — stabiler als instagram-scraper für Profil-Posts
-  // instagram-scraper mit directUrls+resultsType:'posts' gibt leere Datasets seit April 2026
-  const apifyRes = await fetch(
-    `https://api.apify.com/v2/acts/apify~instagram-profile-scraper/runs?token=${APIFY_KEY}&webhooks=${webhooksParam}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        usernames,
-        resultsLimit: 15,
-        proxyConfiguration: {
-          useApifyProxy: true,
-          apifyProxyGroups: ['RESIDENTIAL']
-        }
-      })
-    }
-  )
+  const proxyConfig = { useApifyProxy: true, apifyProxyGroups: ['RESIDENTIAL'] }
+
+  // Beide Actors parallel — trend-webhook verarbeitet wer zuerst valide Posts liefert
+  async function tryRun(actor: string, input: Record<string, unknown>): Promise<string | null> {
+    try {
+      const r = await fetch(
+        `https://api.apify.com/v2/acts/${actor}/runs?token=${APIFY_KEY}&webhooks=${webhooksParam}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }
+      )
+      if (!r.ok) return null
+      const d = await r.json()
+      return d.data?.id || null
+    } catch { return null }
+  }
+
+  const [runId1, runId2] = await Promise.all([
+    tryRun('apify~instagram-profile-scraper', { usernames, resultsLimit: 15, proxyConfiguration: proxyConfig }),
+    tryRun('apify~instagram-scraper', { directUrls, resultsType: 'posts', resultsLimit: 15, proxyConfiguration: proxyConfig }),
+  ])
+
+  const apifyRes = { ok: !!(runId1 || runId2) } // Dummy für Error-Check unten
 
   if (!apifyRes.ok) {
-    const err = await apifyRes.text()
     await fetch(`${SUPABASE_URL}/rest/v1/scrape_jobs?id=eq.${job.id}`, {
       method: 'PATCH', headers: dbHeaders(),
-      body: JSON.stringify({ status: 'error', error_msg: err })
+      body: JSON.stringify({ status: 'error', error_msg: 'Beide Apify-Actors konnten nicht gestartet werden' })
     })
-    return new Response(JSON.stringify({ error: 'Apify error: ' + err }), {
+    return new Response(JSON.stringify({ error: 'Apify actors failed to start' }), {
       status: 502, headers: { ...CORS, 'Content-Type': 'application/json' }
     })
   }
 
-  const apifyData = await apifyRes.json()
-  const runId = apifyData.data?.id
-
+  const startedRuns = [runId1, runId2].filter(Boolean)
   await fetch(`${SUPABASE_URL}/rest/v1/scrape_jobs?id=eq.${job.id}`, {
     method: 'PATCH', headers: dbHeaders(),
-    body: JSON.stringify({ status: 'running', apify_run_id: runId })
+    body: JSON.stringify({
+      status: 'running',
+      apify_run_id: startedRuns[0],
+      error_msg: startedRuns.length > 1 ? `dual: ${startedRuns.join(', ')}` : null
+    })
   })
 
   return new Response(JSON.stringify({
     ok: true,
     job_id: job.id,
-    run_id: runId,
+    run_ids: startedRuns,
     accounts: usernames,
     pool_size: allCoaches.length,
     message: `Trend Discovery — ${usernames.length} Coaches aus Pool von ${allCoaches.length}: ${usernames.join(', ')}`

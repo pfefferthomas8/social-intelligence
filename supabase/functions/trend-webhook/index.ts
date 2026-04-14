@@ -198,13 +198,21 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } })
     }
 
-    // Job laden (enthält excluded_handles in error_msg)
+    // Job laden
     const jobRes = await fetch(`${SUPABASE_URL}/rest/v1/scrape_jobs?id=eq.${job_id}&limit=1`, {
       headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY }
     })
     const jobs: any[] = await jobRes.json()
     const job = jobs?.[0]
     if (!job) return new Response('job not found', { status: 404 })
+
+    // Dual-Actor: Wenn Job bereits erfolgreich abgeschlossen, zweiten Actor ignorieren
+    if (job.status === 'done' && (job.result_count || 0) > 0) {
+      console.log(`Job ${job_id} bereits erfolgreich (${job.result_count} Posts), ignoriere zweiten Actor-Webhook`)
+      return new Response(JSON.stringify({ ok: true, skipped: 'already_done' }), {
+        headers: { 'Content-Type': 'application/json' }
+      })
+    }
 
     // Competitor-Handles laden (ausschließen)
     const compRes = await fetch(
