@@ -287,6 +287,13 @@ Deno.serve(async (req: Request) => {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DASHBOARD_TOKEN}` }
       }).catch(() => {})
 
+      // Videos sofort downloaden → Instagram CDN URLs laufen in Stunden ab
+      fetch(`${SUPABASE_URL}/functions/v1/download-videos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DASHBOARD_TOKEN}` },
+        body: JSON.stringify({ limit: 10 })
+      }).catch(() => {})
+
       // Nach eigenem Profil-Scrape: Thomas DNA neu analysieren (fire & forget)
       if (job.job_type === 'own_profile') {
         fetch(`${SUPABASE_URL}/functions/v1/analyze-thomas`, {

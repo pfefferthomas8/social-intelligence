@@ -44,6 +44,8 @@ export default function Dashboard() {
   const [dashLoading, setDashLoading] = useState(false)
   const [dashCopied, setDashCopied] = useState({})
   const [dashExpanded, setDashExpanded] = useState({})
+  const [genSteps, setGenSteps] = useState([])
+  const genStepsRef = useRef([])
 
   // Quick-Generator
   const [quickOpen, setQuickOpen] = useState(false)
@@ -147,15 +149,68 @@ export default function Dashboard() {
     }
   }
 
+  function pushStep(text) {
+    const id = Date.now() + Math.random()
+    genStepsRef.current = [...genStepsRef.current, { id, text, status: 'running', detail: '' }]
+    setGenSteps([...genStepsRef.current])
+    return id
+  }
+  function doneStep(id, detail = '') {
+    genStepsRef.current = genStepsRef.current.map(s => s.id === id ? { ...s, status: 'done', detail } : s)
+    setGenSteps([...genStepsRef.current])
+  }
+  function errorStep(id, detail = '') {
+    genStepsRef.current = genStepsRef.current.map(s => s.id === id ? { ...s, status: 'error', detail } : s)
+    setGenSteps([...genStepsRef.current])
+  }
+
   async function generateDashboardPosts() {
     setDashLoading(true)
+    setDashPosts([])
+    setDashCopied({})
+    setDashExpanded({})
+    genStepsRef.current = []
+    setGenSteps([])
+
     try {
+      // Schritt 1: Datenstand aus DB laden
+      const s1 = pushStep('Daten aus Datenbank laden…')
+      const [trendR, compR, ownR, dnaR, sigR, transcriptR, pendingR] = await Promise.all([
+        supabase.from('trend_posts').select('*', { count: 'exact', head: true }),
+        supabase.from('instagram_posts').select('*', { count: 'exact', head: true }).eq('source', 'competitor'),
+        supabase.from('instagram_posts').select('*', { count: 'exact', head: true }).eq('source', 'own'),
+        supabase.from('thomas_dna').select('*', { count: 'exact', head: true }),
+        supabase.from('external_signals').select('*', { count: 'exact', head: true }).gte('relevance_score', 70),
+        supabase.from('instagram_posts').select('*', { count: 'exact', head: true }).eq('transcript_status', 'done'),
+        supabase.from('instagram_posts').select('*', { count: 'exact', head: true }).eq('transcript_status', 'pending'),
+      ])
+      doneStep(s1,
+        `${trendR.count || 0} Trend-Posts · ${compR.count || 0} Competitor-Posts · ${ownR.count || 0} eigene Posts · ${dnaR.count || 0} DNA-Insights · ${sigR.count || 0} Signale`)
+
+      // Schritt 2: Transcript-Status anzeigen
+      const transcriptDone = transcriptR.count || 0
+      const transcriptPending = pendingR.count || 0
+      const s2 = pushStep('Video-Transkripte prüfen…')
+      doneStep(s2, `${transcriptDone} Reels transkribiert · ${transcriptPending} Videos ausstehend`)
+
+      // Schritt 3: Videos herunterladen wenn ausstehend (fire & forget)
+      if (transcriptPending > 0) {
+        const s3 = pushStep(`${Math.min(transcriptPending, 10)} Videos für Transkription herunterladen…`)
+        apiFetch('download-videos', { method: 'POST', body: JSON.stringify({ limit: 10 }) })
+          .then(r => doneStep(s3, `${r.downloaded || 0} heruntergeladen · ${r.submitted_to_assemblyai || 0} an AssemblyAI übergeben`))
+          .catch(() => doneStep(s3, 'läuft im Hintergrund'))
+      }
+
+      // Schritt 4: Claude
+      const s4 = pushStep('Claude analysiert alle Daten und generiert 6 Ideen…')
       const data = await apiFetch('generate-dashboard-posts', { method: 'POST' })
+      doneStep(s4, `6 Ideen generiert · ${new Date().toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })} Uhr`)
+
       setDashPosts(data.posts || [])
-      setDashCopied({})
-      setDashExpanded({})
     } catch (e) {
-      alert('Fehler: ' + e.message)
+      const lastStep = genStepsRef.current.findLast?.(s => s.status === 'running')
+      if (lastStep) errorStep(lastStep.id, e.message)
+      else alert('Fehler: ' + e.message)
     } finally {
       setDashLoading(false)
     }
@@ -346,7 +401,24 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {dashPosts.length === 0 && !dashLoading && (
+          {/* Status-Log: läuft während Generierung und bleibt danach stehen */}
+          {genSteps.length > 0 && (
+            <div style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '10px 14px', marginBottom: 14, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+              {genSteps.map(step => (
+                <div key={step.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '3px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                  <span style={{ flexShrink: 0, width: 14, color: step.status === 'done' ? '#22c55e' : step.status === 'error' ? '#ef4444' : 'var(--accent)', marginTop: 1 }}>
+                    {step.status === 'done' ? '✓' : step.status === 'error' ? '✗' : <span className="spinner" style={{ width: 9, height: 9, display: 'inline-block' }} />}
+                  </span>
+                  <span style={{ color: step.status === 'done' ? 'var(--text3)' : step.status === 'error' ? '#ef4444' : 'var(--text2)', flex: 1 }}>
+                    {step.text}
+                    {step.detail && <span style={{ color: step.status === 'error' ? '#ef4444' : 'var(--text4)', marginLeft: 6 }}>— {step.detail}</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {dashPosts.length === 0 && !dashLoading && genSteps.length === 0 && (
             <div style={{ background: 'var(--bg-card)', border: '1px dashed var(--border-strong)', borderRadius: 'var(--r-lg)', padding: '40px', textAlign: 'center' }}>
               <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text2)', marginBottom: 6 }}>6 datengetriebene Content-Ideen</p>
               <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 16, maxWidth: 420, margin: '0 auto 16px' }}>
