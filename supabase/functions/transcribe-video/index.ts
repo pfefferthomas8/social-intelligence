@@ -38,9 +38,8 @@ Deno.serve(async (req: Request) => {
     headers: { 'Authorization': ASSEMBLYAI_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       audio_url: video_url,
+      speech_models: ['universal-2'],
       language_detection: true,
-      punctuate: true,
-      format_text: true,
       webhook_url: webhookUrl,
     })
   })
@@ -55,7 +54,7 @@ Deno.serve(async (req: Request) => {
 
   const { id: transcriptId } = await submitRes.json()
   await fetch(`${SUPABASE_URL}/rest/v1/instagram_posts?id=eq.${post_id}`, {
-    method: 'PATCH', headers: dbHeaders(), body: JSON.stringify({ transcript_status: 'pending' })
+    method: 'PATCH', headers: dbHeaders(), body: JSON.stringify({ transcript_status: 'transcribing' })
   })
 
   return new Response(JSON.stringify({ ok: true, transcript_id: transcriptId }), {

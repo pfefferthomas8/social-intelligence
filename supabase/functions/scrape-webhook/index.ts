@@ -104,6 +104,42 @@ async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competi
   const postUrl = (post.url || post.post_url) as string | null
     || (shortCodeForUrl ? `https://www.instagram.com/p/${shortCodeForUrl}/` : null)
 
+  // Vor dem Upsert: prüfen ob Post bereits transkribiert/in Verarbeitung ist
+  // → verhindert dass Re-Scrapes den transcript_status überschreiben
+  const source = isOwn ? 'own' : 'competitor'
+  const existingRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/instagram_posts?instagram_post_id=eq.${encodeURIComponent(postId)}&source=eq.${source}&select=id,transcript_status&limit=1`,
+    { headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY } }
+  )
+  const existingRows = existingRes.ok ? await existingRes.json().catch(() => []) : []
+  const existing = Array.isArray(existingRows) ? existingRows[0] : null
+  const alreadyProcessed = existing?.transcript_status === 'done' || existing?.transcript_status === 'transcribing'
+
+  // Upsert-Body: transcript_status nur setzen wenn noch nicht in Endzustand
+  const upsertBody: Record<string, unknown> = {
+    source,
+    competitor_id: competitorId,
+    instagram_post_id: postId,
+    post_type: detectPostType(post),
+    caption: (post.caption || post.text || null) as string | null,
+    // fast-post-scraper: like_count, view_count, comment_count (snake_case)
+    likes_count: Number(post.likesCount || post.likes_count || post.like_count || post.edge_media_preview_like?.count || 0),
+    comments_count: Number(post.commentsCount || post.comments_count || post.comment_count || 0),
+    views_count: Number(post.videoViewCount || post.videoPlayCount || post.video_view_count || post.view_count || post.plays || 0),
+    video_url: videoUrl,
+    thumbnail_url: thumbUrl,
+    // fast-post-scraper: 'date' Feld statt 'timestamp'
+    published_at: parseTimestamp(post.timestamp || post.takenAt || post.taken_at || post.created_at || post.date),
+    url: postUrl,
+    scraped_at: new Date().toISOString(),
+  }
+
+  // transcript_status nur setzen wenn Post neu oder noch nicht verarbeitet
+  if (!alreadyProcessed) {
+    upsertBody.transcript_status = videoUrl ? 'pending' : 'none'
+    upsertBody.visual_text_status = thumbUrl ? 'pending' : 'none'
+  }
+
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/instagram_posts?on_conflict=instagram_post_id,source&select=id,transcript_status`,
     {
@@ -114,24 +150,7 @@ async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competi
         'apikey': SERVICE_KEY,
         'Prefer': 'resolution=merge-duplicates,return=representation'
       },
-      body: JSON.stringify({
-        source: isOwn ? 'own' : 'competitor',
-        competitor_id: competitorId,
-        instagram_post_id: postId,
-        post_type: detectPostType(post),
-        caption: (post.caption || post.text || null) as string | null,
-        // fast-post-scraper: like_count, view_count, comment_count (snake_case)
-        likes_count: Number(post.likesCount || post.likes_count || post.like_count || post.edge_media_preview_like?.count || 0),
-        comments_count: Number(post.commentsCount || post.comments_count || post.comment_count || 0),
-        views_count: Number(post.videoViewCount || post.videoPlayCount || post.video_view_count || post.view_count || post.plays || 0),
-        video_url: videoUrl,
-        thumbnail_url: thumbUrl,
-        // fast-post-scraper: 'date' Feld statt 'timestamp'
-        published_at: parseTimestamp(post.timestamp || post.takenAt || post.taken_at || post.created_at || post.date),
-        url: postUrl,
-        transcript_status: videoUrl ? 'pending' : 'none',
-        visual_text_status: thumbUrl ? 'pending' : 'none'
-      })
+      body: JSON.stringify(upsertBody)
     }
   )
 
@@ -142,9 +161,8 @@ async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competi
   }
   const rows = await res.json().catch(() => [])
   const row = Array.isArray(rows) ? rows[0] : rows
-  const dbId = row?.id || null
-  // Nur submittieren wenn noch kein Transcript vorhanden — nicht bereits 'done' oder 'transcribing' überschreiben
-  const alreadyProcessed = row?.transcript_status === 'done' || row?.transcript_status === 'transcribing'
+  const dbId = row?.id || existing?.id || null
+
   return { saved: true, id: dbId, videoUrl: (videoUrl && !alreadyProcessed) ? videoUrl : null }
 }
 
@@ -156,9 +174,8 @@ async function submitVideoToAssemblyAI(postId: string, videoUrl: string): Promis
     headers: { 'Authorization': ASSEMBLYAI_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       audio_url: videoUrl,
+      speech_models: ['universal-2'],
       language_detection: true,
-      punctuate: true,
-      format_text: true,
       webhook_url: webhookUrl,
     })
   })
@@ -421,12 +438,13 @@ Deno.serve(async (req: Request) => {
       }).catch(() => {})
 
       // Videos sofort zu AssemblyAI schicken — URLs sind noch frisch (< 60s alt)
-      // Kein Storage-Umweg: Instagram CDN URLs laufen in Stunden ab, hier sind sie noch gültig
+      // WICHTIG: await nötig — Deno bricht fire-and-forget Promises beim return ab
       if (videoPostsForTranscription.length > 0) {
         console.log(`Starte Transkription für ${videoPostsForTranscription.length} Videos...`)
-        Promise.all(
+        await Promise.all(
           videoPostsForTranscription.map(({ id, videoUrl }) => submitVideoToAssemblyAI(id, videoUrl))
         ).catch(() => {})
+        console.log(`Transkription submitted für ${videoPostsForTranscription.length} Videos`)
       }
 
       // Nach eigenem Profil-Scrape: Thomas DNA neu analysieren (fire & forget)

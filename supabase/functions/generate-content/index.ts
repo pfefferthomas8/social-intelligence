@@ -91,7 +91,7 @@ Kurz, direkt, eine klare Handlung.
 ────────────────────────────────────────
 FORMAT PRO SLIDE:
 ────────────────────────────────────────
-SLIDE [Nummer] [LAYOUT-TAG]:
+SLIDE [Nummer]:
 [Headline/Haupttext]
 [Subtext/Body wenn vorhanden]
 [Struktur-Elemente wenn nötig, z.B. "MYTH:", "ANSWER:", "CHECKLIST:"]`,
