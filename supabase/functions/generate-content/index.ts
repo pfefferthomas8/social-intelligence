@@ -39,11 +39,31 @@ const FORMAT_INSTRUCTIONS: Record<string, string> = {
 - OUTRO & CTA (was der Zuschauer jetzt tun soll)
 Markiere jeden Abschnitt klar. Schreibe so wie man spricht, keine Fachsprache.`,
 
-  carousel: `Erstelle einen Karussel-Post mit:
-- SLIDE 1: Hook-Überschrift (max 8 Wörter, neugierig machend)
-- SLIDE 2-7: Je eine klare Aussage/Tipp pro Slide (kurz, prägnant)
-- SLIDE 8 (FINAL): CTA — was soll der Leser jetzt tun?
-Format: "SLIDE 1: [Text]" usw.`,
+  carousel: `Erstelle einen Karussel-Post (7-9 Slides) mit folgender PFLICHT-STRUKTUR:
+
+SLIDE 1 — OPEN-LOOP HOOK (max 8 Wörter)
+Benennt ein Problem oder Paradoxon das sofort triggert. KEIN Spoiler der Lösung. Ziel: Slide 2 erzwingen.
+
+SLIDE 2 — DUAL-PURPOSE (CRITICAL!)
+Diese Slide wird von Instagram als eigenständige Second-Chance-Preview angezeigt wenn jemand Slide 1 überscrollt hat.
+Sie muss deshalb ZWEI Dinge gleichzeitig erfüllen:
+(a) Standalone verständlich ohne Kontext von Slide 1 — eigener Hook der zum Stoppen zwingt
+(b) Als Fortsetzung funktionieren mit eigenem Cliffhanger der zu Slide 3 zieht
+
+SLIDES 3 bis (N-2) — STORYTELLING-ARC
+Je ein konkretes Insight oder Argument. Jede Slide MUSS mit einem Cliffhanger enden:
+• Entweder als Frage ("Aber warum passiert das eigentlich?")
+• Oder als Ellipse die Spannung aufbaut ("Das Problem:...", "Und dann...", "Was die wenigsten wissen...")
+NIEMALS eine Slide mit abgeschlossener Aussage beenden.
+
+SLIDE (N-1) — AUFLÖSUNG/WENDEPUNKT
+Hier kommt die Antwort/Lösung. Der Payoff nach dem Arc.
+
+LETZTE SLIDE — CTA
+Kurz, direkt, eine Handlung.
+
+Format: Jede Slide als "SLIDE [Nummer]: [Text]"
+Stil: Thomas' Direktheit — kurze Sätze, Du-Ansprache, keine Füllwörter, max 3-4 Zeilen pro Slide.`,
 
   single_post: `Erstelle eine starke Instagram-Caption mit:
 - Erster Satz: Hook der zum Lesen zwingt (Frage, Provokation oder Zahl)
@@ -87,7 +107,7 @@ Deno.serve(async (req: Request) => {
     dbQuery('instagram_posts?select=caption,transcript,post_type,likes_count,views_count&source=eq.own&caption=not.is.null&order=views_count.desc&limit=30'),
     dbQuery('instagram_posts?select=caption,transcript,post_type,likes_count,views_count&source=eq.competitor&order=views_count.desc&limit=20'),
     dbQuery('instagram_posts?select=caption,transcript,post_type&source=eq.custom&limit=10'),
-    dbQuery('thomas_dna?select=category,insight,confidence&order=confidence.desc&limit=20'),
+    dbQuery('thomas_dna?select=category,insight,confidence&order=confidence.desc&limit=35'),
     dbQuery('trend_posts?select=caption,visual_text,username,viral_score,recommendation&order=viral_score.desc&limit=10'),
     dbQuery('generated_content?select=topic,content_type,content,content_pillar&user_rating=eq.1&order=created_at.desc&limit=8'),
     dbQuery('external_signals?select=title,body,signal_type,source,relevance_score,claude_insight&relevance_score=gte.70&order=fetched_at.desc&limit=10'),
@@ -231,7 +251,12 @@ Für jeden Content-Output:
 2. Überprüfe ob ein Trend-Signal aus [7] das Thema verstärkt
 3. Forme den Trigger durch Thomas' Hook-Formeln aus [2] und seinen Stil aus [3]
 4. Stelle sicher dass es zu seiner Zielgruppe aus [1] passt
-5. Das Ergebnis klingt nach Thomas — und schlägt wie ein viraler Post`
+5. Das Ergebnis klingt nach Thomas — und schlägt wie ein viraler Post
+${content_type === 'carousel' && dna('carousel_rule') ? `
+═══════════════════════════════════════════════════════
+[CAROUSEL-SPEZIFISCHE REGELN — ZWINGEND EINHALTEN]
+═══════════════════════════════════════════════════════
+${dna('carousel_rule')}` : ''}`
 
   const userPrompt = `THEMA: ${topic}
 FORMAT: ${content_type.replace(/_/g, ' ').toUpperCase()}
