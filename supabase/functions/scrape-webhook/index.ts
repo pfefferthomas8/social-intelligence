@@ -83,8 +83,28 @@ async function getCompetitorId(username: string): Promise<string | null> {
 }
 
 type UpsertResult = { saved: boolean, id: string | null, videoUrl: string | null }
+type ExistingMap = Map<string, { id: string, transcript_status: string }>
 
-async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competitorId: string | null): Promise<UpsertResult> {
+// Batch-Fetch: alle bekannten Posts für diese Quelle in einer einzigen DB-Anfrage laden
+// → verhindert N SELECT-Calls im Post-Loop (Perf-Optimierung)
+async function fetchExistingPosts(source: string, competitorId: string | null): Promise<ExistingMap> {
+  const filter = competitorId
+    ? `source=eq.${source}&competitor_id=eq.${encodeURIComponent(competitorId)}&select=id,instagram_post_id,transcript_status&limit=500`
+    : `source=eq.${source}&select=id,instagram_post_id,transcript_status&limit=500`
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/instagram_posts?${filter}`, {
+    headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY }
+  })
+  const rows = res.ok ? await res.json().catch(() => []) : []
+  const map: ExistingMap = new Map()
+  if (Array.isArray(rows)) {
+    for (const row of rows) {
+      if (row.instagram_post_id) map.set(row.instagram_post_id, { id: row.id, transcript_status: row.transcript_status })
+    }
+  }
+  return map
+}
+
+async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competitorId: string | null, existingMap: ExistingMap): Promise<UpsertResult> {
   // Video-URL: verschiedene Feldnamen je nach Actor
   // fast-post-scraper: video_versions[0].url
   const videoVersions = Array.isArray(post.video_versions) ? post.video_versions : []
@@ -104,16 +124,10 @@ async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competi
   const postUrl = (post.url || post.post_url) as string | null
     || (shortCodeForUrl ? `https://www.instagram.com/p/${shortCodeForUrl}/` : null)
 
-  // Vor dem Upsert: prüfen ob Post bereits transkribiert/in Verarbeitung ist
-  // → verhindert dass Re-Scrapes den transcript_status überschreiben
-  const source = isOwn ? 'own' : 'competitor'
-  const existingRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/instagram_posts?instagram_post_id=eq.${encodeURIComponent(postId)}&source=eq.${source}&select=id,transcript_status&limit=1`,
-    { headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY } }
-  )
-  const existingRows = existingRes.ok ? await existingRes.json().catch(() => []) : []
-  const existing = Array.isArray(existingRows) ? existingRows[0] : null
+  // Aus vorgeladenem Batch-Map prüfen ob Post bereits in Endzustand (kein Extra-SELECT nötig)
+  const existing = existingMap.get(postId) || null
   const alreadyProcessed = existing?.transcript_status === 'done' || existing?.transcript_status === 'transcribing'
+  const source = isOwn ? 'own' : 'competitor'
 
   // Upsert-Body: transcript_status nur setzen wenn noch nicht in Endzustand
   const upsertBody: Record<string, unknown> = {
@@ -134,14 +148,14 @@ async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competi
     scraped_at: new Date().toISOString(),
   }
 
-  // transcript_status nur setzen wenn Post neu oder noch nicht verarbeitet
+  // transcript_status nur setzen wenn Post neu oder noch nicht in Endzustand
   if (!alreadyProcessed) {
     upsertBody.transcript_status = videoUrl ? 'pending' : 'none'
     upsertBody.visual_text_status = thumbUrl ? 'pending' : 'none'
   }
 
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/instagram_posts?on_conflict=instagram_post_id,source&select=id,transcript_status`,
+    `${SUPABASE_URL}/rest/v1/instagram_posts?on_conflict=instagram_post_id,source&select=id`,
     {
       method: 'POST',
       headers: {
@@ -372,8 +386,10 @@ Deno.serve(async (req: Request) => {
         })
       }
       const competitorId = await getCompetitorId(username)
+      // Einmaliger Batch-SELECT aller bekannten Posts → kein SELECT pro Post im Loop
+      const existingMap = await fetchExistingPosts(isOwn ? 'own' : 'competitor', competitorId)
       for (const post of items) {
-        const result = await upsertPost(post, isOwn, competitorId)
+        const result = await upsertPost(post, isOwn, competitorId, existingMap)
         if (result.saved) {
           savedCount++
           if (result.id && result.videoUrl) videoPostsForTranscription.push({ id: result.id, videoUrl: result.videoUrl })
@@ -403,8 +419,10 @@ Deno.serve(async (req: Request) => {
         }
         const posts = (item.latestPosts || item.posts || []) as Record<string, unknown>[]
         const competitorId = await getCompetitorId(username)
+        // Einmaliger Batch-SELECT pro Profil → kein SELECT pro Post im Loop
+        const existingMap = await fetchExistingPosts(isOwn ? 'own' : 'competitor', competitorId)
         for (const post of posts) {
-          const result = await upsertPost(post, isOwn, competitorId)
+          const result = await upsertPost(post, isOwn, competitorId, existingMap)
           if (result.saved) {
             savedCount++
             if (result.id && result.videoUrl) videoPostsForTranscription.push({ id: result.id, videoUrl: result.videoUrl })
