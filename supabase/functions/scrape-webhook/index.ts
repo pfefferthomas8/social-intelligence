@@ -4,6 +4,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 const DASHBOARD_TOKEN = Deno.env.get('DASHBOARD_TOKEN') || ''
 const APIFY_KEY = Deno.env.get('APIFY_API_KEY') || ''
+const ASSEMBLYAI_KEY = Deno.env.get('ASSEMBLYAI_API_KEY') || ''
 
 function dbHeaders() {
   return {
@@ -81,7 +82,9 @@ async function getCompetitorId(username: string): Promise<string | null> {
   return row?.id || null
 }
 
-async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competitorId: string | null): Promise<boolean> {
+type UpsertResult = { saved: boolean, id: string | null, videoUrl: string | null }
+
+async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competitorId: string | null): Promise<UpsertResult> {
   // Video-URL: verschiedene Feldnamen je nach Actor
   // fast-post-scraper: video_versions[0].url
   const videoVersions = Array.isArray(post.video_versions) ? post.video_versions : []
@@ -94,7 +97,7 @@ async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competi
   // PostID: shortCode (camelCase) | shortcode (lowercase, fast-scraper) | code | id | pk
   const rawId = post.shortCode || post.shortcode || post.code || post.id || post.pk
   const postId = rawId ? String(rawId) : null
-  if (!postId) return false
+  if (!postId) return { saved: false, id: null, videoUrl: null }
 
   // URL: post_url (fast-scraper) | url | aus shortCode/shortcode ableiten
   const shortCodeForUrl = (post.shortCode || post.shortcode || post.code) as string | undefined
@@ -102,14 +105,14 @@ async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competi
     || (shortCodeForUrl ? `https://www.instagram.com/p/${shortCodeForUrl}/` : null)
 
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/instagram_posts?on_conflict=instagram_post_id,source`,
+    `${SUPABASE_URL}/rest/v1/instagram_posts?on_conflict=instagram_post_id,source&select=id,transcript_status`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${SERVICE_KEY}`,
         'apikey': SERVICE_KEY,
-        'Prefer': 'resolution=merge-duplicates,return=minimal'
+        'Prefer': 'resolution=merge-duplicates,return=representation'
       },
       body: JSON.stringify({
         source: isOwn ? 'own' : 'competitor',
@@ -135,9 +138,38 @@ async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competi
   if (!res.ok) {
     const errText = await res.text()
     console.error(`upsert error ${res.status}:`, errText.substring(0, 200))
-    return false
+    return { saved: false, id: null, videoUrl: null }
   }
-  return true
+  const rows = await res.json().catch(() => [])
+  const row = Array.isArray(rows) ? rows[0] : rows
+  const dbId = row?.id || null
+  // Nur submittieren wenn noch kein Transcript vorhanden — nicht bereits 'done' oder 'transcribing' überschreiben
+  const alreadyProcessed = row?.transcript_status === 'done' || row?.transcript_status === 'transcribing'
+  return { saved: true, id: dbId, videoUrl: (videoUrl && !alreadyProcessed) ? videoUrl : null }
+}
+
+// Direkt zu AssemblyAI submitten — kein Storage-Umweg nötig wenn URL frisch ist
+async function submitVideoToAssemblyAI(postId: string, videoUrl: string): Promise<void> {
+  const webhookUrl = `${SUPABASE_URL}/functions/v1/transcribe-webhook?token=${DASHBOARD_TOKEN}&post_id=${postId}`
+  const res = await fetch('https://api.assemblyai.com/v2/transcript', {
+    method: 'POST',
+    headers: { 'Authorization': ASSEMBLYAI_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      audio_url: videoUrl,
+      language_detection: true,
+      punctuate: true,
+      format_text: true,
+      webhook_url: webhookUrl,
+    })
+  })
+  if (res.ok) {
+    await dbUpdate('instagram_posts', `id=eq.${postId}`, { transcript_status: 'transcribing' })
+    console.log(`AssemblyAI gestartet für Post ${postId}`)
+  } else {
+    const err = await res.text()
+    console.error(`AssemblyAI Fehler für ${postId}:`, err.substring(0, 200))
+    await dbUpdate('instagram_posts', `id=eq.${postId}`, { transcript_status: 'error' })
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -285,6 +317,7 @@ Deno.serve(async (req: Request) => {
     console.log(`Mode: ${isPostsMode ? 'posts (instagram-scraper)' : 'profile (profile-scraper)'}, items: ${items.length}, isOwn: ${isOwn}`)
 
     let savedCount = 0
+    const videoPostsForTranscription: { id: string, videoUrl: string }[] = []
 
     if (isPostsMode) {
       // Posts-Modus — job.target ist zuverlässiger als ownerUsername (exakt wie in DB gespeichert)
@@ -323,7 +356,11 @@ Deno.serve(async (req: Request) => {
       }
       const competitorId = await getCompetitorId(username)
       for (const post of items) {
-        if (await upsertPost(post, isOwn, competitorId)) savedCount++
+        const result = await upsertPost(post, isOwn, competitorId)
+        if (result.saved) {
+          savedCount++
+          if (result.id && result.videoUrl) videoPostsForTranscription.push({ id: result.id, videoUrl: result.videoUrl })
+        }
       }
 
     } else {
@@ -350,7 +387,11 @@ Deno.serve(async (req: Request) => {
         const posts = (item.latestPosts || item.posts || []) as Record<string, unknown>[]
         const competitorId = await getCompetitorId(username)
         for (const post of posts) {
-          if (await upsertPost(post, isOwn, competitorId)) savedCount++
+          const result = await upsertPost(post, isOwn, competitorId)
+          if (result.saved) {
+            savedCount++
+            if (result.id && result.videoUrl) videoPostsForTranscription.push({ id: result.id, videoUrl: result.videoUrl })
+          }
         }
       }
     }
@@ -379,12 +420,14 @@ Deno.serve(async (req: Request) => {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DASHBOARD_TOKEN}` }
       }).catch(() => {})
 
-      // Videos sofort downloaden → Instagram CDN URLs laufen in Stunden ab
-      fetch(`${SUPABASE_URL}/functions/v1/download-videos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DASHBOARD_TOKEN}` },
-        body: JSON.stringify({ limit: 10 })
-      }).catch(() => {})
+      // Videos sofort zu AssemblyAI schicken — URLs sind noch frisch (< 60s alt)
+      // Kein Storage-Umweg: Instagram CDN URLs laufen in Stunden ab, hier sind sie noch gültig
+      if (videoPostsForTranscription.length > 0) {
+        console.log(`Starte Transkription für ${videoPostsForTranscription.length} Videos...`)
+        Promise.all(
+          videoPostsForTranscription.map(({ id, videoUrl }) => submitVideoToAssemblyAI(id, videoUrl))
+        ).catch(() => {})
+      }
 
       // Nach eigenem Profil-Scrape: Thomas DNA neu analysieren (fire & forget)
       if (job.job_type === 'own_profile') {
