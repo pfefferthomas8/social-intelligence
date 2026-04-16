@@ -1,7 +1,7 @@
 // Supabase REST API direkt via fetch — kein Import nötig
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+const SERVICE_KEY = Deno.env.get('SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 const DASHBOARD_TOKEN = Deno.env.get('DASHBOARD_TOKEN') || ''
 const APIFY_KEY = Deno.env.get('APIFY_API_KEY') || ''
 const ASSEMBLYAI_KEY = Deno.env.get('ASSEMBLYAI_API_KEY') || ''
@@ -180,27 +180,14 @@ async function upsertPost(post: Record<string, unknown>, isOwn: boolean, competi
   return { saved: true, id: dbId, videoUrl: (videoUrl && !alreadyProcessed) ? videoUrl : null }
 }
 
-// Direkt zu AssemblyAI submitten — kein Storage-Umweg nötig wenn URL frisch ist
-async function submitVideoToAssemblyAI(postId: string, videoUrl: string): Promise<void> {
-  const webhookUrl = `${SUPABASE_URL}/functions/v1/transcribe-webhook?token=${DASHBOARD_TOKEN}&post_id=${postId}`
-  const res = await fetch('https://api.assemblyai.com/v2/transcript', {
+// Startet Transkription für ein Video — fire-and-forget Call an transcribe-video Function
+// Jede Transkription läuft in eigener Edge Function Invocation → kein Timeout im scrape-webhook
+function triggerTranscription(postId: string, videoUrl: string): void {
+  fetch(`${SUPABASE_URL}/functions/v1/transcribe-video`, {
     method: 'POST',
-    headers: { 'Authorization': ASSEMBLYAI_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      audio_url: videoUrl,
-      speech_models: ['universal-2'],
-      language_detection: true,
-      webhook_url: webhookUrl,
-    })
-  })
-  if (res.ok) {
-    await dbUpdate('instagram_posts', `id=eq.${postId}`, { transcript_status: 'transcribing' })
-    console.log(`AssemblyAI gestartet für Post ${postId}`)
-  } else {
-    const err = await res.text()
-    console.error(`AssemblyAI Fehler für ${postId}:`, err.substring(0, 200))
-    await dbUpdate('instagram_posts', `id=eq.${postId}`, { transcript_status: 'error' })
-  }
+    headers: { 'Authorization': `Bearer ${DASHBOARD_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ post_id: postId, video_url: videoUrl })
+  }).catch(e => console.error(`transcribe-video trigger fehlgeschlagen für ${postId}:`, String(e)))
 }
 
 Deno.serve(async (req: Request) => {
@@ -226,10 +213,12 @@ Deno.serve(async (req: Request) => {
     const job = await dbGet('scrape_jobs', `id=eq.${job_id}`)
     if (!job) return new Response('job not found', { status: 404 })
 
-    // Dual-Actor: Wenn Job bereits erfolgreich abgeschlossen (result_count > 0),
-    // kommt der zweite Actor zu spät → ignorieren
-    if (job.status === 'done' && (job.result_count || 0) > 0) {
-      console.log(`Job ${job_id} bereits erfolgreich (${job.result_count} Posts), ignoriere zweiten Actor-Webhook`)
+    // Multi-Actor: Auch wenn Job bereits done ist, Posts vom zweiten/dritten Actor noch verarbeiten
+    // → mehr Posts durch merge-duplicates upsert, kein Datenverlust
+    // Nur überspringen wenn wirklich nichts mehr zu holen ist (z.B. vierter Actor identische Daten)
+    const alreadyDoneWithManyPosts = job.status === 'done' && (job.result_count || 0) >= 40
+    if (alreadyDoneWithManyPosts) {
+      console.log(`Job ${job_id} bereits mit ${job.result_count} Posts abgeschlossen, überspringe`)
       return new Response(JSON.stringify({ ok: true, skipped: 'already_done' }), {
         headers: { 'Content-Type': 'application/json' }
       })
@@ -298,10 +287,10 @@ Deno.serve(async (req: Request) => {
     for (let attempt = 0; attempt < 6; attempt++) {
       if (attempt > 0) await new Promise(r => setTimeout(r, 10000))
 
-      // Race-Condition Guard: hat ein anderer Actor bereits Ergebnisse gespeichert?
+      // Race-Condition Guard: nur abbrechen wenn ein anderer Actor bereits viele Posts hat
       const freshJob = await dbGet('scrape_jobs', `id=eq.${job_id}`)
-      if (freshJob && (freshJob.result_count || 0) > 0) {
-        console.log(`Job ${job_id} bereits erfolgreich durch anderen Actor (${freshJob.result_count} Posts), Retry abgebrochen`)
+      if (freshJob && (freshJob.result_count || 0) >= 40) {
+        console.log(`Job ${job_id} bereits mit ${freshJob.result_count} Posts abgeschlossen, Retry abgebrochen`)
         return new Response(JSON.stringify({ ok: true, skipped: 'other_actor_succeeded', count: freshJob.result_count }), {
           headers: { 'Content-Type': 'application/json' }
         })
@@ -455,14 +444,14 @@ Deno.serve(async (req: Request) => {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DASHBOARD_TOKEN}` }
       }).catch(() => {})
 
-      // Videos sofort zu AssemblyAI schicken — URLs sind noch frisch (< 60s alt)
-      // WICHTIG: await nötig — Deno bricht fire-and-forget Promises beim return ab
+      // Videos transkribieren — jeder Call läuft in eigener Edge Function (kein Timeout-Problem)
+      // scrape-webhook kehrt sofort zurück, transcribe-video übernimmt Download+Upload+AssemblyAI
       if (videoPostsForTranscription.length > 0) {
-        console.log(`Starte Transkription für ${videoPostsForTranscription.length} Videos...`)
-        await Promise.all(
-          videoPostsForTranscription.map(({ id, videoUrl }) => submitVideoToAssemblyAI(id, videoUrl))
-        ).catch(() => {})
-        console.log(`Transkription submitted für ${videoPostsForTranscription.length} Videos`)
+        console.log(`Triggere Transkription für ${videoPostsForTranscription.length} Videos (fire-and-forget)...`)
+        for (const { id, videoUrl } of videoPostsForTranscription) {
+          triggerTranscription(id, videoUrl)
+        }
+        console.log(`${videoPostsForTranscription.length} Transkriptions-Calls abgeschickt`)
       }
 
       // Nach eigenem Profil-Scrape: Thomas DNA neu analysieren (fire & forget)

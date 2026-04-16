@@ -389,7 +389,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Content Intelligence — 6 datengetriebene Posts */}
+        {/* Content Intelligence — 9 Posts: 3 Haltung · 3 Mehrwert · 3 Transformation */}
         <div style={{ marginBottom: 24 }}>
           <div className="section-header" style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -397,7 +397,6 @@ export default function Dashboard() {
               <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: '#ee4f00', background: 'rgba(238,79,0,0.1)', padding: '2px 7px', borderRadius: 100 }}>DATENGETRIEBEN</span>
             </div>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              {/* Trend Scan als kleiner Hintergrund-Button */}
               <button onClick={runTrendScan} disabled={trendLoading} className="btn btn-xs"
                 title={lastTrendRun ? `Letzter Scan: ${timeAgo(lastTrendRun)}` : 'Noch kein Scan'}>
                 {trendLoading
@@ -408,13 +407,13 @@ export default function Dashboard() {
               <button onClick={generateDashboardPosts} disabled={dashLoading} className="btn btn-sm btn-primary">
                 {dashLoading
                   ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Analysiert…</>
-                  : dashPosts.length > 0 ? '↺ Neu generieren' : '⚡ 6 Posts generieren'
+                  : dashPosts.length > 0 ? '↺ Neu generieren' : '⚡ 9 Posts generieren'
                 }
               </button>
             </div>
           </div>
 
-          {/* Status-Log: läuft während Generierung und bleibt danach stehen */}
+          {/* Status-Log */}
           {genSteps.length > 0 && (
             <div style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '10px 14px', marginBottom: 14, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
               {genSteps.map(step => (
@@ -433,77 +432,99 @@ export default function Dashboard() {
 
           {dashPosts.length === 0 && !dashLoading && genSteps.length === 0 && (
             <div style={{ background: 'var(--bg-card)', border: '1px dashed var(--border-strong)', borderRadius: 'var(--r-lg)', padding: '40px', textAlign: 'center' }}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text2)', marginBottom: 6 }}>6 datengetriebene Content-Ideen</p>
+              <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text2)', marginBottom: 6 }}>9 datengetriebene Content-Ideen</p>
               <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 16, maxWidth: 420, margin: '0 auto 16px' }}>
-                Claude analysiert Trends, Competitor-Posts und Community-Signale und erstellt 12 Post-Ideen mit Quellenangabe und Viral-Score.
+                3 Haltung · 3 Mehrwert · 3 Transformation — jede Session andere Themenfelder, nie Wiederholungen.
               </p>
               <button onClick={generateDashboardPosts} className="btn btn-sm btn-primary">⚡ Jetzt generieren</button>
             </div>
           )}
 
-          {dashPosts.length > 0 && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-              {dashPosts.map((post, i) => {
-                const PILLAR_C = { haltung: '#ee4f00', transformation: '#3b82f6', mehrwert: '#22c55e', verkauf: '#a855f7' }
-                const FORMAT_ICON = { video_script: '🎬', b_roll: '⚡', single_post: '📝', carousel: '📋' }
-                const pc = PILLAR_C[post.pillar] || 'var(--text3)'
-                const isExp = dashExpanded[i]
-                const isCopied = dashCopied[i]
-                const scoreColor = post.score >= 80 ? '#22c55e' : post.score >= 60 ? '#ee4f00' : 'var(--text3)'
-                return (
-                  <div key={i} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderTop: `2px solid ${pc}`, borderRadius: 'var(--r-lg)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {/* Format + Pillar + Score */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 10, color: 'var(--text3)' }}>{FORMAT_ICON[post.format]} {post.format?.replace(/_/g, ' ')}</span>
-                        <span style={{ fontSize: 8, fontWeight: 700, color: pc, background: `${pc}18`, padding: '2px 6px', borderRadius: 100, marginLeft: 'auto' }}>{post.pillar?.toUpperCase()}</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: scoreColor, fontFamily: 'var(--font-mono)' }}>{post.score}</span>
+          {dashPosts.length > 0 && (() => {
+            const PILLAR_C = { haltung: '#ee4f00', transformation: '#3b82f6', mehrwert: '#22c55e' }
+            const PILLAR_LABEL = { haltung: 'Haltung', mehrwert: 'Mehrwert', transformation: 'Transformation' }
+            const FORMAT_ICON = { video_script: '🎬', b_roll: '⚡', single_post: '📝', carousel: '📋' }
+            const pillars = ['haltung', 'mehrwert', 'transformation']
+
+            const PostCard = ({ post, i }) => {
+              const pc = PILLAR_C[post.pillar] || 'var(--text3)'
+              const isExp = dashExpanded[i]
+              const isCopied = dashCopied[i]
+              const scoreColor = post.score >= 80 ? '#22c55e' : post.score >= 60 ? '#ee4f00' : 'var(--text3)'
+              return (
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 10, color: 'var(--text3)' }}>{FORMAT_ICON[post.format]} {post.format?.replace(/_/g, ' ')}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: scoreColor, fontFamily: 'var(--font-mono)', marginLeft: 'auto' }}>{post.score}</span>
+                    </div>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', lineHeight: 1.4, margin: 0 }}>{post.hook}</p>
+                    <p style={{ fontSize: 11.5, color: 'var(--text2)', lineHeight: 1.55, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: isExp ? 20 : 3, WebkitBoxOrient: 'vertical' }}>
+                      {post.preview}
+                    </p>
+                    {post.sources?.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text4)', letterSpacing: '0.08em' }}>DATENGRUNDLAGE</div>
+                        {post.sources.map((s, si) => {
+                          const isTrend = s.ref?.startsWith('T')
+                          const isSignal = s.ref?.startsWith('S')
+                          const bg = isTrend ? 'rgba(238,79,0,0.12)' : isSignal ? 'rgba(255,69,0,0.12)' : 'rgba(59,130,246,0.12)'
+                          const color = isTrend ? '#ee4f00' : isSignal ? '#ff6b35' : '#3b82f6'
+                          const label = isTrend ? 'TREND' : isSignal ? 'COMMUNITY' : 'COMP'
+                          return (
+                            <div key={si} style={{ display: 'flex', alignItems: 'flex-start', gap: 5 }}>
+                              <span style={{ fontSize: 8, fontWeight: 700, padding: '2px 5px', borderRadius: 4, background: bg, color, flexShrink: 0, marginTop: 1 }}>{label}</span>
+                              <span style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.4 }}>{s.label}</span>
+                            </div>
+                          )
+                        })}
                       </div>
-                      {/* Hook */}
-                      <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', lineHeight: 1.4, margin: 0 }}>{post.hook}</p>
-                      {/* Preview */}
-                      <p style={{ fontSize: 11.5, color: 'var(--text2)', lineHeight: 1.55, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: isExp ? 20 : 3, WebkitBoxOrient: 'vertical' }}>
-                        {post.preview}
-                      </p>
-                      {/* Datengrundlage */}
-                      {post.sources?.length > 0 && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text4)', letterSpacing: '0.08em' }}>DATENGRUNDLAGE</div>
-                          {post.sources.map((s, si) => {
-                            const isTrend = s.ref?.startsWith('T')
-                            const isSignal = s.ref?.startsWith('S')
-                            const bg = isTrend ? 'rgba(238,79,0,0.12)' : isSignal ? 'rgba(255,69,0,0.12)' : 'rgba(59,130,246,0.12)'
-                            const color = isTrend ? '#ee4f00' : isSignal ? '#ff6b35' : '#3b82f6'
-                            const label = isTrend ? 'TREND' : isSignal ? 'COMMUNITY' : 'COMP'
-                            return (
-                              <div key={si} style={{ display: 'flex', alignItems: 'flex-start', gap: 5 }}>
-                                <span style={{ fontSize: 8, fontWeight: 700, padding: '2px 5px', borderRadius: 4, background: bg, color, flexShrink: 0, marginTop: 1 }}>{label}</span>
-                                <span style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.4 }}>{s.label}</span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                      {/* Why it works */}
-                      {post.why_it_works && (
-                        <div style={{ padding: '7px 9px', background: 'rgba(255,255,255,0.03)', borderRadius: 6, borderLeft: '2px solid var(--accent)' }}>
-                          <p style={{ fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.5, margin: 0 }}>{post.why_it_works}</p>
-                        </div>
-                      )}
-                    </div>
-                    {/* Actions */}
-                    <div style={{ padding: '8px 12px 12px', display: 'flex', gap: 5 }}>
-                      <button onClick={() => navigate('/generator', { state: { topic: post.hook, suggestedType: post.format, additionalInfo: post.preview } })}
-                        className="btn btn-xs btn-primary" style={{ flex: 1, justifyContent: 'center' }}>Im Generator →</button>
-                      <button onClick={() => { navigator.clipboard.writeText(`${post.hook}\n\n${post.preview}`); setDashCopied(prev => ({ ...prev, [i]: true })); setTimeout(() => setDashCopied(prev => ({ ...prev, [i]: false })), 2000) }}
-                        className="btn btn-xs">{isCopied ? '✓' : 'Copy'}</button>
-                      <button onClick={() => setDashExpanded(prev => ({ ...prev, [i]: !prev[i] }))} className="btn btn-xs">{isExp ? '▲' : '▼'}</button>
-                    </div>
+                    )}
+                    {post.why_it_works && (
+                      <div style={{ padding: '7px 9px', background: 'rgba(255,255,255,0.03)', borderRadius: 6, borderLeft: '2px solid var(--accent)' }}>
+                        <p style={{ fontSize: 10.5, color: 'var(--text3)', lineHeight: 1.5, margin: 0 }}>{post.why_it_works}</p>
+                      </div>
+                    )}
                   </div>
-                )
-              })}
-            </div>
-          )}
+                  <div style={{ padding: '8px 12px 12px', display: 'flex', gap: 5 }}>
+                    <button onClick={() => navigate('/generator', { state: { topic: post.hook, suggestedType: post.format, additionalInfo: post.preview } })}
+                      className="btn btn-xs btn-primary" style={{ flex: 1, justifyContent: 'center' }}>Im Generator →</button>
+                    <button onClick={() => { navigator.clipboard.writeText(`${post.hook}\n\n${post.preview}`); setDashCopied(prev => ({ ...prev, [i]: true })); setTimeout(() => setDashCopied(prev => ({ ...prev, [i]: false })), 2000) }}
+                      className="btn btn-xs">{isCopied ? '✓' : 'Copy'}</button>
+                    <button onClick={() => setDashExpanded(prev => ({ ...prev, [i]: !prev[i] }))} className="btn btn-xs">{isExp ? '▲' : '▼'}</button>
+                  </div>
+                </div>
+              )
+            }
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {pillars.map(pillar => {
+                  const pc = PILLAR_C[pillar]
+                  const posts = dashPosts.filter(p => p.pillar === pillar)
+                  if (posts.length === 0) return null
+                  return (
+                    <div key={pillar}>
+                      {/* Säulen-Header */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <div style={{ width: 3, height: 14, borderRadius: 2, background: pc }} />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: pc, letterSpacing: '0.08em' }}>
+                          {PILLAR_LABEL[pillar].toUpperCase()}
+                        </span>
+                        <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                        {posts.map((post, localIdx) => {
+                          const globalIdx = dashPosts.indexOf(post)
+                          return <PostCard key={globalIdx} post={post} i={globalIdx} />
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
         </div>
 
         {/* Content Säulen */}

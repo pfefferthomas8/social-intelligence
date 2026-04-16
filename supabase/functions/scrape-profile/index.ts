@@ -103,7 +103,7 @@ Deno.serve(async (req: Request) => {
     // Actor 1: Instagram Profile Scraper
     startRun('apify~instagram-profile-scraper', {
       usernames: [username],
-      resultsLimit: 50,
+      resultsLimit: 100,
       proxyConfiguration: proxyConfig,
       ...loginCookiesParam
     }, webhooksParam),
@@ -111,7 +111,7 @@ Deno.serve(async (req: Request) => {
     startRun('apify~instagram-scraper', {
       directUrls: [profileUrl],
       resultsType: 'posts',
-      resultsLimit: 50,
+      resultsLimit: 100,
       proxyConfiguration: proxyConfig,
       loginRequired: true,
       ...cookiesParam
@@ -119,14 +119,14 @@ Deno.serve(async (req: Request) => {
     // Actor 3: Instagram API Scraper
     startRun('apify~instagram-api-scraper', {
       startUrls: [{ url: profileUrl }],
-      resultsLimit: 50,
+      resultsLimit: 100,
       proxyConfiguration: proxyConfig,
       ...cookiesParam
     }, webhooksParam),
     // Actor 4: Fast Instagram Post Scraper (178K+ Runs)
     startRun('instagram-scraper~fast-instagram-post-scraper', {
       username: username,
-      resultsLimit: 50,
+      resultsLimit: 100,
       proxyConfiguration: proxyConfig,
       ...cookiesParam
     }, webhooksParam),

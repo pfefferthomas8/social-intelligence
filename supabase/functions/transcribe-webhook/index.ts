@@ -1,9 +1,11 @@
 // AssemblyAI ruft diese Function auf wenn Transkription fertig ist.
-// Speichert Transcript in DB und löscht Video aus Storage (temporärer Speicher).
+// WICHTIG: AssemblyAI sendet NUR {transcript_id, status} im Webhook — KEIN text!
+// Wir müssen den Transcript separat von der AssemblyAI API holen.
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+const SERVICE_KEY = Deno.env.get('SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 const DASHBOARD_TOKEN = Deno.env.get('DASHBOARD_TOKEN') || ''
+const ASSEMBLYAI_KEY = Deno.env.get('ASSEMBLYAI_API_KEY') || ''
 
 function dbHeaders() {
   return {
@@ -17,7 +19,7 @@ async function deleteFromStorage(storagePath: string) {
   try {
     await fetch(`${SUPABASE_URL}/storage/v1/object/instagram-videos/${storagePath}`, {
       method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${SERVICE_KEY}` }
+      headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'apikey': SERVICE_KEY }
     })
     console.log(`Storage gelöscht: ${storagePath}`)
   } catch (e) {
@@ -34,7 +36,11 @@ Deno.serve(async (req) => {
   if (!post_id) return new Response('no post_id', { status: 400 })
 
   const payload = await req.json()
-  const { status, text } = payload
+  // AssemblyAI sendet: { transcript_id: "...", status: "completed" | "error" }
+  // KEIN text im Payload — muss separat abgerufen werden
+  const { transcript_id, status } = payload
+
+  console.log(`Webhook für post ${post_id}: status=${status}, transcript_id=${transcript_id}`)
 
   // Post laden um storage_video_path zu kennen
   const postRes = await fetch(
@@ -44,28 +50,48 @@ Deno.serve(async (req) => {
   const posts: any[] = await postRes.json().catch(() => [])
   const storagePath = posts?.[0]?.storage_video_path
 
-  if (status === 'completed' && text) {
-    // Transcript speichern
+  if (status === 'completed' && transcript_id) {
+    // Transcript von AssemblyAI API holen
+    let transcriptText = ''
+    try {
+      const transcriptRes = await fetch(`https://api.assemblyai.com/v2/transcript/${transcript_id}`, {
+        headers: { 'Authorization': ASSEMBLYAI_KEY }
+      })
+      if (transcriptRes.ok) {
+        const data = await transcriptRes.json()
+        transcriptText = data.text || ''
+        console.log(`Transcript abgerufen für ${post_id}: ${transcriptText.substring(0, 80)}...`)
+      } else {
+        console.error(`AssemblyAI API Fehler: ${transcriptRes.status}`)
+      }
+    } catch (e) {
+      console.error('Transcript-Abruf fehlgeschlagen:', String(e))
+    }
+
+    // Transcript in DB speichern — auch wenn text leer (z.B. stilles Video)
     await fetch(`${SUPABASE_URL}/rest/v1/instagram_posts?id=eq.${post_id}`, {
       method: 'PATCH',
       headers: dbHeaders(),
       body: JSON.stringify({
-        transcript: text,
+        transcript: transcriptText || null,
         transcript_status: 'done',
-        storage_video_path: null // Pfad aus DB löschen
+        storage_video_path: null
       })
     })
-    // Video aus Storage löschen (spart Platz)
     if (storagePath) await deleteFromStorage(storagePath)
 
   } else if (status === 'error') {
+    console.error(`AssemblyAI Fehler für post ${post_id}`)
     await fetch(`${SUPABASE_URL}/rest/v1/instagram_posts?id=eq.${post_id}`, {
       method: 'PATCH',
       headers: dbHeaders(),
-      body: JSON.stringify({ transcript_status: 'error' })
+      body: JSON.stringify({ transcript_status: 'error', storage_video_path: null })
     })
-    // Video auch bei Fehler löschen
     if (storagePath) await deleteFromStorage(storagePath)
+
+  } else {
+    // Unbekannter Status — loggen aber ok zurückgeben
+    console.warn(`Unbekannter Status für post ${post_id}: ${status}`)
   }
 
   return new Response('ok', { status: 200 })

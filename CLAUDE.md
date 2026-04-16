@@ -354,11 +354,19 @@ const username = (body.username || '').trim().replace(/\s+/g, '').replace(/[^a-z
 
 ## GitHub Actions Workflows
 
-`.github/workflows/daily-scrape.yml`:
-- **05:00 UTC täglich**: fetch-external-signals, trend-discovery, transcribe-pending, classify-pillars
-- **06:00 UTC täglich**: analyze-thomas
-- **Sonntag 05:00 UTC**: discover-coaches (Coach-Pool auffüllen)
-- **manual `workflow_dispatch`**: alle Jobs einzeln triggerbar (inkl. `discover`)
+`.github/workflows/daily-scrape.yml` — **läuft täglich, Secrets korrekt gesetzt** (zuletzt erfolgreich 2026-04-16):
+
+| Wann | Was |
+|------|-----|
+| 06:00 UTC täglich | Eigenes Profil scrapen (`auto-scrape` mode=own) |
+| 06:30 UTC täglich | Alle Competitors scrapen (`auto-scrape` mode=competitors) |
+| Mo + Do 07:00 UTC | Trend Scout (`auto-scrape` mode=trends) |
+| Sonntag 05:00 UTC | Neue Coaches entdecken (`discover-coaches`) |
+| `workflow_dispatch` | Manuell triggerbar (own / competitors / trends / discover) |
+
+**GitHub Secrets (beide gesetzt):**
+- `SUPABASE_URL` = `https://shrsluxbrazqscgiwfpu.supabase.co`
+- `DASHBOARD_TOKEN` = VITE_DASHBOARD_TOKEN aus `.env`
 
 ---
 
@@ -403,26 +411,62 @@ git push origin main
 # → Cloudflare Pages deployed automatisch
 ```
 
-### Edge Functions
+### Edge Functions (via npx supabase — kein globales CLI nötig)
 ```bash
-# In social-intelligence Verzeichnis:
-FNAME=generate-dashboard-posts
-curl -s -X PATCH "https://api.supabase.com/v1/projects/shrsluxbrazqscgiwfpu/functions/$FNAME" \
-  -H "Authorization: Bearer $(grep SUPABASE_ACCESS_TOKEN /Users/thomaspfeffer/Downloads/Thomas\ Fitness/form-app/.env | cut -d= -f2)" \
-  -H "Content-Type: application/json" \
-  -d "{\"name\": \"$FNAME\", \"verify_jwt\": false, \"body\": $(python3 -c "import json; print(json.dumps(open('supabase/functions/$FNAME/index.ts').read()))")}"
+cd "/Users/thomaspfeffer/Downloads/Thomas Fitness/social-intelligence"
+SUPABASE_ACCESS_TOKEN=sbp_62e7a3ba913f4d26c3714dc666ab0a05ab6fa10a \
+npx supabase functions deploy FUNKTIONSNAME --project-ref shrsluxbrazqscgiwfpu --no-verify-jwt
 ```
+
+**Alle Functions brauchen `--no-verify-jwt`** — Apify/AssemblyAI rufen Webhooks ohne JWT auf.
+
+Mehrere auf einmal:
+```bash
+SUPABASE_ACCESS_TOKEN=sbp_62e7a3ba913f4d26c3714dc666ab0a05ab6fa10a \
+npx supabase functions deploy scrape-webhook transcribe-video transcribe-webhook --project-ref shrsluxbrazqscgiwfpu --no-verify-jwt
+```
+
+---
+
+## Transkriptions-Pipeline
+
+**Architektur:** Instagram CDN → Supabase Storage → AssemblyAI → `transcribe-webhook`
+
+**Warum Storage-Umweg:** AssemblyAI kann Instagram CDN URLs nicht direkt abrufen (IP/Session-Block von Meta). Supabase Edge Functions können Instagram-Videos laden → temporär in Storage speichern → AssemblyAI bekommt Supabase Signed URL.
+
+**Flow:**
+1. `scrape-webhook` speichert Posts mit `transcript_status='pending'`
+2. `scrape-webhook` ruft `triggerTranscription()` fire-and-forget pro Video auf
+3. `transcribe-video`: Download → Storage Upload → Signed URL → AssemblyAI Submit → status='transcribing'
+4. AssemblyAI ruft `transcribe-webhook` auf wenn fertig → Transcript in DB, Storage-File gelöscht
+
+**Warum fire-and-forget:** Parallele Downloads von 20+ Videos in einer Edge Function führen zu Timeout. Jede Transkription läuft in eigener Function-Invocation.
+
+**Storage Bucket:** `instagram-videos` (temporär, max ~150MB pro File, File wird nach Transkription gelöscht)
+
+**Signed URL:** 2h Gültigkeit — reicht für AssemblyAI (verarbeitet typisch in <10 min)
+
+### KRITISCH: SERVICE_ROLE_KEY statt SUPABASE_SERVICE_ROLE_KEY
+
+`SUPABASE_SERVICE_ROLE_KEY` wurde in Supabase Secrets falsch gesetzt (Hash statt JWT) und kann nicht geändert/gelöscht werden (reserved). Alle Functions nutzen daher:
+```typescript
+const SERVICE_KEY = Deno.env.get('SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+```
+`SERVICE_ROLE_KEY` ist korrekt als Secret gesetzt (echter JWT). Dieses Muster bei allen neuen Functions verwenden.
 
 ---
 
 ## Wichtige Hinweise
 
-- **SUPABASE_ACCESS_TOKEN** steht in `/Users/thomaspfeffer/Downloads/Thomas Fitness/form-app/.env`
+- **SUPABASE_ACCESS_TOKEN** steht in `/Users/thomaspfeffer/Downloads/Thomas Fitness/form-app/.env` (`sbp_62e7a3ba913f4d26c3714dc666ab0a05ab6fa10a`)
 - **Supabase Projekt-Ref:** `shrsluxbrazqscgiwfpu`
+- **Service Role Key holen (wenn nötig):** `curl -s "https://api.supabase.com/v1/projects/shrsluxbrazqscgiwfpu/api-keys" -H "Authorization: Bearer TOKEN" | python3 -c "import sys,json; [print(x['api_key']) for x in json.load(sys.stdin) if x['name']=='service_role']"`
+- **GitHub Token im macOS Keychain:** `security find-internet-password -s github.com -a pfefferthomas8 -w`
 - **Cloudflare Pages** deployed automatisch von `main` branch
-- **Kein `supabase` CLI** installiert — Deployment über Management API (curl)
+- **Supabase CLI via npx** — kein globales CLI, `npx supabase` funktioniert
 - **Keine Form App Logik** — komplett separates Projekt, andere DB, andere Functions
 - **`CLAUDE_MODEL` env** in Supabase Secrets setzen — default `claude-sonnet-4-5`
-- **Reddit/externe Signale** haben keinen eigenen UI-Bereich — sie fließen still in Content Intelligence
+- **Reddit/externe Signale** haben keinen eigenen UI-Bereich — fließen still in Content Intelligence
 - **Competitor-Usernames** müssen exakt mit Instagram übereinstimmen (kein @, kein Leerzeichen)
 - **trend_posts** werden automatisch nach 7 Tagen gelöscht (frische Daten immer)
+- **Auto-Scrape läuft täglich** — manueller Scrape-Button nur für sofortige Aktualisierung nötig

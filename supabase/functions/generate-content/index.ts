@@ -39,62 +39,28 @@ const FORMAT_INSTRUCTIONS: Record<string, string> = {
 - OUTRO & CTA (was der Zuschauer jetzt tun soll)
 Markiere jeden Abschnitt klar. Schreibe so wie man spricht, keine Fachsprache.`,
 
-  carousel: `Erstelle einen Karussel-Post (7-9 Slides) mit folgender PFLICHT-STRUKTUR.
+  carousel: `Erstelle einen Karussel-Post mit 7-9 Slides. Nur den reinen Text — keine Design-Tags, keine Layout-Labels.
 
-WICHTIG: Jede Slide bekommt ein [LAYOUT-TAG] — das zeigt welches Design-Template verwendet wird.
-Texte können kurz ODER lang sein. Manche Slides brauchen nur 2-4 Wörter (großer visueller Impact), andere einen ganzen Absatz (Erklärung/Tiefe). Der Mix ist das Konzept. Niemals künstlich kürzen.
-
-────────────────────────────────────────
-VERFÜGBARE LAYOUT-TYPEN:
-────────────────────────────────────────
-[FOTO HEADLINE] — Großes Wort oder kurze Phrase (2-6 Wörter) als Overlay auf Thomas-Foto. Ein Akzent-Wort in CAPS markieren. Optional: 1-2 kurze Subzeilen darunter.
-Beispiel: "SLOW SUNRISE / Wake gently / Sit by the window / LET THE LIGHT GUIDE YOU"
-
-[EDITORIAL] — Headline in Caps, darunter Fließtext-Absatz (3-5 Sätze). Kann auch Subheadline + zweiten Absatz haben. Für Erklärungen, Insights, tiefere Inhalte.
-
-[MYTH BUST] — "THE MYTH: [These in Anführungszeichen]" + "WHY PEOPLE BELIEVE THIS:" + 2-3 kurze Punkte + optionales Bild.
-
-[Q&A] — "QUESTION" (orange) + Frage-Text + Profilbild-Kreis + "& Answer" + Antwort-Absatz. Für direkte Einwände der Zielgruppe.
-
-[CHECKLIST] — Kategorie-Wort + "CHECKLIST" + 4-6 Punkte mit Checkmarks. Für konkrete Handlungslisten.
-
-[QUOTE CARD] — Kontext-Label (klein, z.B. "Ein Klient sagte:") + großes Zitat in Anführungszeichen + fetter Akzent-Satz darunter. Für emotionale Momente.
-
-[EXPERT CITE] — Starke These als großer Text + kleines Bild + Zitat + "— NAME, TITEL". Für Autorität/Glaubwürdigkeit.
-
-[GRADIENT HOOK] — Nur Text auf Orange-Hintergrund. Große Frage oder Statement, Key-Wörter fett. Für Hook-Slides und CTA.
-
-[REAL DEAL] — Dunkles Banner oben: "THE REAL DEAL" + kurze Kernaussage. Unten: kleines Bild links + "WHAT MATTERS MORE:" orange + 3 Punkte rechts. Für Auflösung/Wendepunkt.
-
-────────────────────────────────────────
 PFLICHT-STRUKTUR:
-────────────────────────────────────────
-SLIDE 1 — OPEN-LOOP HOOK
-Layout: [FOTO HEADLINE] oder [GRADIENT HOOK]
-Benennt ein Problem oder Paradoxon das sofort triggert. Kein Spoiler der Lösung.
 
-SLIDE 2 — DUAL-PURPOSE (CRITICAL: Second-Chance-Slide)
-Layout: frei wählbar, aber eigenständig verständlich OHNE Slide 1
-Instagram zeigt diese Slide als Preview wenn jemand Slide 1 überscrollt. Sie muss alleine stoppen UND einen eigenen Cliffhanger haben der zu Slide 3 zieht.
+SLIDE 1 — HOOK
+Ein Problem oder Paradoxon das sofort triggert. Kurz. Kein Spoiler der Lösung.
 
-SLIDES 3 bis (N-2) — STORYTELLING-ARC
-Je ein konkretes Insight. Jede Slide MUSS mit offenem Ende schließen — Frage ODER Ellipse ("..."). Layouts variieren: Mix aus Editorial, Myth Bust, Q&A, Quote Card, etc.
+SLIDE 2 — SECOND-CHANCE-SLIDE
+Muss eigenständig funktionieren OHNE Slide 1 (Instagram zeigt sie als Preview). Eigener Cliffhanger der zu Slide 3 zieht.
 
-SLIDE (N-1) — AUFLÖSUNG/WENDEPUNKT
-Layout: [REAL DEAL] oder [EDITORIAL]
-Der Payoff. Hier kommt die Lösung/Erkenntnis.
+SLIDES 3 bis (N-2) — INHALT
+Je ein konkretes Insight. Texte können kurz (2-4 Wörter, großer Impact) oder länger (Erklärung, Tiefe) sein — je nach was die Slide braucht. Jede Slide endet offen — Frage oder Ellipse.
+
+SLIDE (N-1) — AUFLÖSUNG
+Der Payoff. Die Lösung oder Erkenntnis.
 
 LETZTE SLIDE — CTA
-Layout: [GRADIENT HOOK]
 Kurz, direkt, eine klare Handlung.
 
-────────────────────────────────────────
-FORMAT PRO SLIDE:
-────────────────────────────────────────
+FORMAT:
 SLIDE [Nummer]:
-[Headline/Haupttext]
-[Subtext/Body wenn vorhanden]
-[Struktur-Elemente wenn nötig, z.B. "MYTH:", "ANSWER:", "CHECKLIST:"]`,
+[Text]`,
 
   single_post: `Erstelle eine starke Instagram-Caption mit:
 - Erster Satz: Hook der zum Lesen zwingt (Frage, Provokation oder Zahl)
