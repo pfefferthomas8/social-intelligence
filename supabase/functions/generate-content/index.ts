@@ -39,31 +39,62 @@ const FORMAT_INSTRUCTIONS: Record<string, string> = {
 - OUTRO & CTA (was der Zuschauer jetzt tun soll)
 Markiere jeden Abschnitt klar. Schreibe so wie man spricht, keine Fachsprache.`,
 
-  carousel: `Erstelle einen Karussel-Post (7-9 Slides) mit folgender PFLICHT-STRUKTUR:
+  carousel: `Erstelle einen Karussel-Post (7-9 Slides) mit folgender PFLICHT-STRUKTUR.
 
-SLIDE 1 — OPEN-LOOP HOOK (max 8 Wörter)
-Benennt ein Problem oder Paradoxon das sofort triggert. KEIN Spoiler der Lösung. Ziel: Slide 2 erzwingen.
+WICHTIG: Jede Slide bekommt ein [LAYOUT-TAG] — das zeigt welches Design-Template verwendet wird.
+Texte können kurz ODER lang sein. Manche Slides brauchen nur 2-4 Wörter (großer visueller Impact), andere einen ganzen Absatz (Erklärung/Tiefe). Der Mix ist das Konzept. Niemals künstlich kürzen.
 
-SLIDE 2 — DUAL-PURPOSE (CRITICAL!)
-Diese Slide wird von Instagram als eigenständige Second-Chance-Preview angezeigt wenn jemand Slide 1 überscrollt hat.
-Sie muss deshalb ZWEI Dinge gleichzeitig erfüllen:
-(a) Standalone verständlich ohne Kontext von Slide 1 — eigener Hook der zum Stoppen zwingt
-(b) Als Fortsetzung funktionieren mit eigenem Cliffhanger der zu Slide 3 zieht
+────────────────────────────────────────
+VERFÜGBARE LAYOUT-TYPEN:
+────────────────────────────────────────
+[FOTO HEADLINE] — Großes Wort oder kurze Phrase (2-6 Wörter) als Overlay auf Thomas-Foto. Ein Akzent-Wort in CAPS markieren. Optional: 1-2 kurze Subzeilen darunter.
+Beispiel: "SLOW SUNRISE / Wake gently / Sit by the window / LET THE LIGHT GUIDE YOU"
+
+[EDITORIAL] — Headline in Caps, darunter Fließtext-Absatz (3-5 Sätze). Kann auch Subheadline + zweiten Absatz haben. Für Erklärungen, Insights, tiefere Inhalte.
+
+[MYTH BUST] — "THE MYTH: [These in Anführungszeichen]" + "WHY PEOPLE BELIEVE THIS:" + 2-3 kurze Punkte + optionales Bild.
+
+[Q&A] — "QUESTION" (orange) + Frage-Text + Profilbild-Kreis + "& Answer" + Antwort-Absatz. Für direkte Einwände der Zielgruppe.
+
+[CHECKLIST] — Kategorie-Wort + "CHECKLIST" + 4-6 Punkte mit Checkmarks. Für konkrete Handlungslisten.
+
+[QUOTE CARD] — Kontext-Label (klein, z.B. "Ein Klient sagte:") + großes Zitat in Anführungszeichen + fetter Akzent-Satz darunter. Für emotionale Momente.
+
+[EXPERT CITE] — Starke These als großer Text + kleines Bild + Zitat + "— NAME, TITEL". Für Autorität/Glaubwürdigkeit.
+
+[GRADIENT HOOK] — Nur Text auf Orange-Hintergrund. Große Frage oder Statement, Key-Wörter fett. Für Hook-Slides und CTA.
+
+[REAL DEAL] — Dunkles Banner oben: "THE REAL DEAL" + kurze Kernaussage. Unten: kleines Bild links + "WHAT MATTERS MORE:" orange + 3 Punkte rechts. Für Auflösung/Wendepunkt.
+
+────────────────────────────────────────
+PFLICHT-STRUKTUR:
+────────────────────────────────────────
+SLIDE 1 — OPEN-LOOP HOOK
+Layout: [FOTO HEADLINE] oder [GRADIENT HOOK]
+Benennt ein Problem oder Paradoxon das sofort triggert. Kein Spoiler der Lösung.
+
+SLIDE 2 — DUAL-PURPOSE (CRITICAL: Second-Chance-Slide)
+Layout: frei wählbar, aber eigenständig verständlich OHNE Slide 1
+Instagram zeigt diese Slide als Preview wenn jemand Slide 1 überscrollt. Sie muss alleine stoppen UND einen eigenen Cliffhanger haben der zu Slide 3 zieht.
 
 SLIDES 3 bis (N-2) — STORYTELLING-ARC
-Je ein konkretes Insight oder Argument. Jede Slide MUSS mit einem Cliffhanger enden:
-• Entweder als Frage ("Aber warum passiert das eigentlich?")
-• Oder als Ellipse die Spannung aufbaut ("Das Problem:...", "Und dann...", "Was die wenigsten wissen...")
-NIEMALS eine Slide mit abgeschlossener Aussage beenden.
+Je ein konkretes Insight. Jede Slide MUSS mit offenem Ende schließen — Frage ODER Ellipse ("..."). Layouts variieren: Mix aus Editorial, Myth Bust, Q&A, Quote Card, etc.
 
 SLIDE (N-1) — AUFLÖSUNG/WENDEPUNKT
-Hier kommt die Antwort/Lösung. Der Payoff nach dem Arc.
+Layout: [REAL DEAL] oder [EDITORIAL]
+Der Payoff. Hier kommt die Lösung/Erkenntnis.
 
 LETZTE SLIDE — CTA
-Kurz, direkt, eine Handlung.
+Layout: [GRADIENT HOOK]
+Kurz, direkt, eine klare Handlung.
 
-Format: Jede Slide als "SLIDE [Nummer]: [Text]"
-Stil: Thomas' Direktheit — kurze Sätze, Du-Ansprache, keine Füllwörter, max 3-4 Zeilen pro Slide.`,
+────────────────────────────────────────
+FORMAT PRO SLIDE:
+────────────────────────────────────────
+SLIDE [Nummer] [LAYOUT-TAG]:
+[Headline/Haupttext]
+[Subtext/Body wenn vorhanden]
+[Struktur-Elemente wenn nötig, z.B. "MYTH:", "ANSWER:", "CHECKLIST:"]`,
 
   single_post: `Erstelle eine starke Instagram-Caption mit:
 - Erster Satz: Hook der zum Lesen zwingt (Frage, Provokation oder Zahl)
