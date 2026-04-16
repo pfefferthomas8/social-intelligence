@@ -202,12 +202,14 @@ export default function Dashboard() {
       const s2 = pushStep('Video-Transkripte prüfen…')
       doneStep(s2, `${transcriptDone} Reels transkribiert · ${transcriptPending} Videos ausstehend`)
 
-      // Schritt 3: Videos herunterladen wenn ausstehend (fire & forget)
+      // Schritt 3: Ausstehende Transkriptionen — werden beim nächsten Scrape automatisch verarbeitet
+      // (Instagram CDN URLs laufen ab → nur frisch gescrapete Videos können transkribiert werden)
       if (transcriptPending > 0) {
-        const s3 = pushStep(`${Math.min(transcriptPending, 10)} Videos für Transkription herunterladen…`)
-        apiFetch('download-videos', { method: 'POST', body: JSON.stringify({ limit: 10 }) })
-          .then(r => doneStep(s3, `${r.downloaded || 0} heruntergeladen · ${r.submitted_to_assemblyai || 0} an AssemblyAI übergeben`))
-          .catch(() => doneStep(s3, 'läuft im Hintergrund'))
+        const s3 = pushStep(`${transcriptPending} Videos ausstehend…`)
+        const transcribing = (await supabase.from('instagram_posts').select('*', { count: 'exact', head: true }).eq('transcript_status', 'transcribing')).count || 0
+        doneStep(s3, transcribing > 0
+          ? `${transcribing} werden gerade transkribiert · Rest beim nächsten Scrape`
+          : `Werden beim nächsten Competitor-Scrape automatisch transkribiert`)
       }
 
       // Schritt 4: Claude

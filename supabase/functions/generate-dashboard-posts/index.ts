@@ -40,14 +40,29 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS })
   }
 
-  // Alle Datenquellen parallel laden
-  const [thomasDna, ownTopPosts, competitorPosts, trendPosts, externalSignals, topRated] = await Promise.all([
+  // Rotation-Index: verhindert dass immer dieselben Posts genommen werden
+  // Jeder Aufruf nimmt eine andere "Scheibe" aus den verfügbaren Posts
+  const rotationSeed = Math.floor(Date.now() / 1000) // ändert sich jede Sekunde
+  const shuffle = <T>(arr: T[]): T[] => {
+    const a = [...arr]
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor((rotationSeed * (i + 1) * 2654435761) % (i + 1))
+      ;[a[i], a[j]] = [a[j], a[i]]
+    }
+    return a
+  }
+
+  // Alle Datenquellen parallel laden — mehr Posts laden, dann rotierend auswählen
+  const [thomasDna, ownTopPosts, competitorPostsAll, trendPosts, externalSignals, topRated, recentlyGenerated] = await Promise.all([
     dbQuery('thomas_dna?select=category,insight,confidence&order=confidence.desc&limit=20'),
-    dbQuery('instagram_posts?select=caption,transcript,visual_text,views_count,likes_count,post_type&source=eq.own&order=views_count.desc&limit=10'),
-    dbQuery('instagram_posts?select=caption,transcript,visual_text,views_count,post_type,content_pillar&source=eq.competitor&order=views_count.desc&limit=15'),
-    dbQuery('trend_posts?select=username,caption,visual_text,viral_score,claude_notes,content_pillar,dach_gap,recommendation,views_count&in=(recommendation,("sofort","beobachten"))&order=viral_score.desc&limit=12'),
-    dbQuery('external_signals?select=title,body,signal_type,source,relevance_score,claude_insight&relevance_score=gte.70&order=fetched_at.desc&limit=8'),
+    dbQuery('instagram_posts?select=caption,transcript,visual_text,views_count,likes_count,post_type&source=eq.own&order=views_count.desc&limit=15'),
+    // Mehr laden → rotierend auswählen → jedes Mal andere Posts sichtbar für Claude
+    dbQuery('instagram_posts?select=caption,transcript,visual_text,views_count,post_type,content_pillar&source=eq.competitor&views_count=gt.0&order=views_count.desc&limit=60'),
+    dbQuery('trend_posts?select=username,caption,visual_text,viral_score,claude_notes,content_pillar,dach_gap,recommendation,views_count&order=viral_score.desc&limit=20'),
+    dbQuery('external_signals?select=title,body,signal_type,source,relevance_score,claude_insight&relevance_score=gte.60&order=fetched_at.desc&limit=12'),
     dbQuery('generated_content?select=topic,content_type,content,content_pillar&user_rating=eq.1&order=created_at.desc&limit=5'),
+    // Zuletzt generierte Hooks/Themen — damit Claude sie VERMEIDET
+    dbQuery('generated_content?select=topic,hook&order=created_at.desc&limit=20'),
   ])
 
   // DNA nach Kategorie
@@ -58,18 +73,30 @@ Deno.serve(async (req: Request) => {
   }
   const dna = (cat: string) => (dnaByCategory[cat] || []).map((d: any) => `• ${d.insight}`).join('\n')
 
+  // Bereits generierte Themen/Hooks für Anti-Repetition
+  const usedTopics = recentlyGenerated
+    .map((r: any) => r.hook ? `"${r.hook}"` : `"${r.topic}"`)
+    .filter(Boolean)
+    .slice(0, 15)
+
+  // Competitor Posts: shufflen und 10 auswählen → jedes Mal andere Auswahl
+  const competitorPosts = shuffle(competitorPostsAll).slice(0, 10)
+
+  // Trend Posts: shufflen und 10 nehmen
+  const selectedTrends = shuffle(trendPosts).slice(0, 10)
+
   // Trend Posts aufbereiten
-  const trendBlock = trendPosts.length > 0
-    ? trendPosts.map((t: any, i: number) => {
+  const trendBlock = selectedTrends.length > 0
+    ? selectedTrends.map((t: any, i: number) => {
         const text = clean([t.caption, t.visual_text].filter(Boolean).join(' | '))
         const dach = t.dach_gap ? ' [DACH-LÜCKE]' : ''
         return `T${i+1}: @${t.username} | ${(t.views_count||0).toLocaleString()} Views | Score ${Math.round(t.viral_score||0)} | ${t.content_pillar?.toUpperCase()||''}${dach}\n"${text}"\n→ ${t.claude_notes || ''}`
       }).join('\n\n')
     : 'Noch keine Trend-Daten'
 
-  // Eigene Top Posts (Stilreferenz für Claude)
+  // Eigene Top Posts (Stilreferenz)
   const ownBlock = ownTopPosts.length > 0
-    ? ownTopPosts.slice(0, 5).map((p: any, i: number) => {
+    ? shuffle(ownTopPosts).slice(0, 5).map((p: any, i: number) => {
         const text = clean([p.caption, p.visual_text].filter(Boolean).join(' | '))
         return `E${i+1}: [${(p.views_count||0).toLocaleString()} Views] ${p.post_type||'post'}: "${text}"`
       }).join('\n\n')
@@ -77,7 +104,7 @@ Deno.serve(async (req: Request) => {
 
   // Competitor Posts aufbereiten
   const compBlock = competitorPosts.length > 0
-    ? competitorPosts.slice(0, 8).map((p: any, i: number) => {
+    ? competitorPosts.map((p: any, i: number) => {
         const text = clean([p.caption, p.transcript, p.visual_text].filter(Boolean).join(' | '))
         return `C${i+1}: [${(p.views_count||0).toLocaleString()} Views] ${p.post_type||'post'}: "${text}"`
       }).join('\n\n')
@@ -85,12 +112,12 @@ Deno.serve(async (req: Request) => {
 
   // Reddit/Community Signale
   const signalBlock = externalSignals.length > 0
-    ? externalSignals.map((s: any, i: number) => {
+    ? shuffle(externalSignals).slice(0, 6).map((s: any, i: number) => {
         return `S${i+1}: [${s.source?.toUpperCase()} · ${s.signal_type?.replace(/_/g,' ')} · ${s.relevance_score}%]\n"${clean(s.title)}"\n${s.body ? clean(s.body).substring(0,120) : ''}\n→ ${s.claude_insight || ''}`
       }).join('\n\n')
     : 'Keine Community-Signale'
 
-  // Top-rated Content
+  // Top-rated Content (Stilreferenz)
   const ratedBlock = topRated.length > 0
     ? topRated.map((r: any) => `[${r.content_type}] "${r.topic}": ${clean(r.content).substring(0,100)}…`).join('\n')
     : ''
@@ -111,17 +138,22 @@ ${dna('style_rule') || '• Kurze Sätze\n• Sachlich, faktenbasiert\n• Keine
 
 ${ratedBlock ? `THOMAS' POSITIV-BEWERTETER CONTENT (Stilreferenz):\n${ratedBlock}` : ''}`
 
-  const userPrompt = `Erstelle 6 Content-Ideen für Thomas basierend auf den Daten.
+  const avoidBlock = usedTopics.length > 0
+    ? `\n⚠️ DIESE THEMEN/HOOKS WURDEN BEREITS GENERIERT — NICHT WIEDERVERWENDEN:\n${usedTopics.join('\n')}\nWähle komplett andere Themen, Winkel und Hooks.`
+    : ''
+
+  const userPrompt = `Erstelle 6 Content-Ideen für Thomas basierend auf den heutigen Daten.
+${avoidBlock}
 
 VERFÜGBARE DATEN:
 
-[TREND-POSTS]
+[TREND-POSTS — Zufällige Auswahl aus aktuellem Pool]
 ${trendBlock}
 
-[COMPETITOR TOP POSTS]
+[COMPETITOR TOP POSTS — Rotierend ausgewählt]
 ${compBlock}
 
-${ownBlock ? `[THOMAS' EIGENE TOP POSTS — Caption + B-Roll-Text]\n${ownBlock}\n` : ''}
+${ownBlock ? `[THOMAS' EIGENE TOP POSTS]\n${ownBlock}\n` : ''}
 [COMMUNITY-SIGNALE]
 ${signalBlock}
 
@@ -131,8 +163,8 @@ Antworte NUR mit diesem JSON-Array — 6 Objekte, kein anderer Text, keine Markd
 format: video_script | b_roll | single_post | carousel
 pillar: haltung | transformation | mehrwert | verkauf
 score: 1-100
-sources: max 2 — T1-T12 (Trends), C1-C8 (Competitors), S1-S8 (Signale)
-Verteile über alle 4 Säulen. KEIN Text außerhalb des JSON-Arrays.`
+sources: max 2 — T1-T10 (Trends), C1-C10 (Competitors), S1-S6 (Signale)
+Verteile über alle 4 Säulen. Jede Idee braucht einen ANDEREN Winkel und Hook. KEIN Text außerhalb des JSON-Arrays.`
 
   // Claude-Call mit Retry bei Overloaded (max 3 Versuche, exponentielles Backoff)
   const claudeBody = JSON.stringify({
