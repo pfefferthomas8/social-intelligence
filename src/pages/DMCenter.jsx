@@ -600,6 +600,7 @@ export default function DMCenter() {
               NOTIZEN
             </div>
             <textarea
+              key={selectedConv.id}
               defaultValue={selectedConv.notes || ''}
               onBlur={async e => {
                 await supabase.from('dm_conversations').update({ notes: e.target.value }).eq('id', selectedConv.id)
