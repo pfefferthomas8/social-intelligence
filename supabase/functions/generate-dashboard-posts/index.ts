@@ -40,13 +40,11 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS })
   }
 
-  // Rotation-Index: verhindert dass immer dieselben Posts genommen werden
-  // Jeder Aufruf nimmt eine andere "Scheibe" aus den verfügbaren Posts
-  const rotationSeed = Math.floor(Date.now() / 1000) // ändert sich jede Sekunde
+  // Echter Zufall bei jedem Aufruf — Fisher-Yates mit Math.random()
   const shuffle = <T>(arr: T[]): T[] => {
     const a = [...arr]
     for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor((rotationSeed * (i + 1) * 2654435761) % (i + 1))
+      const j = Math.floor(Math.random() * (i + 1))
       ;[a[i], a[j]] = [a[j], a[i]]
     }
     return a
