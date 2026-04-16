@@ -39,13 +39,17 @@ export default function Dashboard() {
   const trendPollRef = useRef(null)
   const trendTimerRef = useRef(null)
 
-  // Content Intelligence — 6 datengetriebene Posts
-  const [dashPosts, setDashPosts] = useState([])
+  // Content Intelligence — 6 datengetriebene Posts (persistent via localStorage)
+  const [dashPosts, setDashPosts] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('si_dashPosts') || '[]') } catch { return [] }
+  })
   const [dashLoading, setDashLoading] = useState(false)
   const [dashCopied, setDashCopied] = useState({})
   const [dashExpanded, setDashExpanded] = useState({})
-  const [genSteps, setGenSteps] = useState([])
-  const genStepsRef = useRef([])
+  const [genSteps, setGenSteps] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('si_genSteps') || '[]') } catch { return [] }
+  })
+  const genStepsRef = useRef(genSteps)
 
   // Quick-Generator
   const [quickOpen, setQuickOpen] = useState(false)
@@ -153,15 +157,18 @@ export default function Dashboard() {
     const id = Date.now() + Math.random()
     genStepsRef.current = [...genStepsRef.current, { id, text, status: 'running', detail: '' }]
     setGenSteps([...genStepsRef.current])
+    localStorage.setItem('si_genSteps', JSON.stringify(genStepsRef.current))
     return id
   }
   function doneStep(id, detail = '') {
     genStepsRef.current = genStepsRef.current.map(s => s.id === id ? { ...s, status: 'done', detail } : s)
     setGenSteps([...genStepsRef.current])
+    localStorage.setItem('si_genSteps', JSON.stringify(genStepsRef.current))
   }
   function errorStep(id, detail = '') {
     genStepsRef.current = genStepsRef.current.map(s => s.id === id ? { ...s, status: 'error', detail } : s)
     setGenSteps([...genStepsRef.current])
+    localStorage.setItem('si_genSteps', JSON.stringify(genStepsRef.current))
   }
 
   async function generateDashboardPosts() {
@@ -169,6 +176,8 @@ export default function Dashboard() {
     setDashPosts([])
     setDashCopied({})
     setDashExpanded({})
+    localStorage.removeItem('si_dashPosts')
+    localStorage.removeItem('si_genSteps')
     genStepsRef.current = []
     setGenSteps([])
 
@@ -206,7 +215,9 @@ export default function Dashboard() {
       const data = await apiFetch('generate-dashboard-posts', { method: 'POST' })
       doneStep(s4, `6 Ideen generiert · ${new Date().toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })} Uhr`)
 
-      setDashPosts(data.posts || [])
+      const posts = data.posts || []
+      setDashPosts(posts)
+      localStorage.setItem('si_dashPosts', JSON.stringify(posts))
     } catch (e) {
       const lastStep = genStepsRef.current.findLast?.(s => s.status === 'running')
       if (lastStep) errorStep(lastStep.id, e.message)
