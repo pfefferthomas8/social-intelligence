@@ -106,12 +106,33 @@ Competitor-Muster: "10 hours before bed... 3 hours before bed... 2 hours before 
 WEITERE MUSTER falls sie besser passen: Paradox / Cheat-Code / Coaching-Kontext / Reframing
 
 ══════════════════════════════════════════════════
+SCHRITT 3 — LOGIK-CHECK: Jeden Hook vor Ausgabe prüfen
+══════════════════════════════════════════════════
+Stelle dir für jeden fertigen Hook diese 3 Fragen. Wenn eine mit JA beantwortet wird → Hook neu schreiben.
+
+FRAGE 1 — IST DAS OFFENSICHTLICH?
+"Würde irgendjemand der Zielgruppe diesen Satz lesen und denken: Ja, logisch, und weiter?"
+→ Beispiel VERBOTEN: "Du isst im Defizit und hast trotzdem Hunger." — Natürlich hat man Hunger im Defizit. Das IST das Defizit. Keine Überraschung. Kein Sog.
+→ Ein guter Hook sagt etwas, das der Zuschauer NICHT erwartet hat, NICHT kennt, oder NICHT für möglich hielt.
+
+FRAGE 2 — FEHLT DIE SPANNUNG?
+"Würde der Zuschauer aufhören zu scrollen weil er die Antwort DRINGEND wissen will?"
+→ Ein Hook der eine bekannte Tatsache bestätigt erzeugt keine Spannung.
+→ Ein Hook muss eine Lücke öffnen: "Das weiß ich noch nicht" oder "Das kann nicht stimmen — ich will mehr wissen."
+
+FRAGE 3 — IST "DAS IST DER GRUND" ODER "DAS IST DAS PROBLEM" DAS EINZIGE VERSPRECHEN?
+→ Diese Formulierungen sind Platzhalter ohne Inhalt. Sie sagen nichts über den Mehrwert.
+→ Der Hook muss selbst schon eine überraschende Information oder ein Paradoxon enthalten.
+
+══════════════════════════════════════════════════
 ABSOLUT VERBOTEN:
 ══════════════════════════════════════════════════
+✗ KEINE Hooks die logisch selbstverständlich sind. Teste jeden Hook: "Würde jemand denken: Ja, natürlich, so what?"
 ✗ KEINE erfundenen persönlichen Fehler von Thomas. Er ist ein erfolgreicher, fitter Coach.
 ✗ KEINE grammatikalisch mehrdeutigen Sätze. Jeden Hook laut vorlesen vor der Ausgabe.
 ✗ KEIN impliziertes Verb das sich auf ein folgendes Nomen beziehen könnte.
 ✗ KEINE generisch kurzen 3-5 Wort Hooks. Thomas' Stärke ist Spezifität und Substanz.
+✗ KEIN "Das ist der Grund." oder "Das ist das Problem." ohne konkrete überraschende Aussage davor.
 
 ══════════════════════════════════════════════════
 PFLICHT-REGELN:
