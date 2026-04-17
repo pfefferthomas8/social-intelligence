@@ -124,9 +124,9 @@ Schwach: "Doppelt so schnell Ergebnisse" (keine konkrete Zahl, kein Beweis)
 ═══════════════════════════════════
 PFLICHT-REGELN:
 ═══════════════════════════════════
-• HOOK: max 6-7 Wörter. Kurz. Keine Erklärung.
+• HOOK: 5–18 Wörter. Thomas schreibt KEINE generisch kurzen 3-Wort-Hooks. Seine Stärke ist Spezifität. Siehe [10] für seinen echten Stil.
 • GRAMMATIK: Jeden Hook laut vorlesen — klingt er seltsam oder doppeldeutig? Neu schreiben.
-• SUBHEADLINE: 3-5 Wörter die den Sog verstärken OHNE die Antwort zu geben. Oder "–" wenn nicht nötig.
+• SUBHEADLINE: optional, 3–8 Wörter, verstärkt den Sog ohne die Antwort zu geben. Oder "–".
 • CAPTION: Erster Satz = Hook der nicht loslässt → 2-3 Absätze mit echtem Inhalt → klarer CTA. Ca. 150 Wörter.
 • Jede der 4 B-Rolls nutzt ein ANDERES Schema (A, B, C, D oder E).
 
@@ -153,9 +153,9 @@ Deno.serve(async (req: Request) => {
   }
 
   const [ownPosts, topCompPosts, customPosts, thomasDna, trendPosts, topRated, externalSignals, topRatedBroll] = await Promise.all([
-    dbQuery('instagram_posts?select=caption,transcript,post_type,likes_count,views_count&source=eq.own&caption=not.is.null&order=views_count.desc&limit=30'),
-    dbQuery('instagram_posts?select=caption,transcript,post_type,likes_count,views_count&source=eq.competitor&order=views_count.desc&limit=20'),
-    dbQuery('instagram_posts?select=caption,transcript,post_type&source=eq.custom&limit=10'),
+    dbQuery('instagram_posts?select=caption,transcript,visual_text,post_type,likes_count,views_count&source=eq.own&order=views_count.desc&limit=30'),
+    dbQuery('instagram_posts?select=caption,transcript,visual_text,post_type,likes_count,views_count&source=eq.competitor&order=views_count.desc&limit=20'),
+    dbQuery('instagram_posts?select=caption,transcript,visual_text,post_type&source=eq.custom&limit=10'),
     dbQuery('thomas_dna?select=category,insight,confidence&order=confidence.desc&limit=35'),
     dbQuery('trend_posts?select=caption,visual_text,username,viral_score,recommendation&order=viral_score.desc&limit=20'),
     dbQuery('generated_content?select=topic,content_type,content,content_pillar&user_rating=eq.1&order=created_at.desc&limit=8'),
@@ -286,24 +286,32 @@ Deno.serve(async (req: Request) => {
       })
       .filter(Boolean)
 
+    // Thomas' eigene visual_text Hooks — das ist sein tatsächlicher Stil
+    const ownVisualHooks = ownPosts
+      .filter((p: any) => p.visual_text && p.visual_text.trim().length > 10)
+      .map((p: any) => `[${(p.views_count || 0).toLocaleString()} Views] "${p.visual_text.trim().replace(/\n/g, ' ')}"`)
+      .slice(0, 10)
+
     const parts: string[] = []
 
-    if (competitorHooks.length > 0) {
-      parts.push(`COMPETITOR HOOKS AUS DER DATENBANK — nach Views sortiert:
-Diese Posts haben tatsächlich Hunderttausende Views. Der erste Satz IST der B-Roll Hook.
-Analysiere: Warum stoppt er? Kurz? Widerspruch? Direkt? Dann exakt dieses Muster auf "${topic}" anwenden.
+    // WICHTIGSTE QUELLE ZUERST: Thomas' echte Hooks aus seinen eigenen Reels
+    if (ownVisualHooks.length > 0) {
+      parts.push(`THOMAS' EIGENE REEL-HOOKS — DAS IST SEIN ECHTER STIL (nach Views sortiert):
+Das sind die tatsächlichen Text-Overlays auf Thomas' eigenen Videos. Sein Stil ist erkennbar:
+spezifisch, substanzreich, klare Aussage mit Mehrwert — NICHT generisch kurz.
+Schreibe neue Hooks die sich genauso anfühlen wie diese hier.
 
+${ownVisualHooks.join('\n')}`)
+    }
+
+    if (competitorHooks.length > 0) {
+      parts.push(`COMPETITOR HOOKS (nach Views) — Muster erkennen, auf Deutsch adaptieren:
 ${competitorHooks.join('\n\n')}`)
     }
 
     if (cleanVisualHooks.length > 0) {
-      parts.push(`TEXT-OVERLAYS AUS VIRALEN REELS (Trend Posts):
+      parts.push(`WEITERE TEXT-OVERLAYS AUS VIRALEN REELS:
 ${cleanVisualHooks.join('\n')}`)
-    }
-
-    if (ownHooks.length > 0) {
-      parts.push(`THOMAS' EIGENE TOP-HOOKS:
-${ownHooks.join('\n')}`)
     }
 
     if (ratedHooks.length > 0) {
@@ -311,12 +319,12 @@ ${ownHooks.join('\n')}`)
 ${ratedHooks.join('\n')}`)
     }
 
-    parts.push(`SCHEMA → KONKRETE HOOK-VORLAGE:
-[A] THESE      → "Bringing your own food isn't weird." (561k Views) — auf Deutsch: kurze provokante Aussage
-[B] PARADOX    → "Didn't feel like it, but did it anyway." — zwei gegensätzliche Wahrheiten
-[C] COACH-INSIGHT → "What I tell every man over 35." — nie erfundene Fehler, nur echte Erkenntnisse
-[D] DIREKTANGRIFF → "Listen to this if you have 30 seconds." — direkt an "dich", nie "man"
-[E] ZAHL       → "14lb in his first month." — konkrete Zahl aus echten Daten`)
+    parts.push(`SCHEMA → KONKRETE HOOK-VORLAGE (Beispiele aus der DB):
+[A] THESE      → "Bringing your own food isn't weird." (561k) | Thomas: "Würdest du 20 IQ gegen +20 kg Muskelmasse tauschen?"
+[B] PARADOX    → "Didn't feel like it, but did it anyway." | Thomas: spezifische Aussage mit unerwartetem Kontrast
+[C] COACH-INSIGHT → Thomas: "Das sage ich meinen Coaching Klienten, wenn sie trotz Training 6 Wochen das gleiche Gewicht sehen..."
+[D] DIREKTANGRIFF → "Listen to this if you have 30 seconds." | Thomas: direkte Ansprache mit "du"
+[E] ZAHL       → Thomas: "10 ungewöhnliche Zeichen, dass dein Körper Fett verbrennt" (23k Views)`)
 
     brollSection = `
 ═══════════════════════════════════════════════════════
@@ -369,8 +377,9 @@ ${dna('growth_opportunity') || '• Kontroverse Eröffnungen mit Nuance in Satz 
 ═══════════════════════════════════════════════════════
 ${ownPosts.length > 0
   ? ownPosts.slice(0, 8).map((p: any) => {
+      const vt = p.visual_text ? `HOOK (Video-Text): "${p.visual_text.trim().replace(/\n/g, ' ')}"` : ''
       const text = clean([p.caption, p.transcript].filter(Boolean).join(' | '))
-      return `[${(p.views_count || 0).toLocaleString()} Views] ${text}`
+      return `[${(p.views_count || 0).toLocaleString()} Views]\n${vt ? vt + '\n' : ''}Caption: ${text}`
     }).join('\n\n')
   : 'Noch keine Posts verfügbar — schreibe direkt, faktenbasiert, kurze Sätze.'}
 
