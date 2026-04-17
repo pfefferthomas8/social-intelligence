@@ -68,23 +68,65 @@ SLIDE [Nummer]:
 - CTA am Ende: einfach, direkt, eine Handlung
 - Max 300 Wörter. Kein Hashtag-Spam. Authentisch.`,
 
-  b_roll: `Erstelle 4 verschiedene B-Roll Ideen für dasselbe Thema.
+  b_roll: `Erstelle 4 B-Roll Text-Overlays — jede mit einem anderen Hook-Schema.
 
-Ein B-Roll ist ein 7-Sekunden-Video das eine Person bei einer Tätigkeit zeigt (z.B. im Gym, beim Kochen, beim Aufwachen). Darauf liegt ein starkes Text-Overlay das die Aufmerksamkeit stoppt. Die Infos kommen in der Caption.
+B-Rolls: zufälliges Footage von mir (im Gym, gehen, trainieren). Der visuelle Inhalt ist EGAL.
+Allein der Text-Overlay muss den Scroll stoppen und erzwingen, dass die Caption gelesen wird.
+KEINE Szenenbeschreibung — die wähle ich selbst.
 
-Für jede B-Roll Idee, gib EXAKT dieses Format aus:
+═══════════════════════════════════
+5 HOOK-SCHEMATA — je eine pro B-Roll:
+═══════════════════════════════════
+
+[A] DIE THESE
+Provokante Aussage, die 90% der Zuschauer für falsch halten werden.
+Kurz. Brutal direkt. Keine Erklärung.
+Stark: "Dein Training bringt dir nichts."
+Stark: "Weniger Protein. Mehr Muskeln."
+Schwach: "So trainierst du besser" (zu harmlos, kein Widerspruch)
+
+[B] DAS PARADOX
+Zwei Dinge die sich zu widersprechen scheinen — aber beide stimmen.
+Erzeugt sofort Verwirrung → zwingt zum Stoppen.
+Stark: "Mehr essen. Trotzdem abnehmen."
+Stark: "Weniger trainieren. Schneller Ergebnisse."
+Schwach: "Trainiere klüger, nicht härter" (Klischee, kein echter Widerspruch)
+
+[C] DAS GESTÄNDNIS
+Ich sage etwas Persönliches das Schmerz zeigt. Schafft sofort Nähe.
+Muss sich anfühlen als ob ich etwas zugebe, das mir unangenehm ist.
+Stark: "Ich hab 2 Jahre meinen Körper sabotiert."
+Stark: "Mein größter Fehler als Coach."
+Schwach: "Was ich gelernt habe" (zu vage, kein emotionaler Stich)
+
+[D] DER DIREKTANGRIFF
+Direkt an den Zuschauer — trifft einen Nerv. Kein "man". Immer "du".
+Stark: "Du machst Cardio. Das ist das Problem."
+Stark: "Du trainierst hart. Du schläfst falsch."
+Schwach: "Viele machen diesen Fehler" (zu distanziert, kein Treffer)
+
+[E] DIE ZAHL
+Überraschende, konkrete Zahl die sofort Glaubwürdigkeit und Neugier erzeugt.
+Keine runden Zahlen (10, 100%) — die wirken gelogen.
+Stark: "37% mehr Kraft. Kein einziges Extra-Set."
+Stark: "9kg runter. Kein Cardio."
+Schwach: "Doppelt so schnell Ergebnisse" (keine konkrete Zahl, kein Beweis)
+
+═══════════════════════════════════
+PFLICHT-REGELN:
+═══════════════════════════════════
+• HOOK: max 6-7 Wörter. Kurz. Keine Erklärung.
+• SUBHEADLINE: 3-5 Wörter die den Sog verstärken OHNE die Antwort zu geben. Oder "–" wenn nicht nötig.
+• CAPTION: Erster Satz = Hook der nicht loslässt → 2-3 Absätze mit echtem Inhalt → klarer CTA. Ca. 150 Wörter.
+• Jede der 4 B-Rolls nutzt ein ANDERES Schema (A, B, C, D oder E).
+
+Gib EXAKT dieses Format aus:
 
 B-ROLL [Nummer]:
-SZENE: [Was ist zu sehen? 7 Sekunden. Konkret und visuell. Z.B. "Person zieht sich beim Aufwachen hoch und schaut in die Kamera"]
-HOOK: [Haupttext-Overlay — max 6-7 Wörter, stoppt den Scroll, provoziert oder überrascht]
-SUBHEADLINE: [Optionaler zweiter Text darunter — ergänzt den Hook, max 5 Wörter]
-CAPTION: [Starke Caption für den Post: Hook-Satz der zum Lesen zwingt, dann 2-3 Absätze mit dem Mehrwert/Detail, dann ein klarer CTA. Ca. 150-200 Wörter.]
-
-Regeln:
-- HOOK muss ohne Kontext sofort verstanden werden und Neugier wecken
-- SZENE muss realistisch filmbar sein — keine aufwändige Produktion
-- CAPTION holt den eigentlichen Inhalt rein — Hook zieht die Aufmerksamkeit, Caption liefert den Wert
-- Variiere die 4 Ideen: unterschiedliche Hooks (Frage, These, Zahl, Provokation) und Szenen`
+SCHEMA: [A/B/C/D/E]
+HOOK: [Text-Overlay, max 7 Wörter]
+SUBHEADLINE: [3-5 Wörter — oder –]
+CAPTION: [Volle Caption]`
 }
 
 Deno.serve(async (req: Request) => {

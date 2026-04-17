@@ -10,6 +10,15 @@ const CONTENT_TYPES = [
   { key: 'b_roll', label: 'B-Roll', icon: '⚡', desc: 'Hook + Caption' },
 ]
 
+// Schema-Labels und Farben
+const SCHEMA_CONFIG = {
+  A: { label: 'These',         color: '#ee4f00' },
+  B: { label: 'Paradox',       color: '#3b82f6' },
+  C: { label: 'Geständnis',    color: '#a855f7' },
+  D: { label: 'Direktangriff', color: '#ef4444' },
+  E: { label: 'Zahl',          color: '#22c55e' },
+}
+
 // Parsed eine B-Roll Idee aus dem Claude-Output
 function parseBRolls(text) {
   const blocks = text.split(/B-ROLL\s+\d+:/i).filter(b => b.trim())
@@ -19,16 +28,17 @@ function parseBRolls(text) {
       const m = block.match(regex)
       return m ? m[1].trim() : ''
     }
+    const subh = get('SUBHEADLINE')
     return {
-      szene: get('SZENE'),
+      schema: get('SCHEMA').toUpperCase().replace(/[^A-E]/g, ''),
       hook: get('HOOK'),
-      subheadline: get('SUBHEADLINE'),
+      subheadline: subh === '–' || subh === '-' ? '' : subh,
       caption: get('CAPTION'),
     }
   }).filter(b => b.hook)
 }
 
-function BRollCard({ roll, index, fullContent }) {
+function BRollCard({ roll, index }) {
   const [captionOpen, setCaptionOpen] = useState(false)
   const [copiedHook, setCopiedHook] = useState(false)
   const [copiedCaption, setCopiedCaption] = useState(false)
@@ -39,6 +49,8 @@ function BRollCard({ roll, index, fullContent }) {
     setTimeout(() => setter(false), 2000)
   }
 
+  const schema = SCHEMA_CONFIG[roll.schema] || null
+
   return (
     <div style={{
       background: 'var(--bg-card)',
@@ -47,95 +59,101 @@ function BRollCard({ roll, index, fullContent }) {
       overflow: 'hidden',
       marginBottom: 14,
     }}>
-      {/* Header mit Nummer + Szene */}
-      <div style={{
-        padding: '12px 16px',
-        background: 'rgba(238,79,0,0.06)',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex', alignItems: 'flex-start', gap: 10,
-      }}>
-        <span style={{
-          fontSize: 10, fontWeight: 800, letterSpacing: '0.1em',
-          color: '#ee4f00', background: 'rgba(238,79,0,0.12)',
-          padding: '2px 8px', borderRadius: 100, flexShrink: 0, marginTop: 1,
-        }}>
-          B-ROLL {index + 1}
-        </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
-            <span style={{ color: 'rgba(255,255,255,0.35)', marginRight: 4 }}>SZENE</span>
-            {roll.szene}
-          </div>
-        </div>
-      </div>
-
       {/* Hook Overlay Preview */}
-      <div style={{ padding: '18px 16px 14px' }}>
+      <div style={{ padding: '16px 16px 14px' }}>
         <div style={{
-          background: '#000',
+          background: '#050505',
           borderRadius: 10,
-          padding: '28px 20px',
+          padding: '32px 24px',
           textAlign: 'center',
           position: 'relative',
           marginBottom: 12,
-          minHeight: 90,
+          minHeight: 110,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          gap: 6,
+          gap: 8,
+          border: '1px solid rgba(255,255,255,0.06)',
         }}>
-          {/* Simuliertes Video-Frame */}
+          {/* Nummer + Schema badges */}
           <div style={{
-            position: 'absolute', inset: 0, borderRadius: 10,
-            background: 'linear-gradient(135deg, #111 0%, #0a0a0a 100%)',
-            opacity: 0.9,
-          }} />
+            position: 'absolute', top: 10, left: 12,
+            display: 'flex', gap: 5, alignItems: 'center',
+          }}>
+            <span style={{
+              fontSize: 9, fontWeight: 800, letterSpacing: '0.1em',
+              color: 'rgba(255,255,255,0.4)',
+              fontFamily: 'var(--font-mono)',
+            }}>
+              #{index + 1}
+            </span>
+            {schema && (
+              <span style={{
+                fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
+                color: schema.color,
+                background: `${schema.color}18`,
+                border: `1px solid ${schema.color}35`,
+                padding: '1px 6px', borderRadius: 100,
+                textTransform: 'uppercase',
+              }}>
+                {schema.label}
+              </span>
+            )}
+          </div>
+
+          {/* 7s Badge */}
+          <div style={{
+            position: 'absolute', top: 10, right: 12,
+            fontSize: 9, color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--font-mono)',
+          }}>
+            7s
+          </div>
+
+          {/* Hook Text */}
           <p style={{
-            fontSize: 19, fontWeight: 900, color: '#fff',
-            margin: 0, lineHeight: 1.2, position: 'relative',
-            textShadow: '0 2px 8px rgba(0,0,0,0.8)',
-            letterSpacing: '-0.01em',
+            fontSize: 22, fontWeight: 900, color: '#fff',
+            margin: 0, lineHeight: 1.15,
+            textShadow: '0 2px 12px rgba(0,0,0,0.9)',
+            letterSpacing: '-0.02em',
+            maxWidth: '85%',
           }}>
             {roll.hook}
           </p>
           {roll.subheadline && (
             <p style={{
-              fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.75)',
-              margin: 0, position: 'relative',
+              fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.6)',
+              margin: 0,
               textShadow: '0 1px 4px rgba(0,0,0,0.8)',
+              letterSpacing: '0.01em',
             }}>
               {roll.subheadline}
             </p>
           )}
-          {/* 7s Badge */}
-          <div style={{
-            position: 'absolute', top: 8, right: 10,
-            fontSize: 9, color: 'rgba(255,255,255,0.3)', fontFamily: 'DM Mono, monospace',
-          }}>
-            7s
-          </div>
         </div>
 
-        {/* Hook kopieren */}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+        {/* Buttons */}
+        <div style={{ display: 'flex', gap: 6 }}>
           <button
             onClick={() => copyText(roll.subheadline ? `${roll.hook}\n${roll.subheadline}` : roll.hook, setCopiedHook)}
             className="btn btn-sm"
             style={{ flex: 1, justifyContent: 'center' }}
           >
-            {copiedHook ? <span style={{ color: '#22c55e' }}>✓ Kopiert</span> : '⚡ Hook kopieren'}
+            {copiedHook
+              ? <span style={{ color: '#22c55e' }}>✓ Kopiert</span>
+              : <span>Hook kopieren</span>}
           </button>
           <button
             onClick={() => setCaptionOpen(o => !o)}
             className="btn btn-sm"
             style={{ flex: 1, justifyContent: 'center' }}
           >
-            {captionOpen ? '▲ Caption' : '▼ Caption anzeigen'}
+            {captionOpen ? '▲ Caption' : '▼ Caption'}
           </button>
         </div>
 
         {/* Caption aufklappbar */}
         {captionOpen && (
           <div style={{
-            background: 'rgba(255,255,255,0.03)',
+            marginTop: 10,
+            background: 'rgba(255,255,255,0.025)',
             border: '1px solid rgba(255,255,255,0.07)',
             borderRadius: 8, padding: '14px',
           }}>
@@ -145,7 +163,7 @@ function BRollCard({ roll, index, fullContent }) {
                 {copiedCaption ? <span style={{ color: '#22c55e' }}>✓ Kopiert</span> : 'Kopieren'}
               </button>
             </div>
-            <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.75, margin: 0, whiteSpace: 'pre-wrap' }}>
+            <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.8, margin: 0, whiteSpace: 'pre-wrap' }}>
               {roll.caption}
             </p>
           </div>
@@ -418,7 +436,7 @@ export default function ContentGenerator() {
               {contentType === 'b_roll' ? (
                 <div>
                   {parseBRolls(result.content).map((roll, i) => (
-                    <BRollCard key={i} roll={roll} index={i} fullContent={result.content} />
+                    <BRollCard key={i} roll={roll} index={i} />
                   ))}
                 </div>
               ) : (
