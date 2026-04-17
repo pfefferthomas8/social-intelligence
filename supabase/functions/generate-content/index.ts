@@ -212,79 +212,117 @@ Deno.serve(async (req: Request) => {
   // ── B-Roll spezifische Daten aufbereiten ─────────────────────────────────
   let brollSection = ''
   if (content_type === 'b_roll') {
-    // 1. Saubere Text-Overlays aus viralen Reels (kein Profilname-Müll, keine langen Listen)
+
+    // Helper: ersten Satz extrahieren (bis . ! ? — max 120 Zeichen)
+    const firstLine = (text: string) =>
+      text.replace(/\n/g, ' ').match(/^.{10,120}?[.!?…]/)?.[0]?.trim()
+      || text.replace(/\n/g, ' ').substring(0, 90).trim()
+
+    // 1. Erste Sätze der Top-Competitor-Posts — das SIND B-Roll Hooks
+    // Deduplizieren (gleiche Caption nur einmal), nur sinnvolle Hooks (kein Workout-Listing)
+    const seenCaptions = new Set<string>()
+    const competitorHooks = topCompPosts
+      .filter((p: any) => {
+        const text = (p.caption || p.transcript || '').trim()
+        if (!text || text.length < 10) return false
+        const key = text.substring(0, 50)
+        if (seenCaptions.has(key)) return false
+        seenCaptions.add(key)
+        return true
+      })
+      .map((p: any) => {
+        const text = (p.caption || p.transcript || '').replace(/\n/g, ' ').trim()
+        const hook = firstLine(text)
+        if (!hook || hook.length < 8) return null
+        // Transcript-Opener als gesprochener Hook (falls verfügbar und anders als Caption)
+        const trans = (p.transcript || '').replace(/\n/g, ' ').trim()
+        const transHook = trans && trans.substring(0, 40) !== text.substring(0, 40) ? firstLine(trans) : null
+        const lines = [`[${(p.views_count || 0).toLocaleString()} Views] CAPTION-HOOK: "${hook}"`]
+        if (transHook && transHook.length > 8) lines.push(`  GESPROCHEN: "${transHook}"`)
+        return lines.join('\n')
+      })
+      .filter(Boolean)
+      .slice(0, 10)
+
+    // 2. Saubere Text-Overlays aus viralen Reels (Trend Posts)
     const cleanVisualHooks = trendPosts
       .filter((t: any) => {
         const vt = (t.visual_text || '').trim()
-        return vt.length >= 8 && vt.length <= 120
+        return vt.length >= 8 && vt.length <= 130
           && !vt.includes('@')
-          && !/^\d+[A-Z]\./.test(vt)          // keine Übungslisten
+          && !/^\d+[A-Z.]/.test(vt)   // keine Übungslisten
           && vt.split('\n').length <= 4
-          && /[A-ZÄÖÜ]/.test(vt[0] || '')    // beginnt mit Großbuchstabe
       })
       .map((t: any) => {
         const lines = (t.visual_text as string).trim().split('\n')
-          .map((l: string) => l.trim()).filter((l: string) => l)
-        const hookText = lines.join(' / ')
-        return `[Viral Score ${Math.round(t.viral_score || 0)} · @${t.username}] "${hookText}"`
-      })
-      .slice(0, 8)
-
-    // 2. Thomas' eigene Caption-Einstiege (erster Satz) aus Top Posts
-    const ownHooks = ownPosts
-      .filter((p: any) => (p.views_count || 0) > 0)
-      .slice(0, 12)
-      .map((p: any) => {
-        const text = (p.caption || p.transcript || '').trim()
-        // Erster Satz bis . ! ? — max 100 Zeichen
-        const firstSentence = text.replace(/\n/g, ' ').match(/^.+?[.!?]/)?.[0]?.trim()
-          || text.substring(0, 90).trim()
-        return (firstSentence?.length || 0) >= 10 && (firstSentence?.length || 0) <= 110
-          ? `[${(p.views_count || 0).toLocaleString()} Views] "${firstSentence}"`
+          .map((l: string) => l.trim()).filter((l: string) => l && !l.includes('@'))
+        const hookText = lines.slice(0, 2).join(' / ')
+        return hookText.length >= 8
+          ? `[Viral Score ${Math.round(t.viral_score || 0)}] "${hookText}"`
           : null
       })
       .filter(Boolean)
       .slice(0, 6)
 
-    // 3. Positiv bewertete B-Roll Hooks aus der Vergangenheit
+    // 3. Thomas' eigene Caption-Einstiege aus Top Posts
+    const ownHooks = ownPosts
+      .filter((p: any) => (p.views_count || 0) > 0)
+      .slice(0, 12)
+      .map((p: any) => {
+        const text = (p.caption || p.transcript || '').trim()
+        const hook = firstLine(text)
+        return hook && hook.length >= 10
+          ? `[${(p.views_count || 0).toLocaleString()} Views] "${hook}"`
+          : null
+      })
+      .filter(Boolean)
+      .slice(0, 6)
+
+    // 4. Positiv bewertete B-Roll Hooks
     const ratedHooks = (topRatedBroll as any[])
       .map((r: any) => {
-        const hookMatch = r.content?.match(/HOOK:\s*(.+?)(?:\n|$)/i)
-        return hookMatch
-          ? `[Thomas bewertet: gut] "${hookMatch[1].trim()}" — Thema: ${r.topic}`
-          : null
+        const m = r.content?.match(/HOOK:\s*(.+?)(?:\n|$)/i)
+        return m ? `[Thomas: gut bewertet] "${m[1].trim()}" (Thema: ${r.topic})` : null
       })
       .filter(Boolean)
 
     const parts: string[] = []
+
+    if (competitorHooks.length > 0) {
+      parts.push(`COMPETITOR HOOKS AUS DER DATENBANK — nach Views sortiert:
+Diese Posts haben tatsächlich Hunderttausende Views. Der erste Satz IST der B-Roll Hook.
+Analysiere: Warum stoppt er? Kurz? Widerspruch? Direkt? Dann exakt dieses Muster auf "${topic}" anwenden.
+
+${competitorHooks.join('\n\n')}`)
+    }
+
     if (cleanVisualHooks.length > 0) {
-      parts.push(`BEWIESENE TEXT-OVERLAYS AUS VIRALEN REELS (sortiert nach Viral Score):
-Analysiere das PRINZIP — nicht das Thema. Wie sind sie formuliert? Was macht sie stoppend?
+      parts.push(`TEXT-OVERLAYS AUS VIRALEN REELS (Trend Posts):
 ${cleanVisualHooks.join('\n')}`)
     }
+
     if (ownHooks.length > 0) {
-      parts.push(`THOMAS' EIGENE HOOK-EINSTIEGE (sortiert nach Views):
-So öffnet Thomas seine besten Posts — das ist sein bewiesener Stil und seine Stimme:
+      parts.push(`THOMAS' EIGENE TOP-HOOKS:
 ${ownHooks.join('\n')}`)
     }
+
     if (ratedHooks.length > 0) {
-      parts.push(`THOMAS HAT DIESE B-ROLL HOOKS ALS GUT BEWERTET — diesen Stil fortführen:
+      parts.push(`THOMAS HAT DIESE B-ROLL HOOKS GUT BEWERTET:
 ${ratedHooks.join('\n')}`)
     }
-    parts.push(`SCHEMA → DNA-MAPPING (jedes Schema leitet sich aus Thomas' realen Performance-Daten ab):
-[A] THESE      → "kontroverse Eröffnungen" [growth_opportunity] + polarisierende Statements [competitor_gap]
-[B] PARADOX    → Thomas' stärkstes Muster [hook_pattern]: "Du-Ansprache + Paradoxon/Problem"
-[C] GESTÄNDNIS → "Personal-Brand-Momente / echte Fehler zeigen" [competitor_gap] — Nähe durch Verletzlichkeit
-[D] DIREKTANGRIFF → "Du" direkt ansprechen [hook_pattern] — nie "man" oder "viele", immer "du"
-[E] ZAHL       → "wissenschaftliche Begründungen + konkrete Zahlen" [audience_pattern + style_rule]`)
 
-    if (parts.length > 0) {
-      brollSection = `
+    parts.push(`SCHEMA → KONKRETE HOOK-VORLAGE:
+[A] THESE      → "Bringing your own food isn't weird." (561k Views) — auf Deutsch: kurze provokante Aussage
+[B] PARADOX    → "Didn't feel like it, but did it anyway." — zwei gegensätzliche Wahrheiten
+[C] COACH-INSIGHT → "What I tell every man over 35." — nie erfundene Fehler, nur echte Erkenntnisse
+[D] DIREKTANGRIFF → "Listen to this if you have 30 seconds." — direkt an "dich", nie "man"
+[E] ZAHL       → "14lb in his first month." — konkrete Zahl aus echten Daten`)
+
+    brollSection = `
 ═══════════════════════════════════════════════════════
-[10] B-ROLL HOOK-REFERENZEN — DIREKT AUS DER DATENBANK
+[10] B-ROLL HOOKS — ECHTE VORBILDER AUS DER DATENBANK
 ═══════════════════════════════════════════════════════
 ${parts.join('\n\n')}`
-    }
   }
 
   // ── SYSTEM PROMPT ───────────────────────────────────────────────────────────
