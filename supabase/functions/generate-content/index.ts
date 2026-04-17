@@ -74,6 +74,14 @@ B-Rolls: zufälliges Footage von mir (im Gym, gehen, trainieren). Der visuelle I
 Allein der Text-Overlay muss den Scroll stoppen und erzwingen, dass die Caption gelesen wird.
 KEINE Szenenbeschreibung — die wähle ich selbst.
 
+═══════════════════════════════════════════
+ABSOLUT VERBOTEN — WIRD VOR AUSGABE GEPRÜFT:
+═══════════════════════════════════════════
+✗ KEINE erfundenen persönlichen Fakten über Thomas. "Ich hab X Jahre Y falsch gemacht" ist VERBOTEN wenn es nicht aus den Daten belegt ist. Thomas ist ein erfolgreicher, fitter Coach — Hooks die das Gegenteil implizieren zerstören seine Glaubwürdigkeit.
+✗ KEINE Satzfragmente die grammatikalisch mehrdeutig sind. "Ich hab falsch gegessen. Und meinen Klienten auch." klingt als würde er Klienten essen. Jeder Satz muss für sich allein stehen und eindeutig verständlich sein.
+✗ KEINE Verben die sich ungewollt auf das folgende Substantiv beziehen. Vor jedem Hook laut vorlesen und fragen: Kann dieser Satz falsch verstanden werden?
+✗ KEIN Schema C (Geständnis) mit erfundenen Niederlagen — nur Aussagen die zu einem erfolgreichen Coach passen.
+
 ═══════════════════════════════════
 5 HOOK-SCHEMATA — je eine pro B-Roll:
 ═══════════════════════════════════
@@ -93,11 +101,12 @@ Stark: "Weniger trainieren. Schneller Ergebnisse."
 Schwach: "Trainiere klüger, nicht härter" (Klischee, kein echter Widerspruch)
 
 [C] DAS GESTÄNDNIS
-Ich sage etwas Persönliches das Schmerz zeigt. Schafft sofort Nähe.
-Muss sich anfühlen als ob ich etwas zugebe, das mir unangenehm ist.
-Stark: "Ich hab 2 Jahre meinen Körper sabotiert."
-Stark: "Mein größter Fehler als Coach."
-Schwach: "Was ich gelernt habe" (zu vage, kein emotionaler Stich)
+Eine Einsicht oder Erkenntnis die Thomas als Coach gewonnen hat — kein erfundener persönlicher Fehler.
+Darf keine Aussagen enthalten die seine Kompetenz oder seinen Körper infrage stellen.
+Stark: "Der häufigste Fehler meiner Klienten."
+Stark: "Was ich Männern über 35 immer sage."
+Schwach: "Ich hab X Jahre falsch Y gemacht." (erfundene Niederlage — VERBOTEN)
+GRAMMATIK-PFLICHT: Wenn zwei Sätze, muss der zweite Satz grammatikalisch vollständig sein — kein impliziertes Verb aus Satz 1.
 
 [D] DER DIREKTANGRIFF
 Direkt an den Zuschauer — trifft einen Nerv. Kein "man". Immer "du".
@@ -116,6 +125,7 @@ Schwach: "Doppelt so schnell Ergebnisse" (keine konkrete Zahl, kein Beweis)
 PFLICHT-REGELN:
 ═══════════════════════════════════
 • HOOK: max 6-7 Wörter. Kurz. Keine Erklärung.
+• GRAMMATIK: Jeden Hook laut vorlesen — klingt er seltsam oder doppeldeutig? Neu schreiben.
 • SUBHEADLINE: 3-5 Wörter die den Sog verstärken OHNE die Antwort zu geben. Oder "–" wenn nicht nötig.
 • CAPTION: Erster Satz = Hook der nicht loslässt → 2-3 Absätze mit echtem Inhalt → klarer CTA. Ca. 150 Wörter.
 • Jede der 4 B-Rolls nutzt ein ANDERES Schema (A, B, C, D oder E).
