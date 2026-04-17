@@ -245,16 +245,17 @@ Deno.serve(async (req: Request) => {
 
     // 2b: Anti-Loop für Mode C — wenn dieselbe Nachricht bereits existiert
     // UND danach eine Outbound gespeichert wurde → sendFlow hat uns getriggert, kein echter User-Message
+    // Fenster: 90s (sendFlow-Round-Trip dauert max ~30s, also genug Puffer ohne legitime Msgs zu blockieren)
     const lastInboundSame = recentMsgs.find((m: any) => m.direction === 'inbound' && m.content === trigger_message)
     if (lastInboundSame) {
       const ageSec = (Date.now() - new Date(lastInboundSame.created_at).getTime()) / 1000
-      if (ageSec < 600) { // Innerhalb 10 Minuten
+      if (ageSec < 90) { // 90s Fenster statt 10 Minuten
         const outboundAfter = recentMsgs.find((m: any) =>
           m.direction === 'outbound' &&
           new Date(m.created_at) > new Date(lastInboundSame.created_at)
         )
         if (outboundAfter) {
-          console.log(`Anti-Loop: sendFlow-Trigger erkannt für "${trigger_message.slice(0, 30)}", überspringe`)
+          console.log(`Anti-Loop (90s): sendFlow-Trigger erkannt für "${trigger_message.slice(0, 30)}", überspringe`)
           return new Response(JSON.stringify({ reply: '' }), {
             headers: { ...CORS, 'Content-Type': 'application/json' }
           })

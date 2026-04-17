@@ -34,6 +34,7 @@ export default function DMCenter() {
   const [activeTab, setActiveTab] = useState('inbox') // inbox | settings | campaigns
   const [filter, setFilter] = useState('all') // all | hot | warm | cold
   const [sending, setSending] = useState(false)
+  const [generateError, setGenerateError] = useState(null) // Fehler bei Vorschlag-Generierung
   const [customReply, setCustomReply] = useState('')
   const [editingOriginal, setEditingOriginal] = useState(null) // original Claude-Vorschlag beim Bearbeiten
   const [styleDnaLoading, setStyleDnaLoading] = useState(false)
@@ -294,6 +295,7 @@ export default function DMCenter() {
                   selected={selectedConv?.id === conv.id}
                   onClick={async () => {
                     setSelectedConv(conv)
+                    setGenerateError(null) // Fehler beim Wechsel zurücksetzen
                     // Als gelesen markieren
                     if (conv.has_unread) {
                       await supabase.from('dm_conversations').update({ has_unread: false }).eq('id', conv.id)
@@ -394,14 +396,16 @@ export default function DMCenter() {
                 messages={messages}
                 conv={selectedConv}
                 sending={sending}
+                generateError={generateError}
                 onApprove={approveClaudeSuggestion}
                 onEdit={(text) => { setCustomReply(text); setEditingOriginal(text) }}
                 onGenerate={async () => {
                   const lastInbound = [...messages].reverse().find(m => m.direction === 'inbound')
                   if (!lastInbound) return
                   setSending(true)
+                  setGenerateError(null)
                   try {
-                    await fetch(`https://shrsluxbrazqscgiwfpu.supabase.co/functions/v1/dm-reply`, {
+                    const res = await fetch(`https://shrsluxbrazqscgiwfpu.supabase.co/functions/v1/dm-reply`, {
                       method: 'POST',
                       headers: {
                         'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNocnNsdXhicmF6cXNjZ2l3ZnB1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4ODk4MjEsImV4cCI6MjA5MDQ2NTgyMX0.8hQITokKKhVCfdVTHoGiyUzsHggfD7i13IFumsOfnuo`,
@@ -413,7 +417,17 @@ export default function DMCenter() {
                         trigger_message: lastInbound.content,
                       }),
                     })
+                    const data = await res.json()
+                    if (!res.ok || data.error) {
+                      setGenerateError(data.error || `HTTP ${res.status}`)
+                    } else if (!data.suggestion) {
+                      setGenerateError('Claude hat keinen Vorschlag zurückgegeben')
+                    } else {
+                      setGenerateError(null)
+                    }
                     await loadMessages(selectedConv.id)
+                  } catch (err) {
+                    setGenerateError(err.message || 'Netzwerkfehler')
                   } finally {
                     setSending(false)
                   }
@@ -1098,18 +1112,74 @@ function HeatBadge({ heat }) {
   )
 }
 
-function ClaudeBanner({ messages, conv, sending, onApprove, onEdit, onGenerate }) {
+function ClaudeBanner({ messages, conv, sending, generateError, onApprove, onEdit, onGenerate }) {
   const lastInbound = [...messages].reverse().find(m => m.direction === 'inbound')
   if (!lastInbound) return null
 
   const lastInboundTime = lastInbound.created_at
   const alreadyReplied = messages.some(m => m.direction === 'outbound' && m.created_at > lastInboundTime)
-  if (alreadyReplied) return null
 
   const btnBase = {
     borderRadius: 'var(--r-sm)', padding: '6px 14px', fontSize: 12,
     cursor: 'pointer', fontFamily: 'var(--font)', fontWeight: 600,
     transition: 'opacity 0.15s, transform 0.1s', border: 'none',
+  }
+
+  // Wenn bereits geantwortet: kompakte Leiste mit "Neu generieren" Option
+  if (alreadyReplied) {
+    return (
+      <div style={{
+        background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
+        borderRadius: 'var(--r)', padding: '7px 12px', marginBottom: 10,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+          {lastInbound.claude_suggestion
+            ? `✦ "${lastInbound.claude_suggestion.slice(0, 60)}${lastInbound.claude_suggestion.length > 60 ? '…' : ''}"`
+            : '✦ Kein Claude-Vorschlag vorhanden'
+          }
+        </div>
+        <button
+          onClick={onGenerate}
+          disabled={sending}
+          style={{
+            ...btnBase,
+            background: 'transparent', color: 'var(--text3)',
+            border: '1px solid var(--border)', fontSize: 11,
+            padding: '4px 10px', opacity: sending ? 0.5 : 1,
+          }}
+        >
+          {sending ? '⏳' : '↻ Neu'}
+        </button>
+      </div>
+    )
+  }
+
+  if (conv?.claude_blocked) return null
+
+  // Fehleranzeige
+  if (generateError) {
+    return (
+      <div style={{
+        background: 'rgba(220,50,50,0.08)', border: '1px solid rgba(220,50,50,0.35)',
+        borderRadius: 'var(--r)', padding: '10px 12px', marginBottom: 10,
+      }}>
+        <div style={{ fontSize: 11, color: '#e05', marginBottom: 6 }}>
+          ⚠ Generierung fehlgeschlagen: {generateError}
+        </div>
+        <button
+          onClick={onGenerate}
+          disabled={sending}
+          style={{
+            ...btnBase,
+            background: sending ? '#333' : 'var(--accent)',
+            color: '#fff', opacity: sending ? 0.7 : 1,
+          }}
+        >
+          {sending ? '⏳ Generiert...' : '↻ Nochmal versuchen'}
+        </button>
+      </div>
+    )
   }
 
   if (lastInbound.claude_suggestion) {
@@ -1171,8 +1241,6 @@ function ClaudeBanner({ messages, conv, sending, onApprove, onEdit, onGenerate }
       </div>
     )
   }
-
-  if (conv?.claude_blocked) return null
 
   return (
     <div style={{
