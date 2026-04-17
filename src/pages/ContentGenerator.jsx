@@ -10,13 +10,27 @@ const CONTENT_TYPES = [
   { key: 'b_roll', label: 'B-Roll', icon: '⚡', desc: 'Hook + Caption' },
 ]
 
-// Schema-Labels und Farben
-const SCHEMA_CONFIG = {
-  A: { label: 'These',         color: '#ee4f00' },
-  B: { label: 'Paradox',       color: '#3b82f6' },
-  C: { label: 'Geständnis',    color: '#a855f7' },
-  D: { label: 'Direktangriff', color: '#ef4444' },
-  E: { label: 'Zahl',          color: '#22c55e' },
+// Muster-Labels und Farben
+const MUSTER_COLORS = {
+  'szenario':       '#ee4f00',
+  'neugier':        '#22c55e',
+  'counter':        '#3b82f6',
+  'coaching':       '#a855f7',
+  'cheat':          '#f59e0b',
+  'countdown':      '#06b6d4',
+  'paradox':        '#3b82f6',
+  'direktangriff':  '#ef4444',
+  'reframing':      '#8b5cf6',
+  'zahl':           '#22c55e',
+}
+
+function getMusterColor(muster) {
+  if (!muster) return '#666'
+  const lower = muster.toLowerCase()
+  for (const [key, color] of Object.entries(MUSTER_COLORS)) {
+    if (lower.includes(key)) return color
+  }
+  return '#ee4f00'
 }
 
 // Parsed eine B-Roll Idee aus dem Claude-Output
@@ -29,8 +43,9 @@ function parseBRolls(text) {
       return m ? m[1].trim() : ''
     }
     const subh = get('SUBHEADLINE')
+    const muster = get('MUSTER') || get('SCHEMA') // fallback für alte Outputs
     return {
-      schema: get('SCHEMA').toUpperCase().replace(/[^A-E]/g, ''),
+      muster,
       hook: get('HOOK'),
       subheadline: subh === '–' || subh === '-' ? '' : subh,
       caption: get('CAPTION'),
@@ -49,7 +64,7 @@ function BRollCard({ roll, index }) {
     setTimeout(() => setter(false), 2000)
   }
 
-  const schema = SCHEMA_CONFIG[roll.schema] || null
+  const musterColor = getMusterColor(roll.muster)
 
   return (
     <div style={{
@@ -73,7 +88,7 @@ function BRollCard({ roll, index }) {
           gap: 8,
           border: '1px solid rgba(255,255,255,0.06)',
         }}>
-          {/* Nummer + Schema badges */}
+          {/* Nummer + Muster badge */}
           <div style={{
             position: 'absolute', top: 10, left: 12,
             display: 'flex', gap: 5, alignItems: 'center',
@@ -85,16 +100,17 @@ function BRollCard({ roll, index }) {
             }}>
               #{index + 1}
             </span>
-            {schema && (
+            {roll.muster && (
               <span style={{
-                fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
-                color: schema.color,
-                background: `${schema.color}18`,
-                border: `1px solid ${schema.color}35`,
-                padding: '1px 6px', borderRadius: 100,
+                fontSize: 9, fontWeight: 700, letterSpacing: '0.07em',
+                color: musterColor,
+                background: `${musterColor}18`,
+                border: `1px solid ${musterColor}35`,
+                padding: '1px 7px', borderRadius: 100,
                 textTransform: 'uppercase',
+                maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
-                {schema.label}
+                {roll.muster}
               </span>
             )}
           </div>

@@ -68,74 +68,66 @@ SLIDE [Nummer]:
 - CTA am Ende: einfach, direkt, eine Handlung
 - Max 300 Wörter. Kein Hashtag-Spam. Authentisch.`,
 
-  b_roll: `Erstelle 4 B-Roll Text-Overlays — jede mit einem anderen Hook-Schema.
+  b_roll: `Erstelle 4 B-Roll Text-Overlays für das angegebene Thema.
 
 B-Rolls: zufälliges Footage von mir (im Gym, gehen, trainieren). Der visuelle Inhalt ist EGAL.
 Allein der Text-Overlay muss den Scroll stoppen und erzwingen, dass die Caption gelesen wird.
 KEINE Szenenbeschreibung — die wähle ich selbst.
 
-═══════════════════════════════════════════
-ABSOLUT VERBOTEN — WIRD VOR AUSGABE GEPRÜFT:
-═══════════════════════════════════════════
-✗ KEINE erfundenen persönlichen Fakten über Thomas. "Ich hab X Jahre Y falsch gemacht" ist VERBOTEN wenn es nicht aus den Daten belegt ist. Thomas ist ein erfolgreicher, fitter Coach — Hooks die das Gegenteil implizieren zerstören seine Glaubwürdigkeit.
-✗ KEINE Satzfragmente die grammatikalisch mehrdeutig sind. "Ich hab falsch gegessen. Und meinen Klienten auch." klingt als würde er Klienten essen. Jeder Satz muss für sich allein stehen und eindeutig verständlich sein.
-✗ KEINE Verben die sich ungewollt auf das folgende Substantiv beziehen. Vor jedem Hook laut vorlesen und fragen: Kann dieser Satz falsch verstanden werden?
-✗ KEIN Schema C (Geständnis) mit erfundenen Niederlagen — nur Aussagen die zu einem erfolgreichen Coach passen.
+══════════════════════════════════════════════════
+SCHRITT 1 — ANALYSIERE ZUERST DIE ECHTEN HOOKS AUS [10]
+══════════════════════════════════════════════════
+Lies Abschnitt [10] komplett. Erkenne INTERN (nicht ausgeben):
+• Was ist das Muster hinter Thomas' eigenen Visual-Text-Hooks? Länge? Spezifität? Zielgruppen-Ansprache?
+• Was macht die stärksten Competitor-Overlays unwiderstehlich? Countdown? Paradox? Zahl? Direktangriff?
+• Welche 2-3 Muster passen am besten zu diesem konkreten Thema?
+ERST DANN mit Schritt 2 beginnen.
 
-═══════════════════════════════════
-5 HOOK-SCHEMATA — je eine pro B-Roll:
-═══════════════════════════════════
+══════════════════════════════════════════════════
+SCHRITT 2 — SCHREIBE 4 HOOKS NACH DIESEN MUSTERN:
+══════════════════════════════════════════════════
 
-[A] DIE THESE
-Provokante Aussage, die 90% der Zuschauer für falsch halten werden.
-Kurz. Brutal direkt. Keine Erklärung.
-Stark: "Dein Training bringt dir nichts."
-Stark: "Weniger Protein. Mehr Muskeln."
-Schwach: "So trainierst du besser" (zu harmlos, kein Widerspruch)
+SZENARIO-HOOK — Spricht direkt die Situation der Zielgruppe an. Spezifisch, nicht generisch.
+Thomas' echter Stil: "Warum du dir niemals Sorgen machen musst, wenn du als Mann gerade 10 Kilo zu viel hast."
+Thomas' echter Stil: "Das sage ich meinen Klienten, wenn sie trotz Training 6 Wochen kein Ergebnis sehen."
 
-[B] DAS PARADOX
-Zwei Dinge die sich zu widersprechen scheinen — aber beide stimmen.
-Erzeugt sofort Verwirrung → zwingt zum Stoppen.
-Stark: "Mehr essen. Trotzdem abnehmen."
-Stark: "Weniger trainieren. Schneller Ergebnisse."
-Schwach: "Trainiere klüger, nicht härter" (Klischee, kein echter Widerspruch)
+NEUGIER-ZAHL — Unrunde konkrete Zahl + überraschende Aussage. KEINE runden Zahlen (10, 100%).
+Thomas' echter Stil: "10 ungewöhnliche Zeichen, dass dein Körper gerade Fett verbrennt."
+Competitor-Muster: "THE BIGGEST CHEAT CODE IS GOING TO BED ON AN EMPTY STOMACH." [161k Views]
 
-[C] DAS GESTÄNDNIS
-Eine Einsicht oder Erkenntnis die Thomas als Coach gewonnen hat — kein erfundener persönlicher Fehler.
-Darf keine Aussagen enthalten die seine Kompetenz oder seinen Körper infrage stellen.
-Stark: "Der häufigste Fehler meiner Klienten."
-Stark: "Was ich Männern über 35 immer sage."
-Schwach: "Ich hab X Jahre falsch Y gemacht." (erfundene Niederlage — VERBOTEN)
-GRAMMATIK-PFLICHT: Wenn zwei Sätze, muss der zweite Satz grammatikalisch vollständig sein — kein impliziertes Verb aus Satz 1.
+COUNTER-INTUITIVE — Validierung einer negativen Situation → Reframing ins Positive.
+Thomas' echter Stil: "Warum du dir NIEMALS Sorgen machen musst, wenn [negatives Szenario des Zuschauers]."
+Competitor-Muster: "If you wanna be in the top one percent, just do the opposite of what 99% do." [98k Views]
 
-[D] DER DIREKTANGRIFF
-Direkt an den Zuschauer — trifft einen Nerv. Kein "man". Immer "du".
-Stark: "Du machst Cardio. Das ist das Problem."
-Stark: "Du trainierst hart. Du schläfst falsch."
-Schwach: "Viele machen diesen Fehler" (zu distanziert, kein Treffer)
+DIREKTANGRIFF — Direkt an den Zuschauer. Trifft einen Nerv. Kein "man". Immer "du".
+Stark: Zwei kurze Sätze. Erster = Ist-Zustand. Zweiter = der Nerv-Treffer.
+Competitor-Muster: "10 hours before bed... 3 hours before bed... 2 hours before bed..." (Countdown-Protokoll) [110k Views]
 
-[E] DIE ZAHL
-Überraschende, konkrete Zahl die sofort Glaubwürdigkeit und Neugier erzeugt.
-Keine runden Zahlen (10, 100%) — die wirken gelogen.
-Stark: "37% mehr Kraft. Kein einziges Extra-Set."
-Stark: "9kg runter. Kein Cardio."
-Schwach: "Doppelt so schnell Ergebnisse" (keine konkrete Zahl, kein Beweis)
+WEITERE MUSTER falls sie besser passen: Paradox / Cheat-Code / Coaching-Kontext / Reframing
 
-═══════════════════════════════════
+══════════════════════════════════════════════════
+ABSOLUT VERBOTEN:
+══════════════════════════════════════════════════
+✗ KEINE erfundenen persönlichen Fehler von Thomas. Er ist ein erfolgreicher, fitter Coach.
+✗ KEINE grammatikalisch mehrdeutigen Sätze. Jeden Hook laut vorlesen vor der Ausgabe.
+✗ KEIN impliziertes Verb das sich auf ein folgendes Nomen beziehen könnte.
+✗ KEINE generisch kurzen 3-5 Wort Hooks. Thomas' Stärke ist Spezifität und Substanz.
+
+══════════════════════════════════════════════════
 PFLICHT-REGELN:
-═══════════════════════════════════
-• HOOK: 5–18 Wörter. Thomas schreibt KEINE generisch kurzen 3-Wort-Hooks. Seine Stärke ist Spezifität. Siehe [10] für seinen echten Stil.
-• GRAMMATIK: Jeden Hook laut vorlesen — klingt er seltsam oder doppeldeutig? Neu schreiben.
-• SUBHEADLINE: optional, 3–8 Wörter, verstärkt den Sog ohne die Antwort zu geben. Oder "–".
+══════════════════════════════════════════════════
+• HOOK: 8–20 Wörter. Spezifisch. Zielgruppe direkt angesprochen.
+• MUSTER: Name des verwendeten Musters aus Schritt 2.
+• SUBHEADLINE: 3–8 Wörter die den Sog verstärken ohne die Antwort zu geben. Oder "–".
 • CAPTION: Erster Satz = Hook der nicht loslässt → 2-3 Absätze mit echtem Inhalt → klarer CTA. Ca. 150 Wörter.
-• Jede der 4 B-Rolls nutzt ein ANDERES Schema (A, B, C, D oder E).
+• Jede der 4 B-Rolls nutzt ein ANDERES Muster.
 
 Gib EXAKT dieses Format aus:
 
 B-ROLL [Nummer]:
-SCHEMA: [A/B/C/D/E]
-HOOK: [Text-Overlay, max 7 Wörter]
-SUBHEADLINE: [3-5 Wörter — oder –]
+MUSTER: [Muster-Name]
+HOOK: [Text-Overlay, 8–20 Wörter]
+SUBHEADLINE: [3-8 Wörter — oder –]
 CAPTION: [Volle Caption]`
 }
 
