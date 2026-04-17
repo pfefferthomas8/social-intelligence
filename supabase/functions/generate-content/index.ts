@@ -142,14 +142,17 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'topic + content_type required' }), { status: 400, headers: CORS })
   }
 
-  const [ownPosts, topCompPosts, customPosts, thomasDna, trendPosts, topRated, externalSignals] = await Promise.all([
+  const [ownPosts, topCompPosts, customPosts, thomasDna, trendPosts, topRated, externalSignals, topRatedBroll] = await Promise.all([
     dbQuery('instagram_posts?select=caption,transcript,post_type,likes_count,views_count&source=eq.own&caption=not.is.null&order=views_count.desc&limit=30'),
     dbQuery('instagram_posts?select=caption,transcript,post_type,likes_count,views_count&source=eq.competitor&order=views_count.desc&limit=20'),
     dbQuery('instagram_posts?select=caption,transcript,post_type&source=eq.custom&limit=10'),
     dbQuery('thomas_dna?select=category,insight,confidence&order=confidence.desc&limit=35'),
-    dbQuery('trend_posts?select=caption,visual_text,username,viral_score,recommendation&order=viral_score.desc&limit=10'),
+    dbQuery('trend_posts?select=caption,visual_text,username,viral_score,recommendation&order=viral_score.desc&limit=20'),
     dbQuery('generated_content?select=topic,content_type,content,content_pillar&user_rating=eq.1&order=created_at.desc&limit=8'),
     dbQuery('external_signals?select=title,body,signal_type,source,relevance_score,claude_insight&relevance_score=gte.70&order=fetched_at.desc&limit=10'),
+    content_type === 'b_roll'
+      ? dbQuery('generated_content?select=topic,content&user_rating=eq.1&content_type=eq.b_roll&order=created_at.desc&limit=5')
+      : Promise.resolve([]),
   ])
 
   // ── DNA nach Kategorie gruppieren ──────────────────────────────────────────
@@ -161,8 +164,6 @@ Deno.serve(async (req: Request) => {
   const dna = (cat: string) => (dnaByCategory[cat] || []).map((d: any) => `• ${d.insight}`).join('\n')
 
   // ── Viral Trigger aus Competitor-Posts extrahieren ─────────────────────────
-  // Jeder erfolgreiche Post hat einen psychologischen Trigger dahinter.
-  // Diese Trigger sind universell — nur die Themen sind nicht übertragbar.
   const compTriggerMap: Record<string, string> = {
     'Bringing your own food': 'SOZIALE ERLAUBNIS — "Deine Disziplin ist nicht weird, sie ist Intelligenz"',
     'average': 'SCHOCKIERENDE REALITÄT — Statistik die zeigt wie weit der Durchschnitt hinten liegt',
@@ -187,10 +188,94 @@ Deno.serve(async (req: Request) => {
   // ── Trend-Signale aufbereiten ──────────────────────────────────────────────
   const trendSignals = trendPosts.length > 0
     ? trendPosts.map((t: any) => {
-        const text = clean([t.caption, t.visual_text].filter(Boolean).join(' | '))
-        return `@${t.username} [Score ${Math.round(t.viral_score || 0)}] ${t.recommendation?.toUpperCase() || ''}: "${text}"`
-      }).join('\n')
+        const parts: string[] = []
+        // Visual text (Overlay-Text) separat hervorheben — das ist der eigentliche Hook-Text
+        const vt = (t.visual_text || '').trim()
+        if (vt && !vt.includes('@') && vt.length < 200) {
+          parts.push(`OVERLAY: "${vt.split('\n').slice(0, 2).join(' / ')}"`)
+        }
+        if (t.caption) parts.push(`Caption: "${clean(t.caption).substring(0, 100)}"`)
+        return `@${t.username} [Score ${Math.round(t.viral_score || 0)}]\n${parts.join('\n')}`
+      }).join('\n\n')
     : ''
+
+  // ── B-Roll spezifische Daten aufbereiten ─────────────────────────────────
+  let brollSection = ''
+  if (content_type === 'b_roll') {
+    // 1. Saubere Text-Overlays aus viralen Reels (kein Profilname-Müll, keine langen Listen)
+    const cleanVisualHooks = trendPosts
+      .filter((t: any) => {
+        const vt = (t.visual_text || '').trim()
+        return vt.length >= 8 && vt.length <= 120
+          && !vt.includes('@')
+          && !/^\d+[A-Z]\./.test(vt)          // keine Übungslisten
+          && vt.split('\n').length <= 4
+          && /[A-ZÄÖÜ]/.test(vt[0] || '')    // beginnt mit Großbuchstabe
+      })
+      .map((t: any) => {
+        const lines = (t.visual_text as string).trim().split('\n')
+          .map((l: string) => l.trim()).filter((l: string) => l)
+        const hookText = lines.join(' / ')
+        return `[Viral Score ${Math.round(t.viral_score || 0)} · @${t.username}] "${hookText}"`
+      })
+      .slice(0, 8)
+
+    // 2. Thomas' eigene Caption-Einstiege (erster Satz) aus Top Posts
+    const ownHooks = ownPosts
+      .filter((p: any) => (p.views_count || 0) > 0)
+      .slice(0, 12)
+      .map((p: any) => {
+        const text = (p.caption || p.transcript || '').trim()
+        // Erster Satz bis . ! ? — max 100 Zeichen
+        const firstSentence = text.replace(/\n/g, ' ').match(/^.+?[.!?]/)?.[0]?.trim()
+          || text.substring(0, 90).trim()
+        return (firstSentence?.length || 0) >= 10 && (firstSentence?.length || 0) <= 110
+          ? `[${(p.views_count || 0).toLocaleString()} Views] "${firstSentence}"`
+          : null
+      })
+      .filter(Boolean)
+      .slice(0, 6)
+
+    // 3. Positiv bewertete B-Roll Hooks aus der Vergangenheit
+    const ratedHooks = (topRatedBroll as any[])
+      .map((r: any) => {
+        const hookMatch = r.content?.match(/HOOK:\s*(.+?)(?:\n|$)/i)
+        return hookMatch
+          ? `[Thomas bewertet: gut] "${hookMatch[1].trim()}" — Thema: ${r.topic}`
+          : null
+      })
+      .filter(Boolean)
+
+    const parts: string[] = []
+    if (cleanVisualHooks.length > 0) {
+      parts.push(`BEWIESENE TEXT-OVERLAYS AUS VIRALEN REELS (sortiert nach Viral Score):
+Analysiere das PRINZIP — nicht das Thema. Wie sind sie formuliert? Was macht sie stoppend?
+${cleanVisualHooks.join('\n')}`)
+    }
+    if (ownHooks.length > 0) {
+      parts.push(`THOMAS' EIGENE HOOK-EINSTIEGE (sortiert nach Views):
+So öffnet Thomas seine besten Posts — das ist sein bewiesener Stil und seine Stimme:
+${ownHooks.join('\n')}`)
+    }
+    if (ratedHooks.length > 0) {
+      parts.push(`THOMAS HAT DIESE B-ROLL HOOKS ALS GUT BEWERTET — diesen Stil fortführen:
+${ratedHooks.join('\n')}`)
+    }
+    parts.push(`SCHEMA → DNA-MAPPING (jedes Schema leitet sich aus Thomas' realen Performance-Daten ab):
+[A] THESE      → "kontroverse Eröffnungen" [growth_opportunity] + polarisierende Statements [competitor_gap]
+[B] PARADOX    → Thomas' stärkstes Muster [hook_pattern]: "Du-Ansprache + Paradoxon/Problem"
+[C] GESTÄNDNIS → "Personal-Brand-Momente / echte Fehler zeigen" [competitor_gap] — Nähe durch Verletzlichkeit
+[D] DIREKTANGRIFF → "Du" direkt ansprechen [hook_pattern] — nie "man" oder "viele", immer "du"
+[E] ZAHL       → "wissenschaftliche Begründungen + konkrete Zahlen" [audience_pattern + style_rule]`)
+
+    if (parts.length > 0) {
+      brollSection = `
+═══════════════════════════════════════════════════════
+[10] B-ROLL HOOK-REFERENZEN — DIREKT AUS DER DATENBANK
+═══════════════════════════════════════════════════════
+${parts.join('\n\n')}`
+    }
+  }
 
   // ── SYSTEM PROMPT ───────────────────────────────────────────────────────────
   const systemPrompt = `Du bist die KI-Instanz die ausschließlich für Thomas Pfeffer arbeitet — Fitness-Coach, DACH-Markt, Männer 30+.
@@ -281,6 +366,7 @@ ${externalSignals.map((s: any) => {
   const insight = s.claude_insight ? ` → ${s.claude_insight}` : ''
   return `[${s.source?.toUpperCase()} · ${type.toUpperCase()}] "${clean(s.title)}"${body ? `\n${body}` : ''}${insight}`
 }).join('\n\n')}` : ''}
+${brollSection}
 
 ═══════════════════════════════════════════════════════
 SYNTHESE-PRINZIP
@@ -302,6 +388,8 @@ FORMAT: ${content_type.replace(/_/g, ' ').toUpperCase()}
 ${additional_info ? `ZUSATZINFO: ${additional_info}` : ''}
 
 ${FORMAT_INSTRUCTIONS[content_type] || 'Freie Form.'}
+${content_type === 'b_roll' ? `
+PFLICHT für B-Roll Hooks: Analysiere die realen Beispiele aus [10] — erkenne welches Prinzip die Hooks stoppend macht (Kürze? Widerspruch? Direktheit?) und wende exakt dieses Prinzip auf "${topic}" an. Nicht kopieren — das Muster adaptieren.` : ''}
 
 Gib NUR den fertigen Content aus — keine Analyse, keine Erklärungen, keine Meta-Kommentare.`
 
