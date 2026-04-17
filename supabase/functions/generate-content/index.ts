@@ -187,13 +187,25 @@ Deno.serve(async (req: Request) => {
     'pov': 'REFRAMING — Es ist nicht Genetik. Es ist Entscheidung.',
   }
 
-  const compWithTriggers = topCompPosts.slice(0, 10).map((p: any) => {
-    const text = clean([p.caption, p.transcript].filter(Boolean).join(' '))
-    const lc = text.toLowerCase()
-    const matchedTrigger = Object.entries(compTriggerMap).find(([key]) => lc.includes(key.toLowerCase()))
-    const trigger = matchedTrigger ? matchedTrigger[1] : 'MUSTER: Konkrete Aussage + Kontrast + Lösung'
-    return `[${(p.views_count || 0).toLocaleString()} Views]\nTRIGGER: ${trigger}\nPOST: "${text}"`
-  }).join('\n\n')
+  const seenCompCaptions = new Set<string>()
+  const compWithTriggers = topCompPosts
+    .filter((p: any) => {
+      const key = (p.caption || '').substring(0, 40)
+      if (seenCompCaptions.has(key)) return false
+      seenCompCaptions.add(key)
+      return true
+    })
+    .slice(0, 12).map((p: any) => {
+      const text = clean([p.caption, p.transcript].filter(Boolean).join(' '))
+      const lc = text.toLowerCase()
+      const matchedTrigger = Object.entries(compTriggerMap).find(([key]) => lc.includes(key.toLowerCase()))
+      const trigger = matchedTrigger ? matchedTrigger[1] : 'MUSTER: Konkrete Aussage + Kontrast + Lösung'
+      const vt = (p.visual_text || '').trim()
+      const vtLine = vt && vt.length > 10 && vt.split(/\s+/).length >= 3
+        ? `\nB-ROLL OVERLAY: "${vt.replace(/\n/g, ' ').substring(0, 150)}"`
+        : ''
+      return `[${(p.views_count || 0).toLocaleString()} Views]\nTRIGGER: ${trigger}${vtLine}\nPOST: "${text}"`
+    }).join('\n\n')
 
   // ── Trend-Signale aufbereiten ──────────────────────────────────────────────
   const trendSignals = trendPosts.length > 0
@@ -286,50 +298,89 @@ Deno.serve(async (req: Request) => {
       })
       .filter(Boolean)
 
-    // Thomas' eigene visual_text Hooks — das ist sein tatsächlicher Stil
+    // ── Thomas' eigene visual_text Hooks ──────────────────────────────────────
     const ownVisualHooks = ownPosts
-      .filter((p: any) => p.visual_text && p.visual_text.trim().length > 10)
-      .map((p: any) => `[${(p.views_count || 0).toLocaleString()} Views] "${p.visual_text.trim().replace(/\n/g, ' ')}"`)
+      .filter((p: any) => {
+        const vt = (p.visual_text || '').trim()
+        return vt.length >= 15 && vt.split(/\s+/).length >= 3
+      })
+      .map((p: any) => `[${(p.views_count || 0).toLocaleString()} Views] "${(p.visual_text as string).trim().replace(/\n/g, ' ')}"`)
       .slice(0, 10)
+
+    // ── Competitor visual_text — die echten B-Roll Overlays aus ihren Reels ──
+    const seenVt = new Set<string>()
+    const competitorVisualHooks = topCompPosts
+      .filter((p: any) => {
+        const vt = (p.visual_text || '').trim()
+        if (!vt || vt.length < 25) return false
+        if (vt.split(/\s+/).length < 5) return false        // zu wenig Wörter = nur Label
+        if (/^[A-Z\s]{1,15}$/.test(vt)) return false       // nur Großbuchstaben-Label wie "THE AVERAGE"
+        if (/^\d|^[A-Z]{1,2}\n/.test(vt)) return false     // OCR-Müll
+        const key = vt.substring(0, 40)
+        if (seenVt.has(key)) return false
+        seenVt.add(key)
+        return true
+      })
+      .map((p: any) => {
+        const vt = (p.visual_text as string).trim().replace(/\n/g, ' ')
+        return `[${(p.views_count || 0).toLocaleString()} Views] "${vt.substring(0, 200)}"`
+      })
+      .slice(0, 10)
+
+    // ── Trend Posts visual_text ─────────────────────────────────────────────
+    const trendVisualHooks = trendPosts
+      .filter((t: any) => {
+        const vt = (t.visual_text || '').trim()
+        return vt.length >= 20 && !vt.includes('@') && vt.split(/\s+/).length >= 4
+      })
+      .map((t: any) => {
+        const vt = (t.visual_text as string).trim().replace(/\n/g, ' ')
+        return `[Viral Score ${Math.round(t.viral_score || 0)}] "${vt.substring(0, 160)}"`
+      })
+      .slice(0, 5)
 
     const parts: string[] = []
 
-    // WICHTIGSTE QUELLE ZUERST: Thomas' echte Hooks aus seinen eigenen Reels
     if (ownVisualHooks.length > 0) {
-      parts.push(`THOMAS' EIGENE REEL-HOOKS — DAS IST SEIN ECHTER STIL (nach Views sortiert):
-Das sind die tatsächlichen Text-Overlays auf Thomas' eigenen Videos. Sein Stil ist erkennbar:
-spezifisch, substanzreich, klare Aussage mit Mehrwert — NICHT generisch kurz.
-Schreibe neue Hooks die sich genauso anfühlen wie diese hier.
+      parts.push(`━━━ THOMAS' EIGENE REEL-HOOKS — SEIN ECHTER STIL ━━━
+Text-Overlays von Thomas' eigenen Videos. Das ist seine Stimme, sein Rhythmus, seine Stärke.
+NICHT generisch kurz — spezifisch, substanzreich, mit echtem Mehrwert.
+Neue Hooks müssen sich EXAKT so anfühlen:
 
 ${ownVisualHooks.join('\n')}`)
     }
 
+    if (competitorVisualHooks.length > 0) {
+      parts.push(`━━━ COMPETITOR B-ROLL OVERLAYS — AUS DER DATENBANK ━━━
+Das sind die echten Text-Overlays auf den B-Rolls deiner Competitors mit den meisten Views.
+Das Thema ist irrelevant — das MUSTER ist alles. Wie ist es aufgebaut? Was macht es unwiderstehlich?
+Auf Thomas' Themen + Stil anwenden:
+
+${competitorVisualHooks.join('\n')}`)
+    }
+
+    if (trendVisualHooks.length > 0) {
+      parts.push(`━━━ TREND-REEL OVERLAYS (nach Viral Score) ━━━
+${trendVisualHooks.join('\n')}`)
+    }
+
     if (competitorHooks.length > 0) {
-      parts.push(`COMPETITOR HOOKS (nach Views) — Muster erkennen, auf Deutsch adaptieren:
+      parts.push(`━━━ COMPETITOR CAPTION-HOOKS (erste Sätze, nach Views) ━━━
 ${competitorHooks.join('\n\n')}`)
     }
 
-    if (cleanVisualHooks.length > 0) {
-      parts.push(`WEITERE TEXT-OVERLAYS AUS VIRALEN REELS:
-${cleanVisualHooks.join('\n')}`)
-    }
-
     if (ratedHooks.length > 0) {
-      parts.push(`THOMAS HAT DIESE B-ROLL HOOKS GUT BEWERTET:
+      parts.push(`━━━ THOMAS HAT DIESE HOOKS GUT BEWERTET ━━━
 ${ratedHooks.join('\n')}`)
     }
 
-    parts.push(`SCHEMA → KONKRETE HOOK-VORLAGE (Beispiele aus der DB):
-[A] THESE      → "Bringing your own food isn't weird." (561k) | Thomas: "Würdest du 20 IQ gegen +20 kg Muskelmasse tauschen?"
-[B] PARADOX    → "Didn't feel like it, but did it anyway." | Thomas: spezifische Aussage mit unerwartetem Kontrast
-[C] COACH-INSIGHT → Thomas: "Das sage ich meinen Coaching Klienten, wenn sie trotz Training 6 Wochen das gleiche Gewicht sehen..."
-[D] DIREKTANGRIFF → "Listen to this if you have 30 seconds." | Thomas: direkte Ansprache mit "du"
-[E] ZAHL       → Thomas: "10 ungewöhnliche Zeichen, dass dein Körper Fett verbrennt" (23k Views)`)
-
     brollSection = `
 ═══════════════════════════════════════════════════════
-[10] B-ROLL HOOKS — ECHTE VORBILDER AUS DER DATENBANK
+[10] B-ROLL HOOKS — ALLE DATENPUNKTE AUS DER DATENBANK
 ═══════════════════════════════════════════════════════
+SYNTHESE-AUFTRAG: Kombiniere Thomas' eigenen Stil mit den stärksten Mustern der Competitors.
+Das Ziel: Hooks die sich nach Thomas anfühlen UND so stark sind wie die Competitor-Overlays.
+
 ${parts.join('\n\n')}`
   }
 
