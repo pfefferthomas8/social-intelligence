@@ -12,7 +12,7 @@ const CORS = {
 }
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+const SERVICE_KEY = Deno.env.get('SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 const DASHBOARD_TOKEN = Deno.env.get('DASHBOARD_TOKEN') || ''
 const APIFY_KEY = Deno.env.get('APIFY_API_KEY') || ''
 

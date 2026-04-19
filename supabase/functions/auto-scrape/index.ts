@@ -9,7 +9,7 @@ const CORS = {
 }
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+const SERVICE_KEY = Deno.env.get('SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 const DASHBOARD_TOKEN = Deno.env.get('DASHBOARD_TOKEN') || ''
 
 function dbHeaders() {
@@ -61,8 +61,8 @@ Deno.serve(async (req: Request) => {
       results.own = r.data
 
     } else if (mode === 'competitors') {
-      // Alle aktiven Competitors holen
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/competitor_profiles?is_active=eq.true&select=username,last_scraped_at`, {
+      // Alle aktiven Competitors holen — älteste zuerst für faire Rotation
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/competitor_profiles?is_active=eq.true&select=username,last_scraped_at&order=last_scraped_at.asc.nullsfirst`, {
         headers: dbHeaders()
       })
       const competitors = await res.json()
@@ -74,8 +74,8 @@ Deno.serve(async (req: Request) => {
       const cutoff = new Date(Date.now() - 20 * 60 * 60 * 1000).toISOString()
       const due = competitors.filter((c: any) => !c.last_scraped_at || c.last_scraped_at < cutoff)
 
-      // Max 3 pro Lauf — verhindert zu hohen Apify-Verbrauch
-      const toScrape = due.slice(0, 3)
+      // Alle fälligen scrapen (kein künstliches Limit — verhindert dass Accounts dauerhaft übersprungen werden)
+      const toScrape = due
       const scraped = []
 
       for (const c of toScrape) {
