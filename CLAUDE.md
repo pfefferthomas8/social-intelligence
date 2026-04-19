@@ -1,67 +1,140 @@
 # CLAUDE.md — Social Intelligence Tool
 
 ## Arbeitsanweisungen
-
-- **Änderungen DIREKT in Dateien machen** — nicht erklären was zu tun wäre
-- **Immer auf Deutsch antworten**
-- **Niemals nach Bestätigungen fragen** — autonom arbeiten
-- **Niemals nach API Keys fragen** — alle stehen in der `.env` Datei
-- **Bei Fehlern selbst debuggen**: Logs lesen, Supabase direkt abfragen
-- **Kein Raten** — immer erst relevante Dateien lesen bevor Änderungen gemacht werden
-- **Deployment**: Frontend-Änderungen pushen → Cloudflare Pages deployed auto von `main`. Edge Functions manuell via Supabase Management API deployen.
-- **NIEMALS eigene Claude-Calls zum Testen triggern** — verbraucht API-Quota
+- Änderungen **DIREKT** in Dateien machen — nie nur erklären
+- **Immer auf Deutsch** antworten
+- Niemals nach Bestätigungen fragen — autonom arbeiten
+- Niemals nach API Keys fragen — alle stehen in `.env`
+- Bei Fehlern selbst debuggen: Dateien lesen, Supabase direkt abfragen
+- **NIEMALS Claude-Calls zum Testen triggern** — verbraucht API-Quota
 
 ---
 
-## Projekt-Übersicht
+## URLs & Credentials
 
-**Was:** Social Intelligence Tool für Thomas (Fitness Coach). Scrapt Instagram automatisch, analysiert Trends, generiert auf Knopfdruck professionellen Content für DACH-Markt.
-
-**Kein Multi-User** — nur für Thomas, kein Supabase Auth, einfacher Token-Login.
-
----
-
-## URLs & Deployment
-
-| Was | URL |
-|-----|-----|
-| Frontend (Cloudflare Pages) | https://social-intelligence-1zt.pages.dev |
-| GitHub Repo | https://github.com/pfefferthomas8/social-intelligence |
-| Supabase Projekt | shrsluxbrazqscgiwfpu |
-| Supabase URL | https://shrsluxbrazqscgiwfpu.supabase.co |
+| Was | Wert |
+|-----|------|
+| Frontend | https://social-intelligence-1zt.pages.dev |
+| GitHub | https://github.com/pfefferthomas8/social-intelligence |
+| Supabase Projekt-Ref | `shrsluxbrazqscgiwfpu` |
+| Supabase URL | `https://shrsluxbrazqscgiwfpu.supabase.co` |
+| SUPABASE_ACCESS_TOKEN | in `/Users/thomaspfeffer/Downloads/Thomas Fitness/form-app/.env` |
+| Service Role Key holen | `curl -s "https://api.supabase.com/v1/projects/shrsluxbrazqscgiwfpu/api-keys" -H "Authorization: Bearer TOKEN" \| python3 -c "import sys,json; [print(x['api_key']) for x in json.load(sys.stdin) if x['name']=='service_role']"` |
 
 ---
 
 ## Tech Stack
-
-| Layer | Tool |
-|-------|------|
-| Frontend | React 18, React Router v6, Vite |
-| PWA | vite-plugin-pwa |
-| Backend DB | Supabase (PostgreSQL) |
-| Edge Functions | Supabase Edge Functions (Deno) |
-| Scraping | Apify (`apify~instagram-scraper`) |
-| Transkription | AssemblyAI |
-| AI | Anthropic Claude API (`claude-sonnet-4-5` oder via `CLAUDE_MODEL` env) |
-| Deployment | Cloudflare Pages (Frontend), Supabase (Backend) |
+React 18 + Vite → Cloudflare Pages (auto-deploy von `main`). Supabase Edge Functions (Deno). Apify (Scraping), AssemblyAI (Transkription), Claude API (Content-Gen). Kein Multi-User, kein Supabase Auth — Token-Login via `localStorage`.
 
 ---
 
-## Auth
+## Deployment
 
-Einfacher Token-Login — kein Supabase Auth.
-- Passwort: in `.env` / hardcoded in `Login.jsx`
-- Token wird in `localStorage` gespeichert
-- `src/lib/auth.js`: `setToken()`, `getToken()`, `removeToken()`
+### Frontend
+```bash
+git add src/... && git commit -m "..." && git push origin main
+# → Cloudflare Pages deployed automatisch
+```
+
+### Edge Functions
+```bash
+cd "/Users/thomaspfeffer/Downloads/Thomas Fitness/social-intelligence"
+SUPABASE_ACCESS_TOKEN=sbp_727ee91236fdf36aca8f9bed7d06bddbb9fa70fd \
+npx supabase functions deploy FUNKTIONSNAME --project-ref shrsluxbrazqscgiwfpu --no-verify-jwt
+```
+**Alle Functions brauchen `--no-verify-jwt`** — Apify/AssemblyAI rufen Webhooks ohne JWT auf, und `generate-content` nutzt eigenen DASHBOARD_TOKEN.
 
 ---
 
-## Design System
+## Kritische Eigenheiten
 
-- **Farben:** `--bg: #0a0a0a`, `--surface: #111`, `--border: #1e1e1e`, `--accent: #ee4f00`
-- **Font:** DM Sans
-- **Stil:** Desktop-first SaaS Tool (wie Linear/Vercel), Dark Mode, Sidebar-Navigation, multi-column Layouts
-- **Layout:** `.app-shell` (flex row) → `Sidebar` (220px) + `.main-content` (flex: 1)
+### SERVICE_ROLE_KEY vs SUPABASE_SERVICE_ROLE_KEY
+`SUPABASE_SERVICE_ROLE_KEY` ist in Supabase Secrets falsch gesetzt (Hash statt JWT) und kann nicht geändert werden. Alle Functions nutzen:
+```typescript
+const SERVICE_KEY = Deno.env.get('SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+```
+`SERVICE_ROLE_KEY` ist korrekt. Dieses Pattern bei jeder neuen Function verwenden.
+
+### Apify Webhooks
+Webhooks als Base64 URL-Parameter (`?webhooks=...`), NICHT im Body. `scrape-webhook` validiert `ownerUsername === job.target` — verhindert falschen Account in DB. Dataset-Retry: 6 × 10s, erster Versuch nach 15s (Apify meldet SUCCEEDED bevor Dataset bereit ist).
+
+### Username-Sanitierung
+Usernames vor Apify-Call bereinigen: `.trim().replace('@', '').replace(/\s+/g, '').toLowerCase()`. Leerzeichen → kaputte Apify-URL → falscher Account wird gescrapet.
+
+### Transkriptions-Pipeline
+Instagram CDN → Supabase Storage → AssemblyAI. Umweg nötig weil AssemblyAI Instagram CDN-URLs nicht direkt laden kann (Meta-Block). Storage Bucket: `instagram-videos`, nach Transkription gelöscht.
+
+---
+
+## Datenbank — Key Tables
+
+| Tabelle | Zweck |
+|---------|-------|
+| `instagram_posts` | Alle Posts (source: own/competitor/custom). **Wichtig:** `visual_text` = Text aus Thumbnail (Claude Vision), `transcript` = Gesprochenes (AssemblyAI) |
+| `thomas_dna` | Thomas' analysierter Stil (hook_pattern, style_rule, audience_pattern, pillar_insight, competitor_gap, carousel_rule) |
+| `trend_posts` | Virale Posts aus dynamischem Coach-Pool, 7-Tage TTL |
+| `external_signals` | Reddit/Community-Signale, relevance_score 0–100 |
+| `generated_content` | Generierter Content, `user_rating` 1=gut / -1=schlecht für Feedback-Loop |
+| `discovered_coaches` | Pool von 20+ Online-Fitness-Coaches, befüllt von `discover-coaches` |
+| `competitor_profiles` | Manuell hinzugefügte Competitors |
+| `scrape_jobs` | Status-Tracking für Apify-Runs |
+
+**RLS deaktiviert** — nur Thomas nutzt das Tool.
+
+---
+
+## Edge Functions
+
+| Funktion | Zweck |
+|----------|-------|
+| `scrape-profile` | Startet Apify-Run für Instagram-Profil |
+| `scrape-webhook` | Apify-Webhook → speichert Posts, triggert Transkription + Visual-Extraktion |
+| `import-reel` | Einzelner Reel-Import |
+| `transcribe-video` | Download → Storage → AssemblyAI submit |
+| `transcribe-webhook` | AssemblyAI Callback → Transcript in DB |
+| `process-visual-text` | Text aus Thumbnails via Claude Vision (batch) |
+| `classify-pillars` | Posts → haltung/transformation/mehrwert/verkauf |
+| `analyze-thomas` | Thomas' Posts analysieren → befüllt `thomas_dna` |
+| `generate-content` | Content-Generierung (B-Roll, Carousel, Script, Single Post) |
+| `generate-dashboard-posts` | 6 datengetriebene Content-Ideen für Dashboard |
+| `trend-discovery` | Scrapt 8 Coaches aus `discovered_coaches` Pool (älteste zuerst) |
+| `trend-webhook` | Trend-Scrape Ergebnisse → `trend_posts` |
+| `discover-coaches` | Neue Coaches via Hashtag-Discovery suchen |
+| `fetch-external-signals` | Reddit etc. → `external_signals` |
+
+---
+
+## GitHub Actions (daily-scrape.yml)
+
+| Wann | Was |
+|------|-----|
+| 06:00 UTC täglich | Eigenes Profil (auto-scrape mode=own) |
+| 06:30 UTC täglich | Competitors (auto-scrape mode=competitors) |
+| Mo + Do 07:00 UTC | Trend Scout (auto-scrape mode=trends) |
+| Sonntag 05:00 UTC | Coach Discovery |
+
+**Hinweis:** GitHub Actions Crons feuern oft 4-5h später als geplant — normal.
+
+---
+
+## Content Generator — B-Roll Hooks (kritisch)
+
+`generate-content` nutzt eine **Example-First** Architektur für B-Roll:
+1. Claude liest zuerst Abschnitt `[10]` (Thomas' echte visual_text Hooks + Competitor-Overlays aus DB)
+2. Analysiert das Muster INTERN
+3. Schreibt danach Hooks nach erkanntem Muster
+
+**Wichtig für DB-Queries in generate-content:** Alle `instagram_posts` Selects müssen `visual_text` enthalten — das sind die echten Hook-Texte die Claude als Vorlage braucht.
+
+**B-Roll Logik-Check (Pflicht):**
+- Ist der Hook offensichtlich/tautologisch? → Neu schreiben
+  - VERBOTEN: "Du isst im Defizit und hast Hunger." — natürlich, das IST das Defizit
+- Erzeugt der Hook Spannung? Würde der Zuschauer scrollen bleiben?
+- Kein "Das ist der Grund." ohne überraschende Aussage davor
+
+**Output-Format:** `MUSTER:` (nicht `SCHEMA:`), Hook 8-20 Wörter.
+
+**Muster-Typen:** Szenario-Hook / Neugier-Zahl / Counter-Intuitive / Coaching-Kontext / Cheat-Code / Countdown / Paradox / Reframing / Direktangriff
 
 ---
 
@@ -70,403 +143,8 @@ Einfacher Token-Login — kein Supabase Auth.
 | Route | Seite |
 |-------|-------|
 | `/` | Login |
-| `/dashboard` | Dashboard (Stats, Content Intelligence, Pillars, Competitors) |
-| `/competitors` | Konkurrenten (Scraping, Posts) |
-| `/knowledge` | Wissensdatenbank (Filter, Suche) |
+| `/dashboard` | Dashboard (Stats, Content Intelligence, Pillars) |
+| `/competitors` | Konkurrenten |
+| `/knowledge` | Wissensdatenbank |
 | `/generate` | Content Generator |
 | `/import` | Reel Import |
-
----
-
-## Datenbank (Supabase)
-
-### own_profile
-Eigenes Instagram-Profil von Thomas.
-
-| Spalte | Typ |
-|--------|-----|
-| id | uuid PK |
-| username | text |
-| display_name | text |
-| bio | text |
-| followers_count | int |
-| following_count | int |
-| posts_count | int |
-| profile_pic_url | text |
-| last_scraped_at | timestamptz |
-
-### competitor_profiles
-| Spalte | Typ |
-|--------|-----|
-| id | uuid PK |
-| username | text UNIQUE |
-| display_name | text |
-| followers_count | int |
-| niche | text |
-| is_active | bool |
-| last_scraped_at | timestamptz |
-| added_at | timestamptz |
-
-### instagram_posts
-Alle Posts — eigen, Competitor, Custom Imports.
-
-| Spalte | Typ | Beschreibung |
-|--------|-----|-------------|
-| id | uuid PK | |
-| source | text | `own` \| `competitor` \| `custom` |
-| competitor_id | uuid | FK → competitor_profiles |
-| instagram_post_id | text | |
-| post_type | text | `image` \| `video` \| `carousel` \| `reel` |
-| caption | text | |
-| likes_count | int | |
-| comments_count | int | |
-| views_count | int | |
-| video_url | text | |
-| thumbnail_url | text | |
-| transcript | text | Von AssemblyAI |
-| transcript_status | text | `pending` \| `done` \| `none` \| `error` |
-| visual_text | text | Text aus Thumbnail (Claude Vision) |
-| visual_text_status | text | `pending` \| `done` \| `none` \| `error` |
-| content_pillar | text | `haltung` \| `transformation` \| `mehrwert` \| `verkauf` |
-| published_at | timestamptz | |
-| scraped_at | timestamptz | |
-| url | text | |
-
-UNIQUE: `(instagram_post_id, source)`
-
-### scrape_jobs
-| Spalte | Typ | Beschreibung |
-|--------|-----|-------------|
-| id | uuid PK | |
-| job_type | text | `own_profile` \| `competitor` \| `reel` |
-| target | text | Instagram Username |
-| status | text | `pending` \| `running` \| `done` \| `error` |
-| apify_run_id | text | |
-| result_count | int | |
-| error_msg | text | |
-| started_at | timestamptz | |
-| completed_at | timestamptz | |
-
-### generated_content
-| Spalte | Typ |
-|--------|-----|
-| id | uuid PK |
-| content_type | text | `carousel` \| `single_post` \| `b_roll` \| `video_script` |
-| topic | text |
-| content | text |
-| content_pillar | text |
-| user_rating | int | 0 = dislike, 1 = like (für Feedback-Loop) |
-| created_at | timestamptz |
-
-### thomas_dna
-Thomas' analysierter Content-Stil. Wird von `analyze-thomas` befüllt.
-
-| Spalte | Typ | Beschreibung |
-|--------|-----|-------------|
-| id | uuid PK | |
-| category | text | `hook_pattern` \| `style_rule` \| `audience_pattern` \| `topic_pattern` \| `format_preference` |
-| insight | text | Konkrete Erkenntnis aus Posts |
-| confidence | numeric | 0.0–1.0 |
-| source_post_ids | text[] | Posts auf denen die Erkenntnis basiert |
-| created_at | timestamptz | |
-
-### trend_posts
-Trend-Posts aus dem `trend-discovery` Scrape (Online-Coaches, dynamische Pool).
-
-| Spalte | Typ | Beschreibung |
-|--------|-----|-------------|
-| id | uuid PK | |
-| username | text | Instagram-Account |
-| instagram_post_id | text | |
-| caption | text | |
-| visual_text | text | Text auf Thumbnail |
-| views_count | int | |
-| likes_count | int | |
-| post_type | text | |
-| viral_score | numeric | Berechneter Score |
-| content_pillar | text | |
-| dach_gap | bool | True wenn ähnliches fehlt im DACH-Markt |
-| recommendation | text | `sofort` \| `beobachten` \| `skip` |
-| claude_notes | text | Kurze AI-Notiz |
-| discovered_at | timestamptz | |
-| url | text | |
-
-Automatische Löschung: `trend-webhook` löscht Posts älter als 7 Tage vor jedem Insert.
-
-### external_signals
-Externe Community-Signale (Reddit, YouTube, etc.) — fließen in Content Intelligence.
-Wird von `fetch-external-signals` befüllt.
-
-| Spalte | Typ | Beschreibung |
-|--------|-----|-------------|
-| id | uuid PK | |
-| source | text | `reddit` \| `google_trends` \| `youtube` \| `news` |
-| signal_type | text | z.B. `subreddit_post` \| `trending_topic` |
-| title | text | |
-| body | text | |
-| url | text | |
-| keywords | text[] | |
-| relevance_score | int | 0–100 (Claude-bewertet) |
-| claude_insight | text | Kurze AI-Interpretation |
-| fetched_at | timestamptz | |
-| used | bool | |
-
-### discovered_coaches
-Dynamischer Pool von Online-Fitness-Coaches (≥10K Follower), wird von `discover-coaches` befüllt.
-`trend-discovery` rotiert durch diese Tabelle (älteste zuerst).
-
-| Spalte | Typ | Beschreibung |
-|--------|-----|-------------|
-| id | uuid PK | |
-| username | text UNIQUE | |
-| followers_count | int | |
-| bio | text | |
-| full_name | text | |
-| posts_count | int | |
-| discovered_at | timestamptz | |
-| last_scraped_at | timestamptz | Wann zuletzt in trend-discovery genutzt |
-| last_discovery_run | timestamptz | |
-| is_active | bool | |
-| discovery_source | text | Welcher Hashtag hat ihn gefunden |
-
-20 Seed-Accounts vorgefüllt (jeff nippard, layne norton, james smith pt, syatt fitness, usw.).
-Filter: ≥10K Follower + Coach-Keyword im Username/Bio + KEIN Wettkampf/Bühnen-Keyword.
-
-### topic_suggestions
-Themenvorschläge, auto-generiert nach Scrape.
-
-| Spalte | Typ |
-|--------|-----|
-| id | uuid PK |
-| title | text |
-| why | text |
-| suggested_types | text[] |
-| category | text |
-| used | bool |
-| created_at | timestamptz |
-
-**RLS:** Deaktiviert — Tool ist nur für Thomas.
-
----
-
-## Edge Functions
-
-Deployment via Supabase Management API:
-```bash
-curl -s -X PATCH "https://api.supabase.com/v1/projects/shrsluxbrazqscgiwfpu/functions/FUNKTIONSNAME" \
-  -H "Authorization: Bearer SUPABASE_ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"name\": \"FUNKTIONSNAME\", \"verify_jwt\": false, \"body\": $(python3 -c "import json; print(json.dumps(open('supabase/functions/FUNKTIONSNAME/index.ts').read()))")}"
-```
-
-| Funktion | Zweck |
-|----------|-------|
-| `scrape-profile` | Startet Apify-Run für Instagram-Profil (resultsType: "posts", resultsLimit: 50, webhook-basiert) |
-| `scrape-webhook` | Apify-Webhook — speichert Posts in DB, triggert Transkription/Visual/Klassifizierung. **Validiert ownerUsername vs. job.target** (verhindert falschen Account zu speichern) |
-| `import-reel` | Einzelner Reel-Import via Apify |
-| `transcribe-video` | AssemblyAI Transkription |
-| `process-visual-text` | Visuellen Text aus Thumbnail extrahieren (Claude Vision, batch) |
-| `classify-pillars` | Klassifiziert Posts in Content-Säulen (haltung/transformation/mehrwert/verkauf) |
-| `analyze-thomas` | Analysiert Thomas' eigene Posts → befüllt `thomas_dna` Tabelle |
-| `generate-content` | Content-Generierung via Claude (style aus thomas_dna, externe Signale als Layer 9) |
-| `generate-dashboard-posts` | 6 datengetriebene Content-Ideen auf Knopfdruck (lädt alle Quellen parallel, Claude Sonnet, retry bei overloaded) |
-| `trend-discovery` | Scrapt 8 Accounts aus `discovered_coaches` Pool (älteste zuerst), rotiert dynamisch |
-| `trend-webhook` | Verarbeitet Trend-Scrape-Ergebnisse, berechnet viral_score, speichert in trend_posts |
-| `discover-coaches` | Sucht neue Online-Fitness-Coaches via Hashtag-Discovery (≥10K Follower), befüllt discovered_coaches |
-| `fetch-external-signals` | Holt externe Signale (Reddit etc.), bewertet Relevanz, speichert in external_signals |
-| `topic-suggestions` | Themenvorschläge generieren, auto-refresh nach Scrape (max 1× pro Tag) |
-
----
-
-## Content Intelligence (Dashboard)
-
-Das Herzstück des Dashboards — 6 datengetriebene Post-Ideen per Knopfdruck.
-
-**Datenquellen** (parallel geladen in `generate-dashboard-posts`):
-1. `thomas_dna` — Thomas' analysierter Stil (Hook-Formeln, Stil-Regeln, Zielgruppen-Patterns)
-2. `instagram_posts` (source=own) — Thomas' Top-Posts nach Views
-3. `instagram_posts` (source=competitor) — Competitor Top-Posts
-4. `trend_posts` — Trending bei Online-Coaches (recommendation: sofort/beobachten)
-5. `external_signals` — Reddit/Community-Signale (relevance_score ≥ 70)
-6. `generated_content` (user_rating=1) — Thomas' positiv bewerteter Content als Stilreferenz
-
-**Output-Format** (6 JSON-Objekte):
-```json
-{
-  "hook": "max 10 Wörter auf Deutsch",
-  "format": "video_script|b_roll|single_post|carousel",
-  "pillar": "haltung|transformation|mehrwert|verkauf",
-  "preview": "2 Sätze Kern-Aussage auf Deutsch",
-  "score": 87,
-  "sources": [{"ref": "T3", "label": "@username · 2.1M Views"}],
-  "why_it_works": "1 Satz Trigger + warum für Thomas"
-}
-```
-
-Source-Referenzen: T1-T12 (Trends), C1-C8 (Competitors), S1-S8 (Signale)
-
-**Retry-Logik** bei Claude overloaded: 3 Versuche, 8s / 20s Backoff.
-
----
-
-## Apify Integration
-
-- Actor: `apify~instagram-scraper` (Posts-Modus)
-- `resultsType: "posts"`, `resultsLimit: 50`, ~5-10 Min pro Profil
-- Webhook-basiert: kein Frontend-Polling, Apify ruft `scrape-webhook` auf wenn fertig
-- Webhooks als Base64 URL-Parameter (`?webhooks=...`), NICHT im Body
-- `scrape-webhook` erkennt automatisch zwei Datenstrukturen:
-  - **Posts-Modus** (neu): jedes Dataset-Item ist ein Post direkt (hat `shortCode` + `ownerUsername`)
-  - **Profile-Modus** (legacy): jedes Dataset-Item ist Profil mit `latestPosts[]`
-- **Wichtig:** `scrape-webhook` validiert `firstItem.ownerUsername === job.target` im Posts-Modus — lehnt ab wenn falscher Account gescrapet wurde (verhindert Datenmüll)
-- Dataset-Retry: 6 Versuche × 10s (Apify meldet SUCCEEDED oft bevor Dataset bereit ist), erster Versuch nach 15s
-
-### Username-Sanitierung (kritisch!)
-Sowohl Frontend als auch Backend bereinigen Usernames:
-```javascript
-// Konkurrenten.jsx (Frontend):
-const username = addingUsername.trim().replace('@', '').replace(/\s+/g, '').toLowerCase()
-
-// scrape-profile/index.ts (Backend):
-const username = (body.username || '').trim().replace(/\s+/g, '').replace(/[^a-zA-Z0-9_.]/g, '').toLowerCase()
-```
-**Warum:** Leerzeichen im Username → kaputte Apify-URL → Apify scrapt Instagram-Empfehlungen statt Ziel-Account.
-
----
-
-## Dynamic Coach Discovery
-
-**Zwei-Schicht-System für Trend-Discovery:**
-
-1. **`discover-coaches`** (wöchentlich, Sonntag 05:00 UTC) — sucht neue Coaches via Hashtag-Scraping:
-   - Discovery-Hashtags: `onlinefitnesscoachenformen`, `mensfitnesscoach`, `onlinecoachformen`, etc.
-   - Filter: ≥10K Follower + Coach-Keyword + KEIN Wettkampf/Bühnen-Keyword
-   - Schreibt in `discovered_coaches` Tabelle
-   - 20 Seed-Accounts sind vorgeladen für sofortigen Start
-
-2. **`trend-discovery`** (täglich, automatisch via GitHub Actions) — scrapt 8 Coaches aus dem Pool:
-   - Query: `discovered_coaches?is_active=eq.true&followers_count=gte.10000&order=last_scraped_at.asc.nullsfirst&limit=20`
-   - Nimmt die 8 ältesten (least recently scraped) → Rotation durch den Pool
-   - Setzt `last_scraped_at` sofort → verhindert Doppel-Scraping
-   - Gibt Fehler mit Hinweis zurück wenn Pool leer ist
-
----
-
-## GitHub Actions Workflows
-
-`.github/workflows/daily-scrape.yml` — **läuft täglich, Secrets korrekt gesetzt** (zuletzt erfolgreich 2026-04-16):
-
-| Wann | Was |
-|------|-----|
-| 06:00 UTC täglich | Eigenes Profil scrapen (`auto-scrape` mode=own) |
-| 06:30 UTC täglich | Alle Competitors scrapen (`auto-scrape` mode=competitors) |
-| Mo + Do 07:00 UTC | Trend Scout (`auto-scrape` mode=trends) |
-| Sonntag 05:00 UTC | Neue Coaches entdecken (`discover-coaches`) |
-| `workflow_dispatch` | Manuell triggerbar (own / competitors / trends / discover) |
-
-**GitHub Secrets (beide gesetzt):**
-- `SUPABASE_URL` = `https://shrsluxbrazqscgiwfpu.supabase.co`
-- `DASHBOARD_TOKEN` = VITE_DASHBOARD_TOKEN aus `.env`
-
----
-
-## AI-Logik (generate-content)
-
-**Kein Ton-Selector** — Style wird automatisch aus `thomas_dna` geladen.
-
-Layer-Architektur:
-1. Thomas' Stil aus `thomas_dna` (analyze-thomas generiert)
-2. Thomas' eigene Top-Posts (Engagement-basiert)
-3. Competitor Top-Posts (Views-basiert)
-4. Trend-Posts aus dynamischem Coach-Pool
-5. Positiv bewerteter eigener Content (user_rating=1)
-6. Reddit/Community-Signale aus `external_signals` (Relevanz ≥ 70)
-
----
-
-## Dashboard — Aktuelle Struktur
-
-**Was angezeigt wird:**
-- Stats-Row (Followers, Posts, Engagement Rate)
-- Daily Brief (AI-generierte Tagesbriefing, 1× pro Tag)
-- **Content Intelligence** (6 datengetriebene Post-Ideen mit Hook, Format, Pillar, Score, Datengrundlage, Why it works)
-- Content-Säulen (Verteilung haltung/transformation/mehrwert/verkauf)
-- Competitors-Tabelle
-
-**Was entfernt wurde:**
-- ~~Trend Scout~~ — Daten fließen automatisch in Content Intelligence
-- ~~Themenvorschläge~~ — Daten fließen automatisch in Content Intelligence
-- ~~Trending bei Competitors~~ — Daten fließen automatisch in Content Intelligence
-- ~~Reddit Insights Bereich~~ — fließt still als Signal-Layer in Content Intelligence
-
----
-
-## Deployment Workflow
-
-### Frontend (React)
-```bash
-git add src/...
-git commit -m "..."
-git push origin main
-# → Cloudflare Pages deployed automatisch
-```
-
-### Edge Functions (via npx supabase — kein globales CLI nötig)
-```bash
-cd "/Users/thomaspfeffer/Downloads/Thomas Fitness/social-intelligence"
-SUPABASE_ACCESS_TOKEN=sbp_62e7a3ba913f4d26c3714dc666ab0a05ab6fa10a \
-npx supabase functions deploy FUNKTIONSNAME --project-ref shrsluxbrazqscgiwfpu --no-verify-jwt
-```
-
-**Alle Functions brauchen `--no-verify-jwt`** — Apify/AssemblyAI rufen Webhooks ohne JWT auf.
-
-Mehrere auf einmal:
-```bash
-SUPABASE_ACCESS_TOKEN=sbp_62e7a3ba913f4d26c3714dc666ab0a05ab6fa10a \
-npx supabase functions deploy scrape-webhook transcribe-video transcribe-webhook --project-ref shrsluxbrazqscgiwfpu --no-verify-jwt
-```
-
----
-
-## Transkriptions-Pipeline
-
-**Architektur:** Instagram CDN → Supabase Storage → AssemblyAI → `transcribe-webhook`
-
-**Warum Storage-Umweg:** AssemblyAI kann Instagram CDN URLs nicht direkt abrufen (IP/Session-Block von Meta). Supabase Edge Functions können Instagram-Videos laden → temporär in Storage speichern → AssemblyAI bekommt Supabase Signed URL.
-
-**Flow:**
-1. `scrape-webhook` speichert Posts mit `transcript_status='pending'`
-2. `scrape-webhook` ruft `triggerTranscription()` fire-and-forget pro Video auf
-3. `transcribe-video`: Download → Storage Upload → Signed URL → AssemblyAI Submit → status='transcribing'
-4. AssemblyAI ruft `transcribe-webhook` auf wenn fertig → Transcript in DB, Storage-File gelöscht
-
-**Warum fire-and-forget:** Parallele Downloads von 20+ Videos in einer Edge Function führen zu Timeout. Jede Transkription läuft in eigener Function-Invocation.
-
-**Storage Bucket:** `instagram-videos` (temporär, max ~150MB pro File, File wird nach Transkription gelöscht)
-
-**Signed URL:** 2h Gültigkeit — reicht für AssemblyAI (verarbeitet typisch in <10 min)
-
-### KRITISCH: SERVICE_ROLE_KEY statt SUPABASE_SERVICE_ROLE_KEY
-
-`SUPABASE_SERVICE_ROLE_KEY` wurde in Supabase Secrets falsch gesetzt (Hash statt JWT) und kann nicht geändert/gelöscht werden (reserved). Alle Functions nutzen daher:
-```typescript
-const SERVICE_KEY = Deno.env.get('SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-```
-`SERVICE_ROLE_KEY` ist korrekt als Secret gesetzt (echter JWT). Dieses Muster bei allen neuen Functions verwenden.
-
----
-
-## Wichtige Hinweise
-
-- **SUPABASE_ACCESS_TOKEN** steht in `/Users/thomaspfeffer/Downloads/Thomas Fitness/form-app/.env` (`sbp_62e7a3ba913f4d26c3714dc666ab0a05ab6fa10a`)
-- **Supabase Projekt-Ref:** `shrsluxbrazqscgiwfpu`
-- **Service Role Key holen (wenn nötig):** `curl -s "https://api.supabase.com/v1/projects/shrsluxbrazqscgiwfpu/api-keys" -H "Authorization: Bearer TOKEN" | python3 -c "import sys,json; [print(x['api_key']) for x in json.load(sys.stdin) if x['name']=='service_role']"`
-- **GitHub Token im macOS Keychain:** `security find-internet-password -s github.com -a pfefferthomas8 -w`
-- **Cloudflare Pages** deployed automatisch von `main` branch
-- **Supabase CLI via npx** — kein globales CLI, `npx supabase` funktioniert
-- **Keine Form App Logik** — komplett separates Projekt, andere DB, andere Functions
-- **`CLAUDE_MODEL` env** in Supabase Secrets setzen — default `claude-sonnet-4-5`
-- **Reddit/externe Signale** haben keinen eigenen UI-Bereich — fließen still in Content Intelligence
-- **Competitor-Usernames** müssen exakt mit Instagram übereinstimmen (kein @, kein Leerzeichen)
-- **trend_posts** werden automatisch nach 7 Tagen gelöscht (frische Daten immer)
-- **Auto-Scrape läuft täglich** — manueller Scrape-Button nur für sofortige Aktualisierung nötig
