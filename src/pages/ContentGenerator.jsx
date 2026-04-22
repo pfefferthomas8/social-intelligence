@@ -33,7 +33,6 @@ function getMusterColor(muster) {
   return '#ee4f00'
 }
 
-// Parsed eine B-Roll Idee aus dem Claude-Output
 function parseBRolls(text) {
   const blocks = text.split(/B-ROLL\s+\d+:/i).filter(b => b.trim())
   return blocks.map(block => {
@@ -43,7 +42,7 @@ function parseBRolls(text) {
       return m ? m[1].trim() : ''
     }
     const subh = get('SUBHEADLINE')
-    const muster = get('MUSTER') || get('SCHEMA') // fallback für alte Outputs
+    const muster = get('MUSTER') || get('SCHEMA')
     return {
       muster,
       hook: get('HOOK'),
@@ -74,7 +73,6 @@ function BRollCard({ roll, index }) {
       overflow: 'hidden',
       marginBottom: 14,
     }}>
-      {/* Hook Overlay Preview */}
       <div style={{ padding: '16px 16px 14px' }}>
         <div style={{
           background: '#050505',
@@ -88,7 +86,6 @@ function BRollCard({ roll, index }) {
           gap: 8,
           border: '1px solid rgba(255,255,255,0.06)',
         }}>
-          {/* Nummer + Muster badge */}
           <div style={{
             position: 'absolute', top: 10, left: 12,
             display: 'flex', gap: 5, alignItems: 'center',
@@ -114,16 +111,12 @@ function BRollCard({ roll, index }) {
               </span>
             )}
           </div>
-
-          {/* 7s Badge */}
           <div style={{
             position: 'absolute', top: 10, right: 12,
             fontSize: 9, color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--font-mono)',
           }}>
             7s
           </div>
-
-          {/* Hook Text */}
           <p style={{
             fontSize: 22, fontWeight: 900, color: '#fff',
             margin: 0, lineHeight: 1.15,
@@ -144,8 +137,6 @@ function BRollCard({ roll, index }) {
             </p>
           )}
         </div>
-
-        {/* Buttons */}
         <div style={{ display: 'flex', gap: 6 }}>
           <button
             onClick={() => copyText(roll.subheadline ? `${roll.hook}\n${roll.subheadline}` : roll.hook, setCopiedHook)}
@@ -164,8 +155,6 @@ function BRollCard({ roll, index }) {
             {captionOpen ? '▲ Caption' : '▼ Caption'}
           </button>
         </div>
-
-        {/* Caption aufklappbar */}
         {captionOpen && (
           <div style={{
             marginTop: 10,
@@ -231,9 +220,14 @@ export default function ContentGenerator() {
   const [historyLoading, setHistoryLoading] = useState(true)
   const [progress, setProgress] = useState(0)
   const [deletingId, setDeletingId] = useState(null)
-  const [ratings, setRatings] = useState({}) // id → 1 | -1
+  const [ratings, setRatings] = useState({})
   const [errorMsg, setErrorMsg] = useState('')
+  // Karussell-Kopie
+  const [slides, setSlides] = useState([])
+  const [slideLabel, setSlideLabel] = useState('')
+  const [copyMode, setCopyMode] = useState(false)
   const progressRef = useRef(null)
+  const fileInputRef = useRef(null)
 
   useEffect(() => { loadHistory() }, [])
   useEffect(() => {
@@ -246,7 +240,6 @@ export default function ContentGenerator() {
     setHistoryLoading(true)
     const { data } = await supabase.from('generated_content').select('*').order('created_at', { ascending: false }).limit(20)
     setHistory(data || [])
-    // Ratings aus geladenen Items laden
     if (data?.length) {
       const r = {}
       data.forEach(item => { if (item.user_rating) r[item.id] = item.user_rating })
@@ -256,13 +249,31 @@ export default function ContentGenerator() {
   }
 
   async function rateContent(id, rating) {
-    const newRating = ratings[id] === rating ? null : rating // Toggle: nochmal klicken entfernt Bewertung
+    const newRating = ratings[id] === rating ? null : rating
     setRatings(prev => ({ ...prev, [id]: newRating }))
     await supabase.from('generated_content').update({ user_rating: newRating }).eq('id', id)
   }
 
+  function handleSlideFiles(files) {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    const validFiles = Array.from(files).filter(f => allowed.includes(f.type)).slice(0, 12 - slides.length)
+    if (!validFiles.length) return
+    validFiles.forEach(file => {
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        const dataUrl = ev.target.result
+        const base64 = dataUrl.split(',')[1]
+        setSlides(prev => [...prev, { id: Date.now() + Math.random(), name: file.name, preview: dataUrl, base64, mediaType: file.type }])
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+
+  function removeSlide(id) {
+    setSlides(prev => prev.filter(s => s.id !== id))
+  }
+
   async function generate() {
-    if (!topic.trim()) return
     setGenerating(true)
     setResult(null)
     setProgress(0)
@@ -272,13 +283,27 @@ export default function ContentGenerator() {
       p = Math.min(p + Math.random() * 8, 88)
       setProgress(p)
     }, 400)
+
     try {
-      const data = await apiFetch('generate-content', {
-        method: 'POST',
-        body: JSON.stringify({ topic: topic.trim(), content_type: contentType, additional_info: additionalInfo })
-      })
+      let data
+      if (copyMode) {
+        data = await apiFetch('copy-carousel', {
+          method: 'POST',
+          body: JSON.stringify({
+            slides: slides.map(s => ({ base64: s.base64, mediaType: s.mediaType })),
+            additional_info: additionalInfo,
+            label: slideLabel.trim() || undefined,
+          })
+        })
+        if (data.topic) setTopic(data.topic)
+      } else {
+        data = await apiFetch('generate-content', {
+          method: 'POST',
+          body: JSON.stringify({ topic: topic.trim(), content_type: contentType, additional_info: additionalInfo })
+        })
+      }
       setProgress(100)
-      setResult(data)
+      setResult({ ...data, _copyMode: copyMode })
       setConfirmed(false)
       await loadHistory()
     } catch (e) {
@@ -299,12 +324,24 @@ export default function ContentGenerator() {
 
   function openFromHistory(item) {
     setTopic(item.topic)
-    setContentType(item.content_type)
-    setResult({ content: item.content })
+    if (item.content_type === 'carousel_copy') {
+      setCopyMode(true)
+    } else {
+      setCopyMode(false)
+      setContentType(item.content_type)
+    }
+    setResult({ content: item.content, _copyMode: item.content_type === 'carousel_copy' })
     setConfirmed(true)
   }
 
   const selectedType = CONTENT_TYPES.find(t => t.key === contentType)
+  const canGenerate = copyMode ? slides.length > 0 : topic.trim().length > 0
+
+  // Alle Content-Types für History-Anzeige (inkl. carousel_copy)
+  const ALL_CONTENT_TYPES = [
+    ...CONTENT_TYPES,
+    { key: 'carousel_copy', label: 'Karussell-Kopie', icon: '🔄' },
+  ]
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -323,77 +360,271 @@ export default function ContentGenerator() {
       <div style={{ flex: 1, overflow: 'hidden', display: 'grid', gridTemplateColumns: '420px 1fr' }}>
         {/* Left: Form */}
         <div style={{ borderRight: '1px solid var(--border)', overflowY: 'auto', padding: '24px' }}>
-          {/* Content Type */}
+
+          {/* Mode Toggle: Generator vs. Kopieren */}
           <div style={{ marginBottom: 20 }}>
-            <div className="section-label">Format</div>
+            <div className="section-label">Modus</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-              {CONTENT_TYPES.map(type => (
-                <button
-                  key={type.key}
-                  onClick={() => setContentType(type.key)}
+              <button
+                onClick={() => setCopyMode(false)}
+                style={{
+                  background: !copyMode ? 'var(--accent-dim)' : 'var(--bg-card)',
+                  border: `1px solid ${!copyMode ? 'rgba(238,79,0,0.3)' : 'var(--border)'}`,
+                  borderRadius: 'var(--r)',
+                  padding: '10px 12px',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  fontFamily: 'var(--font)',
+                  display: 'flex', gap: 8, alignItems: 'center',
+                  transition: 'all 0.12s'
+                }}
+              >
+                <span style={{ fontSize: 16 }}>✨</span>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: !copyMode ? 'var(--accent)' : 'var(--text2)' }}>
+                    Generieren
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text3)' }}>Aus Thema erstellen</div>
+                </div>
+              </button>
+              <button
+                onClick={() => setCopyMode(true)}
+                style={{
+                  background: copyMode ? 'rgba(99,102,241,0.12)' : 'var(--bg-card)',
+                  border: `1px solid ${copyMode ? 'rgba(99,102,241,0.35)' : 'var(--border)'}`,
+                  borderRadius: 'var(--r)',
+                  padding: '10px 12px',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  fontFamily: 'var(--font)',
+                  display: 'flex', gap: 8, alignItems: 'center',
+                  transition: 'all 0.12s'
+                }}
+              >
+                <span style={{ fontSize: 16 }}>🔄</span>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: copyMode ? '#818cf8' : 'var(--text2)' }}>
+                    Karussell kopieren
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text3)' }}>Bilder → deine Sprache</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {copyMode ? (
+            /* ── KARUSSELL-KOPIE MODUS ── */
+            <>
+              {/* Slide Upload */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div className="section-label" style={{ margin: 0 }}>Slides hochladen</div>
+                  <span style={{ fontSize: 11, color: 'var(--text3)' }}>{slides.length}/12 Slides</span>
+                </div>
+
+                {/* Drop Zone */}
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = '#818cf8' }}
+                  onDragLeave={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
+                  onDrop={e => {
+                    e.preventDefault()
+                    e.currentTarget.style.borderColor = 'var(--border)'
+                    handleSlideFiles(e.dataTransfer.files)
+                  }}
                   style={{
-                    background: contentType === type.key ? 'var(--accent-dim)' : 'var(--bg-card)',
-                    border: `1px solid ${contentType === type.key ? 'rgba(238,79,0,0.3)' : 'var(--border)'}`,
-                    borderRadius: 'var(--r)',
-                    padding: '10px 12px',
+                    border: '2px dashed var(--border)',
+                    borderRadius: 'var(--r-lg)',
+                    padding: '20px',
+                    textAlign: 'center',
                     cursor: 'pointer',
-                    textAlign: 'left',
-                    fontFamily: 'var(--font)',
-                    display: 'flex', gap: 8, alignItems: 'center',
-                    transition: 'all 0.12s'
+                    transition: 'border-color 0.15s',
+                    background: 'rgba(255,255,255,0.02)',
                   }}
                 >
-                  <span style={{ fontSize: 16 }}>{type.icon}</span>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: contentType === type.key ? 'var(--accent)' : 'var(--text2)' }}>
-                      {type.label}
-                    </div>
-                    <div style={{ fontSize: 10, color: 'var(--text3)' }}>{type.desc}</div>
+                  <div style={{ fontSize: 24, marginBottom: 6 }}>🖼️</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text2)', marginBottom: 3 }}>
+                    Slides hier ablegen oder klicken
                   </div>
-                </button>
-              ))}
-            </div>
-          </div>
+                  <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+                    JPG, PNG, WebP · mehrere auswählbar · max 12 Slides
+                  </div>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={e => { handleSlideFiles(e.target.files); e.target.value = '' }}
+                />
+              </div>
 
-          {/* Topic */}
-          <div style={{ marginBottom: 16 }}>
-            <div className="section-label">Thema / Idee</div>
-            <textarea
-              className="input"
-              placeholder="z.B. Warum Cardio Muskeln NICHT killt"
-              value={topic}
-              onChange={e => setTopic(e.target.value)}
-              style={{ minHeight: 72 }}
-            />
-          </div>
+              {/* Slide Vorschau */}
+              {slides.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {slides.map((slide, idx) => (
+                      <div key={slide.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        background: 'var(--bg-card)', border: '1px solid var(--border)',
+                        borderRadius: 'var(--r)', padding: '8px 10px',
+                      }}>
+                        <span style={{
+                          fontSize: 10, fontWeight: 800, color: 'var(--text3)',
+                          fontFamily: 'var(--font-mono)', minWidth: 18, textAlign: 'center',
+                        }}>
+                          {idx + 1}
+                        </span>
+                        <img
+                          src={slide.preview}
+                          alt={`Slide ${idx + 1}`}
+                          style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }}
+                        />
+                        <span style={{
+                          fontSize: 11, color: 'var(--text3)', flex: 1, minWidth: 0,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>
+                          {slide.name}
+                        </span>
+                        <button
+                          onClick={() => removeSlide(slide.id)}
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            color: 'var(--text4)', padding: '2px 4px', flexShrink: 0,
+                            fontSize: 14, lineHeight: 1,
+                          }}
+                          title="Slide entfernen"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  {slides.length < 12 && (
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="btn btn-sm"
+                      style={{ marginTop: 8, width: '100%', justifyContent: 'center' }}
+                    >
+                      + Weitere Slides hinzufügen
+                    </button>
+                  )}
+                </div>
+              )}
 
-          {/* Additional Info */}
-          <div style={{ marginBottom: 20 }}>
-            <div className="section-label">
-              Zusatzinfos{' '}
-              <span style={{ color: 'var(--text4)', textTransform: 'none', fontSize: 10 }}>(optional)</span>
-            </div>
-            <textarea
-              className="input"
-              placeholder="Zielgruppe, Fokus, besondere Anforderungen…"
-              value={additionalInfo}
-              onChange={e => setAdditionalInfo(e.target.value)}
-              style={{ minHeight: 60 }}
-            />
-          </div>
+              {/* Bezeichnung (optional) */}
+              <div style={{ marginBottom: 16 }}>
+                <div className="section-label">
+                  Bezeichnung{' '}
+                  <span style={{ color: 'var(--text4)', textTransform: 'none', fontSize: 10 }}>(optional)</span>
+                </div>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="z.B. Protein-Karussell von @coach_xyz"
+                  value={slideLabel}
+                  onChange={e => setSlideLabel(e.target.value)}
+                  style={{ fontSize: 13 }}
+                />
+              </div>
 
-          {/* Generate */}
+              {/* Kontext (optional) */}
+              <div style={{ marginBottom: 20 }}>
+                <div className="section-label">
+                  Hinweis{' '}
+                  <span style={{ color: 'var(--text4)', textTransform: 'none', fontSize: 10 }}>(optional)</span>
+                </div>
+                <textarea
+                  className="input"
+                  placeholder="z.B. Zielgruppe anpassen, bestimmten Ton beibehalten…"
+                  value={additionalInfo}
+                  onChange={e => setAdditionalInfo(e.target.value)}
+                  style={{ minHeight: 56 }}
+                />
+              </div>
+            </>
+          ) : (
+            /* ── GENERATOR MODUS ── */
+            <>
+              {/* Content Type */}
+              <div style={{ marginBottom: 20 }}>
+                <div className="section-label">Format</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                  {CONTENT_TYPES.map(type => (
+                    <button
+                      key={type.key}
+                      onClick={() => setContentType(type.key)}
+                      style={{
+                        background: contentType === type.key ? 'var(--accent-dim)' : 'var(--bg-card)',
+                        border: `1px solid ${contentType === type.key ? 'rgba(238,79,0,0.3)' : 'var(--border)'}`,
+                        borderRadius: 'var(--r)',
+                        padding: '10px 12px',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        fontFamily: 'var(--font)',
+                        display: 'flex', gap: 8, alignItems: 'center',
+                        transition: 'all 0.12s'
+                      }}
+                    >
+                      <span style={{ fontSize: 16 }}>{type.icon}</span>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: contentType === type.key ? 'var(--accent)' : 'var(--text2)' }}>
+                          {type.label}
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--text3)' }}>{type.desc}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Topic */}
+              <div style={{ marginBottom: 16 }}>
+                <div className="section-label">Thema / Idee</div>
+                <textarea
+                  className="input"
+                  placeholder="z.B. Warum Cardio Muskeln NICHT killt"
+                  value={topic}
+                  onChange={e => setTopic(e.target.value)}
+                  style={{ minHeight: 72 }}
+                />
+              </div>
+
+              {/* Additional Info */}
+              <div style={{ marginBottom: 20 }}>
+                <div className="section-label">
+                  Zusatzinfos{' '}
+                  <span style={{ color: 'var(--text4)', textTransform: 'none', fontSize: 10 }}>(optional)</span>
+                </div>
+                <textarea
+                  className="input"
+                  placeholder="Zielgruppe, Fokus, besondere Anforderungen…"
+                  value={additionalInfo}
+                  onChange={e => setAdditionalInfo(e.target.value)}
+                  style={{ minHeight: 60 }}
+                />
+              </div>
+            </>
+          )}
+
+          {/* Generate Button */}
           <button
             onClick={generate}
-            disabled={!topic.trim() || generating}
+            disabled={!canGenerate || generating}
             className="btn btn-primary"
-            style={{ width: '100%', padding: '11px', fontSize: 14, fontWeight: 700 }}
+            style={{
+              width: '100%', padding: '11px', fontSize: 14, fontWeight: 700,
+              ...(copyMode ? { background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', borderColor: '#4f46e5' } : {})
+            }}
           >
             {generating ? (
               <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span className="spinner" style={{ width: 15, height: 15, borderColor: 'rgba(255,255,255,0.3)', borderTopColor: '#fff' }} />
-                Generiert…
+                {copyMode ? 'Wird umgeschrieben…' : 'Generiert…'}
               </span>
+            ) : copyMode ? (
+              `🔄 Karussell in meiner Sprache umschreiben`
             ) : (
               `${selectedType?.icon} ${selectedType?.label} generieren`
             )}
@@ -405,7 +636,10 @@ export default function ContentGenerator() {
                 <div className="progress-fill" style={{ width: `${progress}%` }} />
               </div>
               <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, textAlign: 'center' }}>
-                {progress < 30 ? 'Daten werden geladen…' : progress < 70 ? 'Claude analysiert & schreibt…' : 'Fast fertig…'}
+                {copyMode
+                  ? (progress < 30 ? 'Slides werden analysiert…' : progress < 70 ? 'Claude schreibt in Thomas\' Stil…' : 'Fast fertig…')
+                  : (progress < 30 ? 'Daten werden geladen…' : progress < 70 ? 'Claude analysiert & schreibt…' : 'Fast fertig…')
+                }
               </div>
             </div>
           )}
@@ -433,13 +667,17 @@ export default function ContentGenerator() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
-                    {CONTENT_TYPES.find(t => t.key === result.content_type || t.key === contentType)?.icon} Ergebnis
+                    {result._copyMode
+                      ? '🔄 Karussell-Kopie'
+                      : `${ALL_CONTENT_TYPES.find(t => t.key === (result.content_type || contentType))?.icon} Ergebnis`}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{topic}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
+                    {result._copyMode ? (slideLabel || topic || 'Karussell-Kopie') : topic}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  {contentType !== 'b_roll' && <CopyButton text={result.content} />}
-                  <button onClick={generate} className="btn btn-sm">↻ Neu</button>
+                  {(contentType !== 'b_roll' || result._copyMode) && <CopyButton text={result.content} />}
+                  <button onClick={generate} className="btn btn-sm" disabled={!canGenerate}>↻ Neu</button>
                   <button onClick={() => setResult(null)} className="btn btn-sm" title="Schließen">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
                       <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
@@ -449,22 +687,23 @@ export default function ContentGenerator() {
               </div>
 
               {/* B-Roll: spezielle Karten-Ansicht */}
-              {contentType === 'b_roll' ? (
+              {!result._copyMode && contentType === 'b_roll' ? (
                 <div>
                   {parseBRolls(result.content).map((roll, i) => (
                     <BRollCard key={i} roll={roll} index={i} />
                   ))}
                 </div>
               ) : (
-              <div style={{
-                background: 'var(--bg-card)', border: '1px solid var(--border)',
-                borderRadius: 'var(--r-lg)', padding: '20px',
-                fontSize: 14, lineHeight: 1.8, color: 'var(--text2)',
-                whiteSpace: 'pre-wrap', minHeight: 300
-              }}>
-                {result.content}
-              </div>
+                <div style={{
+                  background: 'var(--bg-card)', border: '1px solid var(--border)',
+                  borderRadius: 'var(--r-lg)', padding: '20px',
+                  fontSize: 14, lineHeight: 1.8, color: 'var(--text2)',
+                  whiteSpace: 'pre-wrap', minHeight: 300
+                }}>
+                  {result.content}
+                </div>
               )}
+
               {/* Feedback Buttons */}
               {result.id && (
                 <div style={{
@@ -555,8 +794,8 @@ export default function ContentGenerator() {
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
-                            <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                              {CONTENT_TYPES.find(t => t.key === item.content_type)?.icon} {CONTENT_TYPES.find(t => t.key === item.content_type)?.label}
+                            <span style={{ fontSize: 10, color: item.content_type === 'carousel_copy' ? '#818cf8' : 'var(--accent)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                              {ALL_CONTENT_TYPES.find(t => t.key === item.content_type)?.icon} {ALL_CONTENT_TYPES.find(t => t.key === item.content_type)?.label}
                             </span>
                             <span style={{ fontSize: 11, color: 'var(--text3)' }}>
                               {new Date(item.created_at).toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
@@ -567,7 +806,6 @@ export default function ContentGenerator() {
                           </p>
                         </div>
                         <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
-                          {/* Feedback Buttons */}
                           <button
                             onClick={e => { e.stopPropagation(); rateContent(item.id, 1) }}
                             className="btn btn-sm"
