@@ -41,8 +41,13 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'Max 12 Slides' }), { status: 400, headers: CORS })
   }
 
-  // Thomas DNA für Stil-Kontext laden
-  const thomasDna = await dbQuery('thomas_dna?select=category,insight,confidence&order=confidence.desc&limit=25')
+  // Thomas DNA + eigene Posts + positiv bewertete Outputs laden
+  const [thomasDna, ownPosts, topRatedCarousels] = await Promise.all([
+    dbQuery('thomas_dna?select=category,insight,confidence&order=confidence.desc&limit=25'),
+    dbQuery('instagram_posts?select=caption,transcript,views_count&source=eq.own&order=views_count.desc&limit=12'),
+    dbQuery('generated_content?select=topic,content&user_rating=eq.1&content_type=in.(carousel,carousel_copy)&order=created_at.desc&limit=4'),
+  ])
+
   const dnaByCategory: Record<string, any[]> = {}
   for (const d of thomasDna) {
     if (!dnaByCategory[d.category]) dnaByCategory[d.category] = []
@@ -50,30 +55,77 @@ Deno.serve(async (req: Request) => {
   }
   const dna = (cat: string) => (dnaByCategory[cat] || []).map((d: any) => `• ${d.insight}`).join('\n')
 
+  function clean(text: unknown): string {
+    if (!text) return ''
+    return String(text).replace(/[\uD800-\uDFFF]/g, '').replace(/\0/g, '').substring(0, 400)
+  }
+
+  // Thomas' echte Post-Texte als Stil-Referenz
+  const ownPostExamples = ownPosts
+    .filter((p: any) => (p.caption || p.transcript))
+    .slice(0, 8)
+    .map((p: any) => {
+      const text = clean([p.caption, p.transcript].filter(Boolean).join(' | '))
+      return `[${(p.views_count || 0).toLocaleString()} Views]\n"${text}"`
+    }).join('\n\n')
+
+  // Positiv bewertete Karussell-Outputs
+  const ratedExamples = topRatedCarousels
+    .map((r: any) => {
+      const preview = clean(r.content).substring(0, 300)
+      return `Thema: "${r.topic}"\n${preview}…`
+    }).join('\n\n---\n\n')
+
   const systemPrompt = `Du schreibst ausschließlich für Thomas Pfeffer — Fitness-Coach, DACH-Markt, Männer 30+.
 
-Du bekommst Screenshots von Karussell-Slides eines anderen Creators.
-Deine einzige Aufgabe: Den Inhalt dieser Slides 1:1 in Thomas' Schreibstil und Sprache neu formulieren.
+Du bekommst Screenshots von Karussell-Slides. Deine Aufgabe: Den Inhalt dieser Slides 1:1 inhaltlich übernehmen und in Thomas' Schreibstil auf Deutsch neu formulieren.
 
-REGELN:
+══════════════════════════════════════════════════
+PFLICHT-REGELN
+══════════════════════════════════════════════════
 • GLEICHE Message — keine Aussage verändern, weglassen oder hinzufügen
-• GLEICHE Struktur — gleiche Anzahl Slides, gleiche Slide-Reihenfolge
-• NUR die Formulierung ändert sich — in Thomas' Deutsch, Thomas' Rhythmus
-• Nicht kreativ werden — es geht ums Übersetzen in seinen Stil, nicht ums Neuerfinden
-• Gib NUR den Slide-Text aus — kein Kommentar, keine Erklärung, keine Meta-Infos
+• GLEICHE Struktur — gleiche Anzahl Slides, gleiche Reihenfolge
+• NUR die Formulierung ändert sich — in Thomas' Sprache, Thomas' Rhythmus
+• Gib NUR den Slide-Text aus — kein Kommentar, keine Erklärung
 
-THOMAS' SCHREIBSTIL:
-${dna('style_rule') || '• Kurze, klare Sätze als Stilmittel\n• Sachlich, kein Hype, keine leere Motivation\n• Du-Ansprache, direkt\n• Fakten und Mechanismen statt Phrasen'}
+══════════════════════════════════════════════════
+SPRACHLICHE QUALITÄT — ABSOLUT KRITISCH
+══════════════════════════════════════════════════
+• Jeder Satz muss auf DEUTSCH grammatikalisch einwandfrei sein
+• KEIN wörtlich übersetzter Satzbau aus dem Englischen
+  VERBOTEN: "Das ist nicht, was du denkst." → RICHTIG: "Das meinst du falsch."
+  VERBOTEN: "Hier ist, was du tun musst:" → RICHTIG: "Das musst du tun:"
+  VERBOTEN: "Das ist nicht der Fall." → RICHTIG: "Das stimmt nicht."
+• Englische Ausdrücke NUR wenn Thomas sie nachweislich nutzt (z.B. "Coaching", "Mindset")
+• Kein Denglisch, kein aufgesetzter Influencer-Stil
+• Lies jeden fertigen Satz laut durch: Klingt das wie ein Österreicher/Deutscher, der erklärt? Dann ist es richtig.
+
+══════════════════════════════════════════════════
+THOMAS' SCHREIBSTIL
+══════════════════════════════════════════════════
+${dna('style_rule') || '• Kurze, klare Sätze\n• Sachlich, kein Hype, keine leere Motivation\n• Du-Ansprache, direkt\n• Fakten und Mechanismen statt Phrasen'}
 
 THOMAS' ZIELGRUPPE:
-${dna('audience_pattern') || '• Männer 30–55, beruflich erfolgreich\n• Wollen Effizienz bei Training und Ernährung\n• Smarte Lösungen, keine Extremmethoden'}
+${dna('audience_pattern') || '• Männer 30–55, beruflich erfolgreich\n• Wollen Effizienz, keine Extremmethoden'}
 
 THOMAS' HOOK-MUSTER:
 ${dna('hook_pattern') || '• Du-Ansprache + Paradoxon\n• Validierung vor Lösung\n• Konkrete Zahlen statt vage Aussagen'}
 
-FORMAT der Ausgabe (exakt so, keine Abweichungen):
+══════════════════════════════════════════════════
+SO SCHREIBT THOMAS IN DER PRAXIS — LERNE SEINEN RHYTHMUS
+══════════════════════════════════════════════════
+Das sind echte Texte von Thomas. Sein Satzbau, seine Wortwahl, sein Rhythmus — das ist der Standard:
+
+${ownPostExamples || 'Keine eigenen Posts verfügbar — schreibe sachlich, direkt, kurze Sätze, Du-Ansprache.'}
+
+${ratedExamples ? `══════════════════════════════════════════════════
+THOMAS HAT DIESE OUTPUTS GUT BEWERTET — SO KLINGT ES RICHTIG
+══════════════════════════════════════════════════
+${ratedExamples}` : ''}
+
+FORMAT der Ausgabe (exakt so):
 SLIDE [Nummer]:
-[Text der Slide]`
+[Text]`
 
   // Vision content blocks — jedes Bild als eigener Block
   const imageBlocks = (slides as any[]).map((s: any) => ({
@@ -85,10 +137,12 @@ SLIDE [Nummer]:
     }
   }))
 
-  const userPrompt = `Das sind ${slides.length} Slides eines Karussells (Slide 1 bis Slide ${slides.length} in der angezeigten Reihenfolge).
+  const userPrompt = `Das sind ${slides.length} Slides eines Karussells (in der gezeigten Reihenfolge: Slide 1 bis Slide ${slides.length}).
 
-Lies den Text auf jeder Slide genau. Schreibe ihn dann 1:1 in Thomas' Schreibstil um — gleiche Botschaft, gleiche Slide-Anzahl.
-${additional_info ? `\nKontext / Hinweis: ${additional_info}` : ''}
+SCHRITT 1 — Lies den Text auf jeder Slide genau. Verstehe die vollständige Message.
+SCHRITT 2 — Formuliere jeden Slide-Text neu: gleiche Botschaft, Thomas' Stil, grammatikalisch einwandfreies Deutsch.
+SCHRITT 3 — Lies jeden fertigen Satz durch: Klingt er natürlich auf Deutsch? Nicht wie eine Übersetzung?
+${additional_info ? `\nKontext: ${additional_info}` : ''}
 
 SLIDE [Nummer]:
 [Text]`
