@@ -695,9 +695,11 @@ export default function ContentGenerator() {
                 </div>
               ) : (
                 <div style={{
-                  background: 'var(--bg-card)', border: '1px solid var(--border)',
+                  background: result._copyMode ? 'rgba(139,92,246,0.06)' : 'var(--bg-card)',
+                  border: `1px solid ${result._copyMode ? 'rgba(139,92,246,0.25)' : 'var(--border)'}`,
                   borderRadius: 'var(--r-lg)', padding: '20px',
-                  fontSize: 14, lineHeight: 1.8, color: 'var(--text2)',
+                  fontSize: 14, lineHeight: 1.8,
+                  color: result._copyMode ? '#c4b5fd' : 'var(--text2)',
                   whiteSpace: 'pre-wrap', minHeight: 300
                 }}>
                   {result.content}
@@ -783,12 +785,13 @@ export default function ContentGenerator() {
                     <div
                       key={item.id}
                       style={{
-                        background: 'var(--bg-card)', border: '1px solid var(--border)',
+                        background: item.content_type === 'carousel_copy' ? 'rgba(139,92,246,0.05)' : 'var(--bg-card)',
+                        border: `1px solid ${item.content_type === 'carousel_copy' ? 'rgba(139,92,246,0.2)' : 'var(--border)'}`,
                         borderRadius: 'var(--r)', padding: '14px',
                         cursor: 'pointer', transition: 'border-color 0.12s'
                       }}
-                      onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-strong)'}
-                      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = item.content_type === 'carousel_copy' ? 'rgba(139,92,246,0.45)' : 'var(--border-strong)'}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = item.content_type === 'carousel_copy' ? 'rgba(139,92,246,0.2)' : 'var(--border)'}
                       onClick={() => openFromHistory(item)}
                     >
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
