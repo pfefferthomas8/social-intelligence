@@ -179,7 +179,21 @@ SLIDE [Nummer]:
   }
   if (!content) return new Response(JSON.stringify({ error: 'Claude überlastet. Bitte nochmal versuchen.', detail: lastErrContent }), { status: 503, headers: CORS })
 
-  const topic = label || `Karussell-Kopie (${slides.length} Slides)`
+  // Titel aus SLIDE 1 ableiten — das ist der Hook, prägnant und aussagekräftig
+  function extractTitle(text: string): string {
+    const slide1Match = text.match(/SLIDE\s*1\s*:\s*\n?([\s\S]+?)(?=\nSLIDE\s*2|$)/i)
+    if (!slide1Match) return ''
+    const slide1 = slide1Match[1].trim()
+    // Erste nicht-leere Zeile nehmen
+    const firstLine = slide1.split('\n').map(l => l.trim()).find(l => l.length > 3) || ''
+    // Max 70 Zeichen, an Wortgrenze kürzen
+    if (firstLine.length <= 70) return firstLine
+    const cut = firstLine.substring(0, 67)
+    const lastSpace = cut.lastIndexOf(' ')
+    return (lastSpace > 30 ? cut.substring(0, lastSpace) : cut) + '…'
+  }
+
+  const topic = label || extractTitle(content) || `Karussell-Kopie (${slides.length} Slides)`
   const saveRes = await fetch(`${SUPABASE_URL}/rest/v1/generated_content`, {
     method: 'POST',
     headers: dbHeaders(),
