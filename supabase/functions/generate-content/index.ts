@@ -174,21 +174,37 @@ Das stärkste Muster aus der Datenbank: NORMALISIERUNG von Disziplin als Identit
 Referenz (coachdango 67K Likes): "Deine eigene Mahlzeit mitbringen ist nicht weird. Früh gehen um zu trainieren ist nicht unhöflich. Irgendwann hat die Gesellschaft entschieden, dass Struktur eine Entschuldigung braucht."
 
 ════════════════════════════════════
-SLIDE 1 — DER KONTRAST-HOOK (Neugier, kein Insight)
+SLIDE 1 — KURIOUS ODER POLARISIEREND (nicht beides — entscheide dich)
 ════════════════════════════════════
-Zwei Zeilen. Erster Satz = eine alltägliche Beobachtung. Zweiter Satz = der Bruch der nicht stimmt.
-Thomas' stärkstes Muster: "Die meisten Männer [konkretes alltägliches Verhalten]." / "[Kurzer Kontrast-Satz, 3-5 Wörter, der nicht stimmt.]"
-KEIN Insight, KEINE Antwort — nur die Spannung.
-Referenz: "Die meisten Männer checken ihren Kontostand täglich. Aber ihren Körper? Einmal im Jahr."
+Zwei Optionen. Wähle die stärkere für das konkrete Thema:
+
+OPTION A — KURIOUS: Öffnet eine Wissenslücke die der Leser schließen MUSS.
+Funktioniert wenn das Thema eine überraschende Wahrheit hat.
+Muster: Eine Aussage die wie ein Widerspruch klingt, aber wahr ist.
+Beispiel: "Der Grund warum Männer mit mehr Disziplin oft weniger erreichen."
+Beispiel: "Warum du mit 3 Trainingseinheiten pro Woche mehr Muskeln aufbaust als mit 6."
+
+OPTION B — POLARISIEREND: Provoziert. Nicht jeder ist einverstanden. Das ist das Ziel.
+Funktioniert wenn das Thema eine unbequeme Meinung trägt.
+Muster: Eine klare, direkte Aussage die den Leser entweder sofort zustimmen oder widersprechen lässt.
+Beispiel: "Training ist keine Frage der Zeit. Es ist eine Frage des Charakters."
+Beispiel: "Die meisten Männer trainieren nie. Sie planen es nur."
+
+VERBOTEN: Weiche Kontrast-Sätze die weder kuriosierten noch polarisieren.
+VERBOTEN: "Die meisten Männer trainieren, wenn sie Zeit haben. Komisch nur, dass sie nie Zeit haben." — das ist zu harmlos, zu vorhersehbar.
+Slide 1 muss sofort einen Reflex auslösen: "Wie meint er das?" ODER "Was? Das stimmt/stimmt nicht!"
 
 ════════════════════════════════════
-SLIDE 2 — DIE BRUTALE WAHRHEIT (PFLICHT: der Slide der nicht loslässt)
+SLIDE 2 — STANDALONE + BRUTALE WAHRHEIT (PFLICHT: der entscheidende Slide)
 ════════════════════════════════════
-Kein Alltagsszenario. Keine Einleitung. DIREKT die unbequeme Wahrheit.
-Kurz. Brutal. Spezifisch. Lennart-Stil: Ein bis zwei Sätze, die treffen wie ein Schlag.
-Referenz (Lennart 1988 Likes): "Wenn dein Kaffee nach Dessert schmeckt, wundere dich nicht wenn dein Körper auch danach aussieht."
-Der Leser soll kurz innehalten und denken: "Das stimmt. Das trifft mich."
-Keine Erklärung auf Slide 2. Nur die Aussage die trifft.
+INSTAGRAM-REALITÄT: Viele Leser sehen Slide 2 bevor sie Slide 1 richtig gelesen haben.
+Slide 2 MUSS deshalb zwei Dinge gleichzeitig leisten:
+(1) Für sich alleine funktionieren — auch wer Slide 1 nur überflogen hat, versteht sofort worum es geht.
+(2) Die brutalste, direkteste Aussage zum Thema sein — kein Aufwärmen, kein Einstieg.
+
+Kurz. Direkt. Spezifisch. Kein erklärender Einleitungssatz.
+Der Leser soll nach Slide 2 denken: "Das stimmt. Das trifft mich. Ich will mehr davon."
+Referenz (Lennart 1988 Likes): "Wenn dein Kaffee nach Dessert schmeckt, wundere dich nicht wenn dein Körper auch danach aussieht." — Wer das liest ohne Slide 1, versteht es trotzdem sofort.
 
 ════════════════════════════════════
 SLIDES 3-5 — DAS REFRAMING (Schicht für Schicht)
@@ -209,15 +225,23 @@ Referenz: "Jacked wirst du nicht im Gym. Du wirst es in dem Moment wenn 99% impu
 ════════════════════════════════════
 LETZTE SLIDE — NUR DIE QUOTE. KEIN CTA. NIEMALS.
 ════════════════════════════════════
-ABSOLUTES VERBOT: Kein "Teile das", kein "Folge mir", kein "Kommentiere", kein "Schreib mir". Nichts.
-NUR ein einziger Satz. Maximal zwei kurze.
-Der Satz muss ohne jeden Kontext funktionieren — als Screenshot, als Story, als Zitat.
-Er muss eine Wahrheit benennen die der Leser schon immer gefühlt hat, aber nie so klar formuliert gehört hat.
-Er bestätigt seine Identität. Er macht ihn stolz darauf wer er ist oder sein will.
-Test: Würde jemand diesen Satz als Story posten mit "So ist es."? Wenn ja, ist er richtig.
-Referenz-Stil:
-"Struktur. Standards. Selbstführung. Heute nennen viele das extrem. Aber nur weil der Durchschnitt so weit davon entfernt ist."
-"Jacked wirst du nicht im Gym. Du wirst es in dem Moment wenn 99% impulsiv handeln und du Standards wählst."
+ABSOLUTES VERBOT: Kein "Teile das", kein "Folge mir", kein "Kommentiere", kein "Schreib mir". Nichts davon.
+NUR ein einziger Satz. Maximal zwei.
+
+WICHTIGSTE REGEL: Klingt der Satz wie etwas das eine KI geschrieben hat? Dann ist er falsch.
+Der Satz muss sich anfühlen wie etwas das ein Mensch in einem echten Gespräch sagen würde.
+Kein "Das einzige System das nicht verhandelt." — das ist steif und klingt konstruiert.
+Kein aufgeblasener Satzbau. Keine Metaphern die zu weit greifen.
+
+STATTDESSEN: Direkt. Menschlich. So wie Thomas selbst reden würde.
+Der Satz trifft weil er eine Wahrheit ausspricht die jeder kennt, aber niemand so klar gesagt hat.
+Er muss zum spezifischen Thema des Karussells passen — keine generische Lebensweisheit.
+
+Test 1: Würde ein echter Mensch das als Instagram-Story posten mit nichts außer diesem Satz?
+Test 2: Klingt es wie etwas das Thomas in einem Gespräch sagen würde — oder wie etwas das eine KI für tief hält?
+Test 3: Passt der Satz direkt zum Thema des Karussells, oder könnte er zu jedem beliebigen Haltungs-Post gehören?
+
+Alle drei Tests müssen bestanden sein. Sonst neu schreiben.
 
 FORMAT:
 SLIDE [Nummer]:
