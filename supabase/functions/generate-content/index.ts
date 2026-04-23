@@ -39,140 +39,243 @@ const FORMAT_INSTRUCTIONS: Record<string, string> = {
 - OUTRO & CTA (was der Zuschauer jetzt tun soll)
 Markiere jeden Abschnitt klar. Schreibe so wie man spricht, keine Fachsprache.`,
 
-  carousel_mehrwert: `Erstelle einen MEHRWERT-Karussell-Post mit 7-9 Slides. Ziel: Der Leser SPEICHERT diesen Post.
+  carousel_mehrwert: `Erstelle einen MEHRWERT-Karussell-Post mit 7-9 Slides.
+ZIEL: Jeder Slide zwingt zum Weiterwischen. Die letzte Slide wird geteilt.
 Nur reiner Text. Keine Design-Tags, keine Layout-Labels.
-
 ABSOLUTES VERBOT: KEINE Gedankenstriche (—), KEINE Bindestriche als Satzzeichen.
 
-══════════════════════════════════════════════════════════
-SLIDE 1 — NEUGIER-LÜCKE: Thema benennen, Antwort verbergen
-══════════════════════════════════════════════════════════
-Genau zwei Zeilen. Kein Insight, kein Bold Claim, keine Antwort.
-Starter: "Warum..." / "Der Grund warum..." / "Das Problem mit..." / "Eine Sache über..."
-Zeile 2 nur wenn sie echten Sog erzeugt: "Den die meisten nie erkennen." / "Über die kaum jemand spricht."
+════════════════════════════════════
+SLIDE 1 — DER SCHOCK-HOOK
+════════════════════════════════════
+Eine Zeile. Maximal zwei. Kein Insight, nur das Versprechen von etwas Überraschendem.
+Die Zielgruppe sind Männer 30+ die beruflich erfolgreich sind, ihren Körper aber vernachlässigt haben.
+Der Hook muss ein konkretes, überraschendes Versprechen machen — KEIN "5 Tipps für..." Clickbait.
 
-SLIDE 2 — DAS PROBLEM
-Warum die meisten das falsch machen. Konkret, erkennbar, fühlbar.
-Ein konkretes Alltagsszenario mit innerem Monolog in Anführungszeichen.
+RICHTIG: "Warum Männer die täglich Ausdauer machen, langsamer Fett verlieren."
+RICHTIG: "Der Grund warum du mit 3 Einheiten pro Woche mehr Muskeln aufbaust als mit 6."
+FALSCH: "5 Fehler beim Abnehmen." (zu generisch)
+FALSCH: "Cardio killt Muskeln." (verrät die Antwort)
 
-SLIDES 3 bis (N-2) — JE EIN KONKRETER TIPP ODER INSIGHT
-Jede Slide = eine Sache. Spezifisch. Umsetzbar. Mit kurzem "Warum" dahinter.
-Keine Aufzählungen innerhalb einer Slide. Eine Aussage, eine Erklärung, fertig.
-Texte können kurz (2-4 Wörter, Impact) oder länger (Erklärung, Tiefe) sein.
+════════════════════════════════════
+SLIDE 2 — DIE SCHOCKIERENDE WAHRHEIT (PFLICHT: hier verliert man den Leser oder gewinnt ihn)
+════════════════════════════════════
+Das ist der wichtigste Slide. Keine Einleitung. Keine Wiederholung von Slide 1.
+DIREKT mit der überraschendsten Aussage oder Zahl beginnen die zum Thema existiert.
+Muster der Top-Posts: Konkrete Studie ODER schockierende Statistik ODER kontraintuitives Faktum.
+Beispiel-Muster (coachdango 18K Likes): "Studien zeigen: Männer die 2x pro Woche Sex haben, haben 30% mehr IgA-Antikörper, niedrigeren Cortisol und bessere Herzwerte als Männer die abstinent leben."
+Der Leser muss denken: "Das wusste ich nicht. Weiter."
+Am Ende von Slide 2: Optional ein Cliffhanger-Satz der auf die nächste Slide zieht. "Und das ist erst der Anfang."
 
-SLIDE (N-1) — DER ÜBERRASCHENDE ÜBERBLICK
-Der eine Satz den der Leser screenshot-t. Die Kernbotschaft in ihrer klarsten Form.
+════════════════════════════════════
+SLIDES 3 bis (N-2) — JE EIN KONKRETER TIPP MIT MECHANISMUS
+════════════════════════════════════
+Jede Slide = eine einzige Sache. Kein Listicle innerhalb der Slide.
+Aufbau jeder Slide: [Die Aussage/der Tipp] + [Warum das funktioniert — der Mechanismus, kurz]
+Spezifisch und direkt umsetzbar. Nicht "schlaf mehr" — sondern "Wer unter 7h schläft, hat 24% mehr Hunger am nächsten Tag (Ghrelin-Anstieg). Eine Stunde mehr Schlaf = eine Diät-Woche Unterschied."
+Jede Slide endet so dass der Leser reflexartig weiterwischt. Entweder offene Frage, Ellipse, oder "Aber Slide X ist noch stärker."
 
-LETZTE SLIDE — CTA
-Kurz. Eine Handlung. Direkt.
+════════════════════════════════════
+SLIDE (N-1) — DER SCREENSHOT-SATZ
+════════════════════════════════════
+Die Kernbotschaft des gesamten Karussells in einem einzigen Satz.
+So formuliert, dass man ihn rauskopieren und jemand schicken will.
+Kein "Fazit:" oder "Zusammenfassend:". Direkt die Aussage.
+
+════════════════════════════════════
+LETZTE SLIDE — SHARE-CTA (PFLICHT)
+════════════════════════════════════
+KEIN generischer "Folge mir für mehr"-CTA.
+Der CTA muss zum Teilen auffordern und einen konkreten Menschen nennen für den es relevant ist.
+Pflicht-Muster: "Schick das an [jemanden der gerade X macht / kämpft mit Y / seit Monaten Z versucht]."
+Beispiel: "Schick das an jemanden der gerade abnehmen will aber nicht weiterkommt."
+Beispiel: "Teile das mit dem Mann in deinem Leben der seit Jahren dasselbe Problem hat."
+Optional: Eine zweite Zeile mit Thomas' CTA (Kommentieren, DM).
 
 FORMAT:
 SLIDE [Nummer]:
 [Text]`,
 
-  carousel_transformation: `Erstelle einen TRANSFORMATION-Karussell-Post mit 7-9 Slides. Ziel: Der Leser TEILT oder SENDET diesen Post.
+  carousel_transformation: `Erstelle einen TRANSFORMATION-Karussell-Post mit 7-9 Slides.
+ZIEL: Der Leser sieht sich selbst in der Geschichte. Er schickt es jemandem der dasselbe erlebt.
 Nur reiner Text. Keine Design-Tags, keine Layout-Labels.
-
 ABSOLUTES VERBOT: KEINE Gedankenstriche (—), KEINE Bindestriche als Satzzeichen.
 
-Kann Thomas' eigene Geschichte sein ODER eine Kunden-Transformation (dann "er"/"sie").
-Immer konkrete Zahlen: Wochen, Kilo, Kalorien, Trainingshäufigkeit.
+WICHTIG: Die Geschichte kann ERFUNDEN sein. Sie muss sich aber zu 100% real anfühlen.
+Schreibe entweder als Thomas (ich-Perspektive) oder als Kundengeschichte ("Er ist 38, Unternehmer...").
+Immer: Spezifische Zahlen. Konkretes Alter. Konkreter Beruf. Konkrete Ausgangssituation.
+Zielgruppe: Männer 30-50, beruflich erfolgreich, körperlich vernachlässigt, zu beschäftigt oder zu müde.
+Der größte Fehler: Zu abstrakt, zu schnell beim Ergebnis, zu wenig Identifikation.
 
-SLIDE 1 — AUSGANGSSITUATION
-Wer war die Person? Wo stand sie? Ein konkretes Bild. Kein Spoiler auf das Ergebnis.
-Kein "Vor 12 Wochen war ich fett." Stattdessen: Spezifische Situation die der Leser kennt.
+════════════════════════════════════
+SLIDE 1 — DIE AUSGANGSSITUATION (kein Hinweis auf das Ergebnis)
+════════════════════════════════════
+Zeichne ein konkretes Bild der Person BEVOR sich etwas verändert hat.
+Spezifisch: Alter, Job, Situation, Körpergefühl. KEIN "Ich war unzufrieden."
+Referenz-Muster (coachdango 44K Likes): "In der Schule war ich der dicke, orientierungslose Typ der tagsüber Videospiele spielte und nachts soff."
+Der Leser denkt: "Das bin ich. Das kenn ich. Was kommt jetzt?" — KEIN Spoiler auf die Transformation.
 
-SLIDE 2 — DAS KONKRETE PROBLEM
-Was hat nicht funktioniert? Welcher Versuch ist gescheitert? Spezifisch und fühlbar.
-Der Leser denkt: "Genau das kenne ich."
+════════════════════════════════════
+SLIDE 2 — DER TIEFPUNKT (PFLICHT: der emotionalste Moment)
+════════════════════════════════════
+Das ist der Slide der den Leser nicht loslässt. Kein abstrakter "Ich war unzufrieden."
+Ein KONKRETER Moment. Spezifisch. Oft klein und banal — gerade deshalb trifft er.
+Innerer Monolog in Anführungszeichen. So spezifisch dass der Leser denkt: "Woher weiß er das?"
+Referenz-Muster: "Ich stand vor dem Spiegel nach dem Duschen. 39 Jahre alt. Bauch. Keine Energie mehr nach 20 Uhr. Meine Frau sagte nichts. Das war das Schlimmste."
+Enden mit einer kurzen Aussage die Spannung aufbaut: "Dann ist etwas passiert das ich nicht erwartet hätte."
 
-SLIDES 3-5 — DER WEG
-Was hat sich verändert? Welche Entscheidung wurde getroffen?
-Je eine konkrete Veränderung pro Slide. Methode, Mindset-Shift, oder Erkenntnis.
-Keine Aufzählung, jede Slide eine Aussage mit Tiefe.
+════════════════════════════════════
+SLIDES 3-5 — DER WEG (nicht der Erfolg, die Reise)
+════════════════════════════════════
+Nicht "Ich habe angefangen Sport zu machen." — das ist leer.
+Jede Slide = ein konkreter Wendepunkt, eine Entscheidung, eine Erkenntnis.
+Zeige die Schwierigkeit. Zeige was nicht funktioniert hat. Zeige den ersten kleinen Sieg.
+Zahlen einbauen: "Erste 3 Wochen: minus 1,5 kg. Ich dachte: zu langsam. Dann..."
+Jede Slide endet mit Spannung zur nächsten: Ellipse, offene Frage, oder "Aber dann..."
 
-SLIDE 6 — DAS ERGEBNIS
-Konkret und messbar. Zahlen. Zeitraum. Was sich außer dem Körper noch verändert hat.
+════════════════════════════════════
+SLIDE 6 — DAS ERGEBNIS (konkret, nicht nur körperlich)
+════════════════════════════════════
+Zahlen. Zeitraum. Aber AUCH was sich außer dem Körper verändert hat.
+Schlecht: "Ich hab 12 Kilo abgenommen."
+Gut: "12 Wochen. Minus 8 Kilo. Aber das war nicht das Beste. Ich schlafe wieder durch. Meine Frau sagt, ich bin wieder der Mann den sie geheiratet hat."
 
-SLIDE 7 — WAS DAS FÜR DEN LESER BEDEUTET
-Der Transfer. "Wenn das möglich war, dann..." — Direkte Ansprache des Lesers.
+════════════════════════════════════
+SLIDE 7 — DER SPIEGEL (der Leser erkennt sich)
+════════════════════════════════════
+Direkte Ansprache des Lesers. Nicht "Das kannst du auch." — das ist leer.
+Zeige dem Leser dass er gerade genau dort ist wo die Person in der Geschichte war.
+Muster: "Wenn du gerade [sehr spezifische Situation aus der Geschichte] kennst, dann weißt du genau wie sich das anfühlt."
+Der Leser denkt: "Er spricht von mir."
 
+════════════════════════════════════
 LETZTE SLIDE — CTA
-Eine Handlung. Direkt. Ohne Druck.
+════════════════════════════════════
+Sanft aber klar. Keine Drohung, kein Druck.
+"Wenn du bereit bist, kommentiere [X]." oder "Schick das an jemanden der gerade an diesem Punkt ist."
 
 FORMAT:
 SLIDE [Nummer]:
 [Text]`,
 
-  carousel_haltung: `Erstelle einen HALTUNGS-Karussell-Post mit 7-9 Slides. Ziel: Kommentare und Identifikation.
+  carousel_haltung: `Erstelle einen HALTUNGS-Karussell-Post mit 7-9 Slides.
+ZIEL: Jeder Slide trifft einen Nerv. Die letzte Slide wird geteilt weil der Leser denkt: "Fuck ja, genau so ist es."
 Nur reiner Text. Keine Design-Tags, keine Layout-Labels.
-
 ABSOLUTES VERBOT: KEINE Gedankenstriche (—), KEINE Bindestriche als Satzzeichen.
 
-══════════════════════════════════════════════════════════
-SLIDE 1 — PROVOKANTER KONTRAST: Kein Insight, nur Spannung
-══════════════════════════════════════════════════════════
-Zwei Zeilen. Erster Satz = eine alltägliche Wahrheit. Zweiter Satz = der Bruch.
-Bewährtes Thomas-Muster: "Die meisten Männer [alltägliches Verhalten]." / "Aber [ihr Körper / ihr Leben / die Realität]? [Punch in 3-5 Wörtern]."
-Kein Insight, keine Antwort, nur die Spannung die zwingt weiterzulesen.
+Zielgruppe: Männer 30-50, beruflich diszipliniert, kämpfen damit ihren Körper genauso zu führen wie ihr Business.
+Das stärkste Muster aus der Datenbank: NORMALISIERUNG von Disziplin als Identität. Der Leser fühlt sich BESTÄTIGT, nicht beschämt.
+Referenz (coachdango 67K Likes): "Deine eigene Mahlzeit mitbringen ist nicht weird. Früh gehen um zu trainieren ist nicht unhöflich. Irgendwann hat die Gesellschaft entschieden, dass Struktur eine Entschuldigung braucht."
 
-SLIDE 2 — DAS UNBEQUEME SZENARIO
-Konkretes Alltagsbild. Innerer Monolog in Anführungszeichen.
-Der Leser erkennt sich. Kein Urteil, nur Spiegelung.
+════════════════════════════════════
+SLIDE 1 — DER KONTRAST-HOOK (Neugier, kein Insight)
+════════════════════════════════════
+Zwei Zeilen. Erster Satz = eine alltägliche Beobachtung. Zweiter Satz = der Bruch der nicht stimmt.
+Thomas' stärkstes Muster: "Die meisten Männer [konkretes alltägliches Verhalten]." / "[Kurzer Kontrast-Satz, 3-5 Wörter, der nicht stimmt.]"
+KEIN Insight, KEINE Antwort — nur die Spannung.
+Referenz: "Die meisten Männer checken ihren Kontostand täglich. Aber ihren Körper? Einmal im Jahr."
 
-SLIDES 3-5 — DIE WAHRHEIT HINTER DEM PROBLEM
-Jede Slide ein Reframing oder eine tiefere Erkenntnis.
-Nicht moralisieren, sondern aufzeigen. Kurze, präzise Sätze.
-Jede Slide endet offen oder mit einer Frage.
+════════════════════════════════════
+SLIDE 2 — DIE BRUTALE WAHRHEIT (PFLICHT: der Slide der nicht loslässt)
+════════════════════════════════════
+Kein Alltagsszenario. Keine Einleitung. DIREKT die unbequeme Wahrheit.
+Kurz. Brutal. Spezifisch. Lennart-Stil: Ein bis zwei Sätze, die treffen wie ein Schlag.
+Referenz (Lennart 1988 Likes): "Wenn dein Kaffee nach Dessert schmeckt, wundere dich nicht wenn dein Körper auch danach aussieht."
+Der Leser soll kurz innehalten und denken: "Das stimmt. Das trifft mich."
+Keine Erklärung auf Slide 2. Nur die Aussage die trifft.
 
-SLIDE 6 — DIE ENTSCHEIDUNG
-Der Wendepunkt. Was trennt die, die es schaffen, von denen die es nicht schaffen.
-Eine klare, provokante Aussage. Kein "Du kannst es schaffen" — das ist leer.
+════════════════════════════════════
+SLIDES 3-5 — DAS REFRAMING (Schicht für Schicht)
+════════════════════════════════════
+Jede Slide vertieft die Wahrheit aus Slide 2. Jede Slide ist eine neue Perspektive.
+Nicht moralisieren — aufzeigen. Der Leser soll selbst denken, nicht belehrt werden.
+Aufbau: Beobachtung aus der Realität → Was das eigentlich bedeutet → Was die meisten nicht sehen.
+Kurze, präzise Sätze. Kein Fließtext. Jede Slide endet mit Spannung: Ellipse oder offene Frage.
+Referenz-Muster: "Die Gesellschaft hat Junkfood normalisiert. Echtes Essen essen gilt heute als Diät." (coachdango)
 
-SLIDE 7 — DER PAYOFF
-Die Erkenntnis in ihrer direktesten Form. Der Satz den man speichert oder zitiert.
+════════════════════════════════════
+SLIDE (N-1) — DIE ENTSCHEIDUNG
+════════════════════════════════════
+Was die Männer unterscheidet die es schaffen von denen die es nicht tun.
+Nicht "Entscheide dich." — das ist leer. Zeige WAS die Entscheidung konkret bedeutet.
+Referenz: "Jacked wirst du nicht im Gym. Du wirst es in dem Moment wenn 99% impulsiv handeln und du Standards wählst." (Lennart)
 
-LETZTE SLIDE — CTA
-Kurz. Direkt. Eine Handlung.
+════════════════════════════════════
+LETZTE SLIDE — DER "FUCK JA" SATZ (PFLICHT)
+════════════════════════════════════
+Das ist der wichtigste Slide des gesamten Karussells. Kein CTA. Keine Aufforderung.
+NUR ein einziger Satz. Oder maximal zwei. So formuliert dass der Leser ihn screenshotet oder weitersendet.
+Der Satz muss: (1) eine Wahrheit benennen die der Leser schon immer wusste aber nie so gehört hat, (2) ihn in seiner Identität bestätigen, (3) quotable sein — er muss funktionieren ohne jeden Kontext.
+Test: Würde jemand diesen Satz als Instagram-Story teilen? Wenn ja, ist er richtig.
+Referenz-Stil: "Struktur. Standards. Selbstführung. Heute nennen viele das extrem. Aber nur weil der Durchschnitt so weit davon entfernt ist."
+DANACH (als zweite Zeile, optional): Ein kurzer CTA wie "Schick das an jemanden der das braucht."
 
 FORMAT:
 SLIDE [Nummer]:
 [Text]`,
 
-  carousel_verkauf: `Erstelle einen SALES-Karussell-Post mit 7-9 Slides. Ziel: Direkte Coaching-Anfragen.
+  carousel_verkauf: `Erstelle einen SALES-Karussell-Post mit 7-9 Slides.
+ZIEL: Der Idealkunde liest das und denkt "Das ist genau für mich" und schreibt von selbst eine DM.
 Nur reiner Text. Keine Design-Tags, keine Layout-Labels.
-
 ABSOLUTES VERBOT: KEINE Gedankenstriche (—), KEINE Bindestriche als Satzzeichen.
 
-WICHTIG: Kein aggressives Verkaufen. Thomas verkauft durch Vertrauen und Spezifität, nicht durch Druck.
-Der Leser soll denken: "Das ist genau für mich." und von selbst fragen.
+WICHTIG: Thomas verkauft nicht durch Druck. Er verkauft durch Präzision.
+Je spezifischer die Beschreibung des Problems, desto mehr fühlt sich der Idealkunde verstanden.
+Zielgruppe: Männer 30-50, beruflich erfolgreich (Unternehmer, Führungskräfte, gut verdienend), wollen ihren Körper transformieren, haben wenig Zeit, haben schon Dinge versucht die nicht funktioniert haben.
 
-SLIDE 1 — DER SCHMERZPUNKT
-Benennt das genaue Problem des Idealkunden. Spezifisch: Alter, Situation, Symptom.
-Kein Spoiler auf die Lösung. Nur Identifikation.
-Beispiel-Starter: "Mein Coaching ist nicht für jeden." / "Es gibt einen Punkt an dem Training nicht mehr reicht."
+════════════════════════════════════
+SLIDE 1 — DIE GENAUE BESCHREIBUNG (kein Spoiler, nur Identifikation)
+════════════════════════════════════
+Nicht "Mein Coaching ist für Männer die..." — das ist zu generisch.
+Beschreibe die SITUATION so spezifisch, dass der Idealkunde denkt "Das bist du, nicht irgendjemand."
+Starter-Optionen: "Es gibt einen Punkt..." / "Mein Coaching ist nicht für jeden..." / "Dieser Post ist für Männer die..."
+Kein Hinweis auf die Lösung. Nur die Erkenntnis: "Das beschreibt mich."
 
-SLIDE 2 — DAS SZENARIO
-Konkretes Alltagsbild des Idealkunden. Innerer Monolog in Anführungszeichen.
-Der Leser denkt: "Woher weiß der das?"
+════════════════════════════════════
+SLIDE 2 — DER INNERE MONOLOG (PFLICHT: hier entscheidet sich ob der Leser bleibt)
+════════════════════════════════════
+Kein Alltagsszenario von außen. Direkt in den Kopf des Idealkunden.
+Innerer Monolog in Anführungszeichen. So spezifisch dass er denkt: "Woher weiß Thomas das?"
+Typische Gedanken des Idealkunden: "Ich weiß was ich tun müsste. Ich mache es nur nicht." / "Ich hab's schon 3x probiert. Es hält nie." / "Mein Business läuft. Mein Körper nicht."
+Enden mit einer Frage oder Aussage die Spannung aufbaut.
 
-SLIDES 3-4 — WARUM DIE MEISTEN LÖSUNGEN SCHEITERN
-Was hat er schon probiert? Warum hat es nicht funktioniert?
-Keine Konkurrenten angreifen. Den Mechanismus erklären der zum Scheitern führt.
+════════════════════════════════════
+SLIDES 3-4 — WARUM BISHERIGE VERSUCHE SCHEITERTEN
+════════════════════════════════════
+Was hat er schon probiert? Beschreibe die Erfahrungen die fast jeder in seiner Zielgruppe gemacht hat.
+Nicht "Du warst nicht diszipliniert genug." — das beschämt. Stattdessen: Den MECHANISMUS erklären.
+"Der Plan war zu komplex für jemanden mit vollem Terminkalender." / "Ernährungspläne funktionieren für Menschen mit geregeltem Alltag. Nicht für dich."
+Jeder Slide = ein gescheiterter Versuch mit Erklärung WARUM er scheitern musste.
 
-SLIDE 5 — DER UNTERSCHIED
-Was Thomas anders macht. Konkret. Kein Marketing-Sprech, keine leeren Versprechen.
-Eine Methode, ein Prinzip, ein konkreter Unterschied.
+════════════════════════════════════
+SLIDE 5 — DER KONKRETE UNTERSCHIED
+════════════════════════════════════
+Was Thomas anders macht. Kein Marketing-Sprech, kein "ganzheitlicher Ansatz".
+Eine einzige, konkrete Sache die den Unterschied macht. Mit Mechanismus.
+Schlecht: "Ich arbeite individuell mit dir." — leer.
+Gut: "Wir bauen ein System das mit deinem Kalender arbeitet, nicht gegen ihn. 3 Einheiten. Flexible Ernährung. Ohne Verzicht auf dein Sozialleben."
 
-SLIDE 6 — BEWEIS
-Ein konkretes Kunden-Ergebnis mit Zahlen und Zeitraum.
-Oder: Was nach X Wochen im Coaching passiert.
+════════════════════════════════════
+SLIDE 6 — DER BEWEIS
+════════════════════════════════════
+Ein konkretes Ergebnis. Kein allgemeines "Meine Kunden erreichen ihre Ziele."
+Zahlen. Zeitraum. Was sich außer dem Körper verändert hat.
+Optional: Ein kurzes Zitat des Kunden in Anführungszeichen.
+Schlecht: "Viele meiner Kunden haben abgenommen."
+Gut: "Marcus, 43, Geschäftsführer. 12 Wochen. Minus 9 Kilo. Trainiert 3x pro Woche. Hat seinen ersten Urlaub seit Jahren wirklich genossen."
 
-SLIDE 7 — FÜR WEN ES IST
-Die genaue Beschreibung des Idealkunden. Wer genau passt. Wer NICHT passt (schafft Vertrauen).
+════════════════════════════════════
+SLIDE 7 — FÜR WEN ES IST. UND FÜR WEN NICHT.
+════════════════════════════════════
+Die genaue Beschreibung des Idealkunden — wer genau passt.
+DANN: Wer NICHT passt. Das schafft Vertrauen. Es zeigt Selektivität.
+"Mein Coaching ist nicht für dich wenn du schnelle Tricks suchst oder nicht bereit bist wöchentlich 45 Minuten zu investieren."
 
-LETZTE SLIDE — CTA
-Eine einzige Handlung. Klar und direkt. Kommentieren, DM, Link.
+════════════════════════════════════
+LETZTE SLIDE — EIN EINZIGER CTA
+════════════════════════════════════
+Eine Handlung. Nicht drei. Eine.
+Konkret: "Kommentiere X" oder "Schreib mir eine DM mit dem Wort Y" oder "Klick den Link in der Bio."
+Optional: Ein letzter Satz der Dringlichkeit schafft ohne Druck. "Ich nehme jeden Monat maximal X neue Kunden."
 
 FORMAT:
 SLIDE [Nummer]:
