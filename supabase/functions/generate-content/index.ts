@@ -40,20 +40,26 @@ const FORMAT_INSTRUCTIONS: Record<string, string> = {
 Markiere jeden Abschnitt klar. Schreibe so wie man spricht, keine Fachsprache.`,
 
   carousel_mehrwert: `MEHRWERT-KARUSSELL. 7-9 Slides. Nur Text. Keine Design-Tags.
-VERBOT: Keine Gedankenstriche. Slide-Länge variieren: manche 1-2 Sätze (Punch), manche 3-4 (Erklärung).
+VERBOT: Keine Gedankenstriche.
 ZIEL: Jeder Slide zwingt zum Weiterwischen. Letzte Slide wird weitergeteilt.
 
-SLIDE 1: Eine Zeile, maximal zwei. Konkretes überraschendes Versprechen, kein Insight.
+SLIDE-LÄNGE: Genau wie bei Haltung — bewusst variieren. Manche Slides 1-2 Sätze (Punch), manche 3-4 (wenn Erklärung nötig). KEIN Fließtext der alles erklärt. Nicht jeder Slide braucht viel Text.
+
+SLIDE 1: Eine Zeile, maximal zwei. Überraschendes Versprechen, kein Insight, keine Antwort.
 Richtig: "Warum Männer die täglich Cardio machen, langsamer Fett verlieren."
-Falsch: "5 Fehler beim Abnehmen." / Jede Aussage die die Antwort verrät.
+Falsch: Jede Aussage die die Antwort verrät.
 
-SLIDE 2 (wichtigster Slide): Kein Einstieg, keine Wiederholung. Direkt die schockierendste Zahl oder das kontraintuitivste Faktum zum Thema. Der Leser denkt: "Das wusste ich nicht. Weiter." Optional am Ende: kurzer Cliffhanger zur nächsten Slide.
+SLIDE 2 — STEHT ALLEINE + ZIEHT REIN (genau wie bei Haltung, PFLICHT):
+Viele Leser sehen Slide 2 bevor sie Slide 1 richtig gelesen haben.
+Slide 2 muss deshalb: (1) für sich alleine sofort verständlich sein — auch wer Slide 1 überflogen hat, versteht sofort worum es geht. (2) die schockierendste, überraschendste Aussage oder Zahl zum Thema sein. Kein Einleitungssatz, kein Aufwärmen.
+Der Leser denkt: "Das wusste ich nicht. Das ist interessant. Weiter."
+Genauso stark wie ein Haltungs-Slide 2 — nur mit Mehrwert-Inhalt statt Meinung.
 
-SLIDES 3 bis N-2: Je ein Tipp. Aufbau: [Aussage] + [Mechanismus warum es funktioniert, konkret]. Nicht "schlaf mehr" sondern "Wer unter 7h schläft hat 24% mehr Hunger (Ghrelin). Eine Stunde mehr Schlaf = eine Diät-Woche Unterschied." Jede Slide endet offen.
+SLIDES 3 bis N-2: Je ein Tipp. [Aussage] + [kurzer Mechanismus]. Nicht "schlaf mehr" — "Wer unter 7h schläft hat 24% mehr Hunger (Ghrelin). Eine Stunde mehr Schlaf = eine Diät-Woche Unterschied." Jede Slide endet offen.
 
 SLIDE N-1: Den einen Satz den man kopiert und weitersendet. Kein "Fazit:".
 
-LETZTE SLIDE: Share-CTA. KEIN "Folge mir". Pflicht-Muster: "Schick das an [jemanden der gerade X kämpft]."
+LETZTE SLIDE: Share-CTA. KEIN "Folge mir". Pflicht: "Schick das an [jemanden der gerade X kämpft]."
 
 FORMAT: SLIDE [Nummer]:\n[Text]`,
 
@@ -67,7 +73,7 @@ SLIDE 1: Ausgangssituation ohne Spoiler auf das Ergebnis. Spezifisch: Alter, Sit
 Referenz: "In der Schule war ich der dicke, orientierungslose Typ der tagsüber Videospiele spielte und nachts soff." (44K Likes)
 
 SLIDE 2 (emotionalster Moment, steht alleine): Ein einziger konkreter Moment, oft klein und banal. Innerer Monolog in Anführungszeichen. Leser denkt: "Woher weiß er das?"
-Referenz: "Ich stand vor dem Spiegel nach dem Duschen. 39. Bauch. Keine Energie nach 20 Uhr. Meine Frau sagte nichts. Das war das Schlimmste."
+Referenz: "Ich stand vor dem Spiegel nach dem Duschen. 33. Bauch. Keine Energie nach 20 Uhr. Meine Frau sagte nichts. Das war das Schlimmste."
 Endet mit: "Dann ist etwas passiert das ich nicht erwartet hätte."
 
 SLIDES 3-5: Je ein Wendepunkt. Nicht "Ich fing an zu trainieren." — der konkrete Moment der Erkenntnis. Zeige was NICHT funktioniert hat. Zahlen: "3 Wochen: minus 1,5 kg. Zu langsam, dachte ich. Dann..."
