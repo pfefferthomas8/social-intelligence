@@ -51,7 +51,7 @@ Variiere bewusst: Manche Slides sind Puncher (1 Satz), manche erklären kurz (3-
 SLIDE 1 — DER SCHOCK-HOOK
 ════════════════════════════════════
 Eine Zeile. Maximal zwei. Kein Insight, nur das Versprechen von etwas Überraschendem.
-Die Zielgruppe sind Männer 30+ mit vollem Leben: stressiger Job oder zwei Jobs, Familie, Verantwortung. Sie wollen trainieren, schaffen es aber nicht konstant, weil kein System existiert das zu ihrem Alltag passt.
+Die Zielgruppe sind Männer 30+ mit dem richtigen Mindset: verantwortungsvoll, haben Standards, sind keine Loser. Job egal — Unternehmer, Handwerker, Angestellter. Was sie verbindet: voller Alltag, kein System das konstant funktioniert, aber der Wille es zu ändern.
 Der Hook muss ein konkretes, überraschendes Versprechen machen — KEIN "5 Tipps für..." Clickbait.
 
 RICHTIG: "Warum Männer die täglich Ausdauer machen, langsamer Fett verlieren."
@@ -106,9 +106,9 @@ ABSOLUTES VERBOT: KEINE Gedankenstriche (—), KEINE Bindestriche als Satzzeiche
 SLIDE-LÄNGE: Variiere bewusst. Manche Slides sind 1-2 Sätze (Punch), manche 3-4 Sätze (Tiefe). Nicht jeder Slide braucht viel Text.
 
 WICHTIG: Die Geschichte kann ERFUNDEN sein. Sie muss sich aber zu 100% real anfühlen.
-Schreibe entweder als Thomas (ich-Perspektive) oder als Kundengeschichte ("Er ist 38, Schichtleiter, zwei Kinder...").
-Immer: Spezifisches Alter, konkreter Beruf oder Lebenssituation, konkrete Ausgangssituation mit Zahlen.
-Zielgruppe: Männer 30-50 mit vollem Leben. Stressiger Job oder zwei Jobs. Familie. Verantwortung. Wollen trainieren, finden aber kein System das funktioniert.
+Schreibe entweder als Thomas (ich-Perspektive) oder als Kundengeschichte.
+Immer: Spezifisches Alter, konkreter Beruf oder Lebenssituation (Unternehmer, Handwerker, Vater, Angestellter — alles möglich), konkrete Ausgangssituation mit Zahlen.
+Zielgruppe: Männer 30+ deren Mindset stimmt — verantwortungsvoll, haben Standards, geben nicht auf. Job spielt keine Rolle. Was zählt: Sie wollen ihren Körper genauso führen wie ihr Leben, finden aber kein System das wirklich zu ihrem Alltag passt.
 Der größte Fehler: Zu abstrakt, zu schnell beim Ergebnis, zu wenig Identifikation.
 
 ════════════════════════════════════
@@ -169,7 +169,7 @@ ABSOLUTES VERBOT: KEINE Gedankenstriche (—), KEINE Bindestriche als Satzzeiche
 
 SLIDE-LÄNGE: Kurze Slides sind oft stärker als lange. 1-2 Sätze die treffen schlagen jeden Absatz. Variiere bewusst.
 
-Zielgruppe: Männer 30-50 mit vollem Leben. Stressiger Job, Familie, Verantwortung. Sie wollen trainieren und haben einen Anspruch an sich selbst, finden aber kein System das konstant funktioniert. Nicht nur Unternehmer — auch der Handwerker mit zwei Jobs, der Vater mit drei Kindern, der Schichtarbeiter.
+Zielgruppe: Männer 30+. Mindset entscheidet, nicht der Job. Verantwortungsvoll, haben Standards, keine Loser — Unternehmer genauso wie Handwerker oder Angestellter. Sie haben einen Anspruch an sich selbst. Ihr Problem ist kein fehlendes Wollen, sondern kein System das in ihren echten Alltag passt.
 Das stärkste Muster aus der Datenbank: NORMALISIERUNG von Disziplin als Identität. Der Leser fühlt sich BESTÄTIGT, nicht beschämt.
 Referenz (coachdango 67K Likes): "Deine eigene Mahlzeit mitbringen ist nicht weird. Früh gehen um zu trainieren ist nicht unhöflich. Irgendwann hat die Gesellschaft entschieden, dass Struktur eine Entschuldigung braucht."
 
@@ -232,7 +232,7 @@ SLIDE-LÄNGE: Variiere bewusst. Kurze Slides (1-2 Sätze) für Puncher, etwas l�
 
 WICHTIG: Thomas verkauft nicht durch Druck. Er verkauft durch Präzision.
 Je spezifischer die Beschreibung des Problems, desto mehr fühlt sich der Idealkunde verstanden.
-Zielgruppe: Männer 30-50 mit vollem Leben. Stressiger Job oder zwei Jobs, Familie, Verantwortung. Wollen ihren Körper transformieren, haben es schon mehrfach versucht, hatten aber kein System das in ihren echten Alltag gepasst hat. Kein abgehobenes Business-Lifestyle-Bild — der normale Mann mit zu wenig Zeit und zu viel Verantwortung.
+Zielgruppe: Männer 30+. Nicht definiert durch den Job, sondern durch den Mindset: verantwortungsvoll, haben Standards, sind keine Loser. Kann Unternehmer sein, kann Handwerker sein, kann Vater mit Vollzeitjob sein. Verbindend: voller Alltag, wollen ihren Körper transformieren, haben es versucht, hatten aber kein System das wirklich gepasst hat.
 
 ════════════════════════════════════
 SLIDE 1 — DIE GENAUE BESCHREIBUNG (kein Spoiler, nur Identifikation)
@@ -820,13 +820,13 @@ Prüfung: Kann der Leser nach Slide 1 die Kernaussage erraten? Wenn ja, ist Slid
 ═══════════════════════════════════════════════════════
 [1] THOMAS' ZIELGRUPPE — wer sie wirklich sind
 ═══════════════════════════════════════════════════════
-${dna('audience_pattern') || '• Männer 30–55 mit vollem Leben: stressiger Job oder zwei Jobs, Familie, Verantwortung. Wollen trainieren aber finden kein System das konstant in ihren Alltag passt. Nicht nur Unternehmer — auch Handwerker, Schichtarbeiter, Väter mit drei Kindern. Der gemeinsame Nenner: zu wenig Zeit, zu viel Verantwortung, trotzdem Anspruch an sich selbst.'}
+${dna('audience_pattern') || '• Männer 30+. Der Job spielt keine Rolle — Unternehmer, Handwerker, Angestellter, Vater, alles möglich. Was sie verbindet ist ihr MINDSET: Sie tragen Verantwortung und stehen dazu. Sie haben Standards. Sie sind keine Loser. Sie geben nicht auf. Ihr Problem ist nicht Motivation — ihr Problem ist ein System das nicht in ihren vollen Alltag passt. Sie wollen ihren Körper genauso führen wie ihren Job: mit Klarheit, Effizienz und Ergebnis.'}
 
 Niemals für diese Zielgruppe erstellen:
 ✗ Wettkampf/Bühne/Contest-Content — das ist nicht ihre Welt
-✗ Profisport-Inhalte — sie sind keine Athleten, sie wollen einen fitten Körper im normalen Leben
+✗ Profisport-Inhalte — sie wollen einen fitten Körper im normalen Leben, kein Athleten-Dasein
 ✗ Extreme Methoden — sie wollen ein System das funktioniert, nicht Hardcore
-✗ Abgehobenes Business-Lifestyle-Bild — nicht jeder ist CEO. Der Schichtleiter mit 2 Kids ist genauso Zielgruppe.
+✗ Motivations-Content für Menschen die aufgeben — diese Männer geben nicht auf, sie brauchen das richtige System
 ✗ Supplement-Fokus — echte Lösungen, nicht Produkte
 ✗ Leere Motivation — Fakten und Mechanismen, nicht "Glaub an dich"
 
