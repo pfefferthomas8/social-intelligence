@@ -44,6 +44,9 @@ ZIEL: Jeder Slide zwingt zum Weiterwischen. Die letzte Slide wird geteilt.
 Nur reiner Text. Keine Design-Tags, keine Layout-Labels.
 ABSOLUTES VERBOT: KEINE Gedankenstriche (—), KEINE Bindestriche als Satzzeichen.
 
+SLIDE-LÄNGE: Nicht jeder Slide braucht viel Text. Kurze Slides (1-2 Sätze) können genauso stark sein wie lange.
+Variiere bewusst: Manche Slides sind Puncher (1 Satz), manche erklären kurz (3-4 Sätze). Kein Fließtext der alles erklärt.
+
 ════════════════════════════════════
 SLIDE 1 — DER SCHOCK-HOOK
 ════════════════════════════════════
@@ -99,6 +102,8 @@ SLIDE [Nummer]:
 ZIEL: Der Leser sieht sich selbst in der Geschichte. Er schickt es jemandem der dasselbe erlebt.
 Nur reiner Text. Keine Design-Tags, keine Layout-Labels.
 ABSOLUTES VERBOT: KEINE Gedankenstriche (—), KEINE Bindestriche als Satzzeichen.
+
+SLIDE-LÄNGE: Variiere bewusst. Manche Slides sind 1-2 Sätze (Punch), manche 3-4 Sätze (Tiefe). Nicht jeder Slide braucht viel Text.
 
 WICHTIG: Die Geschichte kann ERFUNDEN sein. Sie muss sich aber zu 100% real anfühlen.
 Schreibe entweder als Thomas (ich-Perspektive) oder als Kundengeschichte ("Er ist 38, Unternehmer...").
@@ -162,6 +167,8 @@ ZIEL: Jeder Slide trifft einen Nerv. Die letzte Slide wird geteilt weil der Lese
 Nur reiner Text. Keine Design-Tags, keine Layout-Labels.
 ABSOLUTES VERBOT: KEINE Gedankenstriche (—), KEINE Bindestriche als Satzzeichen.
 
+SLIDE-LÄNGE: Kurze Slides sind oft stärker als lange. 1-2 Sätze die treffen schlagen jeden Absatz. Variiere bewusst.
+
 Zielgruppe: Männer 30-50, beruflich diszipliniert, kämpfen damit ihren Körper genauso zu führen wie ihr Business.
 Das stärkste Muster aus der Datenbank: NORMALISIERUNG von Disziplin als Identität. Der Leser fühlt sich BESTÄTIGT, nicht beschämt.
 Referenz (coachdango 67K Likes): "Deine eigene Mahlzeit mitbringen ist nicht weird. Früh gehen um zu trainieren ist nicht unhöflich. Irgendwann hat die Gesellschaft entschieden, dass Struktur eine Entschuldigung braucht."
@@ -200,14 +207,17 @@ Nicht "Entscheide dich." — das ist leer. Zeige WAS die Entscheidung konkret be
 Referenz: "Jacked wirst du nicht im Gym. Du wirst es in dem Moment wenn 99% impulsiv handeln und du Standards wählst." (Lennart)
 
 ════════════════════════════════════
-LETZTE SLIDE — DER "FUCK JA" SATZ (PFLICHT)
+LETZTE SLIDE — NUR DIE QUOTE. KEIN CTA. NIEMALS.
 ════════════════════════════════════
-Das ist der wichtigste Slide des gesamten Karussells. Kein CTA. Keine Aufforderung.
-NUR ein einziger Satz. Oder maximal zwei. So formuliert dass der Leser ihn screenshotet oder weitersendet.
-Der Satz muss: (1) eine Wahrheit benennen die der Leser schon immer wusste aber nie so gehört hat, (2) ihn in seiner Identität bestätigen, (3) quotable sein — er muss funktionieren ohne jeden Kontext.
-Test: Würde jemand diesen Satz als Instagram-Story teilen? Wenn ja, ist er richtig.
-Referenz-Stil: "Struktur. Standards. Selbstführung. Heute nennen viele das extrem. Aber nur weil der Durchschnitt so weit davon entfernt ist."
-DANACH (als zweite Zeile, optional): Ein kurzer CTA wie "Schick das an jemanden der das braucht."
+ABSOLUTES VERBOT: Kein "Teile das", kein "Folge mir", kein "Kommentiere", kein "Schreib mir". Nichts.
+NUR ein einziger Satz. Maximal zwei kurze.
+Der Satz muss ohne jeden Kontext funktionieren — als Screenshot, als Story, als Zitat.
+Er muss eine Wahrheit benennen die der Leser schon immer gefühlt hat, aber nie so klar formuliert gehört hat.
+Er bestätigt seine Identität. Er macht ihn stolz darauf wer er ist oder sein will.
+Test: Würde jemand diesen Satz als Story posten mit "So ist es."? Wenn ja, ist er richtig.
+Referenz-Stil:
+"Struktur. Standards. Selbstführung. Heute nennen viele das extrem. Aber nur weil der Durchschnitt so weit davon entfernt ist."
+"Jacked wirst du nicht im Gym. Du wirst es in dem Moment wenn 99% impulsiv handeln und du Standards wählst."
 
 FORMAT:
 SLIDE [Nummer]:
@@ -217,6 +227,8 @@ SLIDE [Nummer]:
 ZIEL: Der Idealkunde liest das und denkt "Das ist genau für mich" und schreibt von selbst eine DM.
 Nur reiner Text. Keine Design-Tags, keine Layout-Labels.
 ABSOLUTES VERBOT: KEINE Gedankenstriche (—), KEINE Bindestriche als Satzzeichen.
+
+SLIDE-LÄNGE: Variiere bewusst. Kurze Slides (1-2 Sätze) für Puncher, etwas längere für Erklärungen. Kein Fließtext.
 
 WICHTIG: Thomas verkauft nicht durch Druck. Er verkauft durch Präzision.
 Je spezifischer die Beschreibung des Problems, desto mehr fühlt sich der Idealkunde verstanden.
