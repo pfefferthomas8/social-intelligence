@@ -43,6 +43,14 @@ Markiere jeden Abschnitt klar. Schreibe so wie man spricht, keine Fachsprache.`,
 VERBOT: Keine Gedankenstriche.
 ZIEL: Jeder Slide zwingt zum Weiterwischen. Letzte Slide wird weitergeteilt.
 
+KERNPRINZIP — VALUE PACKED:
+Der Leser muss nach dem Karussell denken: "Wie kann er das gratis rausgeben?"
+Das bedeutet: Echter, tiefer Inhalt. Keine oberflächlichen Tipps die jeder kennt.
+Nicht "trink mehr Wasser" — sondern der konkrete Mechanismus, die Zahl, die Studie, das Insider-Wissen das sich anfühlt wie bezahlter Content.
+Jeder Tipp muss so spezifisch und substanzreich sein, dass der Leser ihn sofort anwenden kann.
+VERBOTEN: Allgemeinwissen das jeder schon gehört hat. Wenn der Leser nickt ohne nachzudenken — ist es zu flach.
+TEST: Würde jemand für dieses Wissen zahlen? Wenn nein, tiefer gehen.
+
 SLIDE-LÄNGE: Genau wie bei Haltung — bewusst variieren. Manche Slides 1-2 Sätze (Punch), manche 3-4 (wenn Erklärung nötig). KEIN Fließtext der alles erklärt. Nicht jeder Slide braucht viel Text.
 
 SLIDE 1: Eine Zeile, maximal zwei. Überraschendes Versprechen, kein Insight, keine Antwort.
