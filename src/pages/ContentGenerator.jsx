@@ -10,6 +10,13 @@ const CONTENT_TYPES = [
   { key: 'b_roll', label: 'B-Roll', icon: '⚡', desc: 'Hook + Caption' },
 ]
 
+const CAROUSEL_SUBTYPES = [
+  { key: 'mehrwert', label: 'Mehrwert', icon: '💡', desc: 'Tipps & Wissen — wird gespeichert' },
+  { key: 'transformation', label: 'Transformation', icon: '⚡', desc: 'Geschichte & Ergebnis — wird geteilt' },
+  { key: 'haltung', label: 'Haltung', icon: '🧠', desc: 'Mindset & Identität — erzeugt Kommentare' },
+  { key: 'verkauf', label: 'Sales', icon: '🎯', desc: 'Coaching-Angebot — erzeugt Anfragen' },
+]
+
 // Muster-Labels und Farben
 const MUSTER_COLORS = {
   'szenario':       '#ee4f00',
@@ -215,6 +222,7 @@ export default function ContentGenerator() {
   const [additionalInfo, setAdditionalInfo] = useState('')
   const [generating, setGenerating] = useState(false)
   const [result, setResult] = useState(null)
+  const [carouselSubtype, setCarouselSubtype] = useState('mehrwert')
   const [confirmed, setConfirmed] = useState(false)
   const [history, setHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(true)
@@ -299,7 +307,12 @@ export default function ContentGenerator() {
       } else {
         data = await apiFetch('generate-content', {
           method: 'POST',
-          body: JSON.stringify({ topic: topic.trim(), content_type: contentType, additional_info: additionalInfo })
+          body: JSON.stringify({
+            topic: topic.trim(),
+            content_type: contentType,
+            additional_info: additionalInfo,
+            ...(contentType === 'carousel' ? { carousel_subtype: carouselSubtype } : {})
+          })
         })
       }
       setProgress(100)
@@ -578,6 +591,40 @@ export default function ContentGenerator() {
                   ))}
                 </div>
               </div>
+
+              {/* Karussell Subtyp */}
+              {contentType === 'carousel' && (
+                <div style={{ marginBottom: 20 }}>
+                  <div className="section-label">Karussell-Typ</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                    {CAROUSEL_SUBTYPES.map(sub => (
+                      <button
+                        key={sub.key}
+                        onClick={() => setCarouselSubtype(sub.key)}
+                        style={{
+                          background: carouselSubtype === sub.key ? 'var(--accent-dim)' : 'var(--bg-card)',
+                          border: `1px solid ${carouselSubtype === sub.key ? 'rgba(238,79,0,0.3)' : 'var(--border)'}`,
+                          borderRadius: 'var(--r)',
+                          padding: '10px 12px',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          fontFamily: 'var(--font)',
+                          display: 'flex', gap: 8, alignItems: 'center',
+                          transition: 'all 0.12s'
+                        }}
+                      >
+                        <span style={{ fontSize: 16 }}>{sub.icon}</span>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: carouselSubtype === sub.key ? 'var(--accent)' : 'var(--text2)' }}>
+                            {sub.label}
+                          </div>
+                          <div style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.3 }}>{sub.desc}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Topic */}
               <div style={{ marginBottom: 16 }}>

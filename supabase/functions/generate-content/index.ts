@@ -5,7 +5,7 @@ const CORS = {
 }
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+const SERVICE_KEY = Deno.env.get('SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 const DASHBOARD_TOKEN = Deno.env.get('DASHBOARD_TOKEN') || ''
 const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY') || ''
 // Modell zentral über Secret steuerbar — Update: Supabase Secret CLAUDE_MODEL ändern
@@ -39,18 +39,199 @@ const FORMAT_INSTRUCTIONS: Record<string, string> = {
 - OUTRO & CTA (was der Zuschauer jetzt tun soll)
 Markiere jeden Abschnitt klar. Schreibe so wie man spricht, keine Fachsprache.`,
 
-  carousel: `Erstelle einen Karussel-Post mit 7-9 Slides. Nur den reinen Text — keine Design-Tags, keine Layout-Labels.
+  carousel_mehrwert: `Erstelle einen MEHRWERT-Karussell-Post mit 7-9 Slides. Ziel: Der Leser SPEICHERT diesen Post.
+Nur reiner Text. Keine Design-Tags, keine Layout-Labels.
 
-PFLICHT-STRUKTUR:
+ABSOLUTES VERBOT: KEINE Gedankenstriche (—), KEINE Bindestriche als Satzzeichen.
 
-SLIDE 1 — HOOK
-Ein Problem oder Paradoxon das sofort triggert. Kurz. Kein Spoiler der Lösung.
+══════════════════════════════════════════════════════════
+SLIDE 1 — NEUGIER-LÜCKE: Thema benennen, Antwort verbergen
+══════════════════════════════════════════════════════════
+Genau zwei Zeilen. Kein Insight, kein Bold Claim, keine Antwort.
+Starter: "Warum..." / "Der Grund warum..." / "Das Problem mit..." / "Eine Sache über..."
+Zeile 2 nur wenn sie echten Sog erzeugt: "Den die meisten nie erkennen." / "Über die kaum jemand spricht."
 
-SLIDE 2 — SECOND-CHANCE-SLIDE
-Muss eigenständig funktionieren OHNE Slide 1 (Instagram zeigt sie als Preview). Eigener Cliffhanger der zu Slide 3 zieht.
+SLIDE 2 — DAS PROBLEM
+Warum die meisten das falsch machen. Konkret, erkennbar, fühlbar.
+Ein konkretes Alltagsszenario mit innerem Monolog in Anführungszeichen.
+
+SLIDES 3 bis (N-2) — JE EIN KONKRETER TIPP ODER INSIGHT
+Jede Slide = eine Sache. Spezifisch. Umsetzbar. Mit kurzem "Warum" dahinter.
+Keine Aufzählungen innerhalb einer Slide. Eine Aussage, eine Erklärung, fertig.
+Texte können kurz (2-4 Wörter, Impact) oder länger (Erklärung, Tiefe) sein.
+
+SLIDE (N-1) — DER ÜBERRASCHENDE ÜBERBLICK
+Der eine Satz den der Leser screenshot-t. Die Kernbotschaft in ihrer klarsten Form.
+
+LETZTE SLIDE — CTA
+Kurz. Eine Handlung. Direkt.
+
+FORMAT:
+SLIDE [Nummer]:
+[Text]`,
+
+  carousel_transformation: `Erstelle einen TRANSFORMATION-Karussell-Post mit 7-9 Slides. Ziel: Der Leser TEILT oder SENDET diesen Post.
+Nur reiner Text. Keine Design-Tags, keine Layout-Labels.
+
+ABSOLUTES VERBOT: KEINE Gedankenstriche (—), KEINE Bindestriche als Satzzeichen.
+
+Kann Thomas' eigene Geschichte sein ODER eine Kunden-Transformation (dann "er"/"sie").
+Immer konkrete Zahlen: Wochen, Kilo, Kalorien, Trainingshäufigkeit.
+
+SLIDE 1 — AUSGANGSSITUATION
+Wer war die Person? Wo stand sie? Ein konkretes Bild. Kein Spoiler auf das Ergebnis.
+Kein "Vor 12 Wochen war ich fett." Stattdessen: Spezifische Situation die der Leser kennt.
+
+SLIDE 2 — DAS KONKRETE PROBLEM
+Was hat nicht funktioniert? Welcher Versuch ist gescheitert? Spezifisch und fühlbar.
+Der Leser denkt: "Genau das kenne ich."
+
+SLIDES 3-5 — DER WEG
+Was hat sich verändert? Welche Entscheidung wurde getroffen?
+Je eine konkrete Veränderung pro Slide. Methode, Mindset-Shift, oder Erkenntnis.
+Keine Aufzählung, jede Slide eine Aussage mit Tiefe.
+
+SLIDE 6 — DAS ERGEBNIS
+Konkret und messbar. Zahlen. Zeitraum. Was sich außer dem Körper noch verändert hat.
+
+SLIDE 7 — WAS DAS FÜR DEN LESER BEDEUTET
+Der Transfer. "Wenn das möglich war, dann..." — Direkte Ansprache des Lesers.
+
+LETZTE SLIDE — CTA
+Eine Handlung. Direkt. Ohne Druck.
+
+FORMAT:
+SLIDE [Nummer]:
+[Text]`,
+
+  carousel_haltung: `Erstelle einen HALTUNGS-Karussell-Post mit 7-9 Slides. Ziel: Kommentare und Identifikation.
+Nur reiner Text. Keine Design-Tags, keine Layout-Labels.
+
+ABSOLUTES VERBOT: KEINE Gedankenstriche (—), KEINE Bindestriche als Satzzeichen.
+
+══════════════════════════════════════════════════════════
+SLIDE 1 — PROVOKANTER KONTRAST: Kein Insight, nur Spannung
+══════════════════════════════════════════════════════════
+Zwei Zeilen. Erster Satz = eine alltägliche Wahrheit. Zweiter Satz = der Bruch.
+Bewährtes Thomas-Muster: "Die meisten Männer [alltägliches Verhalten]." / "Aber [ihr Körper / ihr Leben / die Realität]? [Punch in 3-5 Wörtern]."
+Kein Insight, keine Antwort, nur die Spannung die zwingt weiterzulesen.
+
+SLIDE 2 — DAS UNBEQUEME SZENARIO
+Konkretes Alltagsbild. Innerer Monolog in Anführungszeichen.
+Der Leser erkennt sich. Kein Urteil, nur Spiegelung.
+
+SLIDES 3-5 — DIE WAHRHEIT HINTER DEM PROBLEM
+Jede Slide ein Reframing oder eine tiefere Erkenntnis.
+Nicht moralisieren, sondern aufzeigen. Kurze, präzise Sätze.
+Jede Slide endet offen oder mit einer Frage.
+
+SLIDE 6 — DIE ENTSCHEIDUNG
+Der Wendepunkt. Was trennt die, die es schaffen, von denen die es nicht schaffen.
+Eine klare, provokante Aussage. Kein "Du kannst es schaffen" — das ist leer.
+
+SLIDE 7 — DER PAYOFF
+Die Erkenntnis in ihrer direktesten Form. Der Satz den man speichert oder zitiert.
+
+LETZTE SLIDE — CTA
+Kurz. Direkt. Eine Handlung.
+
+FORMAT:
+SLIDE [Nummer]:
+[Text]`,
+
+  carousel_verkauf: `Erstelle einen SALES-Karussell-Post mit 7-9 Slides. Ziel: Direkte Coaching-Anfragen.
+Nur reiner Text. Keine Design-Tags, keine Layout-Labels.
+
+ABSOLUTES VERBOT: KEINE Gedankenstriche (—), KEINE Bindestriche als Satzzeichen.
+
+WICHTIG: Kein aggressives Verkaufen. Thomas verkauft durch Vertrauen und Spezifität, nicht durch Druck.
+Der Leser soll denken: "Das ist genau für mich." und von selbst fragen.
+
+SLIDE 1 — DER SCHMERZPUNKT
+Benennt das genaue Problem des Idealkunden. Spezifisch: Alter, Situation, Symptom.
+Kein Spoiler auf die Lösung. Nur Identifikation.
+Beispiel-Starter: "Mein Coaching ist nicht für jeden." / "Es gibt einen Punkt an dem Training nicht mehr reicht."
+
+SLIDE 2 — DAS SZENARIO
+Konkretes Alltagsbild des Idealkunden. Innerer Monolog in Anführungszeichen.
+Der Leser denkt: "Woher weiß der das?"
+
+SLIDES 3-4 — WARUM DIE MEISTEN LÖSUNGEN SCHEITERN
+Was hat er schon probiert? Warum hat es nicht funktioniert?
+Keine Konkurrenten angreifen. Den Mechanismus erklären der zum Scheitern führt.
+
+SLIDE 5 — DER UNTERSCHIED
+Was Thomas anders macht. Konkret. Kein Marketing-Sprech, keine leeren Versprechen.
+Eine Methode, ein Prinzip, ein konkreter Unterschied.
+
+SLIDE 6 — BEWEIS
+Ein konkretes Kunden-Ergebnis mit Zahlen und Zeitraum.
+Oder: Was nach X Wochen im Coaching passiert.
+
+SLIDE 7 — FÜR WEN ES IST
+Die genaue Beschreibung des Idealkunden. Wer genau passt. Wer NICHT passt (schafft Vertrauen).
+
+LETZTE SLIDE — CTA
+Eine einzige Handlung. Klar und direkt. Kommentieren, DM, Link.
+
+FORMAT:
+SLIDE [Nummer]:
+[Text]`,
+
+  carousel: `Erstelle einen Karussel-Post mit 7-9 Slides. Nur den reinen Text. Keine Design-Tags, keine Layout-Labels.
+
+ABSOLUTES VERBOT: KEINE Gedankenstriche (—), KEINE Bindestriche als Satzzeichen. Punkt. Komma. Das war's.
+
+══════════════════════════════════════════════════════════
+SLIDE 1 — EISERNE REGEL: NUR THEMA + NEUGIER. NIEMALS AUSSAGE.
+══════════════════════════════════════════════════════════
+Slide 1 besteht aus genau zwei Zeilen.
+
+ZEILE 1: Ein starker Neugier-Satz. Stellt eine Frage oder benennt ein Paradoxon, ohne die Antwort zu geben.
+Erlaubte Starter: "Warum..." / "Der Grund warum..." / "Das Problem mit..." / "Eine Sache über..." / "Der Fehler den..."
+NICHT: "Die meisten Männer denken..." / "X. Aber in Wahrheit..." / "Das stimmt nicht." / "Aber"-Konstruktionen
+
+ZEILE 2: Optional. Nur wenn sie echten Sog erzeugt. Wenn Zeile 1 alleine stark genug ist, weglassen.
+Wenn sie kommt: Reine Neugier-Phrase, kein Inhalt. "Den die meisten nie erkennen." / "Über die kaum jemand spricht."
+
+GOLDSTANDARD (Thomas' eigenes Beispiel):
+"Warum Männer mit einer Elite-Form oft nur durchschnittliche Disziplin haben."
+→ Eine Zeile. Kein Spoiler. Sofortiger Widerspruch zur Erwartung. Leser muss wissen wie das geht.
+
+WEITERE RICHTIGE BEISPIELE:
+"Eine der größten Selbstsabotagen beim Abnehmen."
+"Über die fast niemand spricht..."
+
+"Der Grund warum Männer nach 4 Wochen aufhören."
+"Er hat nichts mit Motivation zu tun."
+
+FALSCH — alle diese Varianten sind verboten weil sie ein Urteil oder Insight enthalten:
+"Die meisten Männer denken, sie hätten ein Disziplin-Problem. Das stimmt nicht." → verrät die Antwort
+"Die meisten Männer mit den besten Körpern sind nicht disziplinierter als du." → verrät den Punkt komplett
+"X. Aber das ist falsch." / "X. Das stimmt nicht." → jede Gegenaussage gibt das Insight preis
+
+SLIDE 2 — SZENARIO + CLIFFHANGER
+Muss eigenständig funktionieren OHNE Slide 1 (Instagram zeigt sie als Preview).
+Kein abstrakter Einstieg. Stattdessen: Ein konkretes, erkennbares Alltagsszenario.
+
+PFLICHT-MUSTER:
+[Konkrete Situation schildern — Ort, Zeit, Kontext]
+[Innerer Monolog in Anführungszeichen — so denkt die Zielgruppe wirklich]
+[Cliffhanger-Satz: "Die Wahrheit sieht anders aus." / "Genau hier passiert es." / "Und das ist das Problem."]
+
+RICHTIG:
+"Du bist seit 10 Tagen in der Diät. Deine Kollegen bestellen Pizza und du denkst: 'Einmal cheaten wird ja nicht schaden...'
+Die Wahrheit sieht anders aus."
+
+"Sonntag, 20 Uhr. Die Woche war stressig. Du schaffst es nicht ins Gym und sagst dir: 'Nächste Woche starte ich richtig.'
+Nächste Woche kommt nie."
+
+FALSCH:
+"In diesem Karussell erkläre ich dir warum..."
+"Viele Menschen kennen das Problem..."
 
 SLIDES 3 bis (N-2) — INHALT
-Je ein konkretes Insight. Texte können kurz (2-4 Wörter, großer Impact) oder länger (Erklärung, Tiefe) sein — je nach was die Slide braucht. Jede Slide endet offen — Frage oder Ellipse.
+Je ein konkretes Insight. Texte können kurz (2-4 Wörter, großer Impact) oder länger (Erklärung, Tiefe) sein, je nach was die Slide braucht. Jede Slide endet offen, mit Frage oder Ellipse.
 
 SLIDE (N-1) — AUFLÖSUNG
 Der Payoff. Die Lösung oder Erkenntnis.
@@ -160,12 +341,14 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS })
   }
 
-  const { topic, content_type, additional_info } = await req.json()
+  const { topic, content_type, additional_info, carousel_subtype } = await req.json()
   if (!topic || !content_type) {
     return new Response(JSON.stringify({ error: 'topic + content_type required' }), { status: 400, headers: CORS })
   }
+  const validSubtypes = ['mehrwert', 'transformation', 'haltung', 'verkauf']
+  const activeSubtype = content_type === 'carousel' && validSubtypes.includes(carousel_subtype) ? carousel_subtype : null
 
-  const [ownPosts, topCompPosts, customPosts, thomasDna, trendPosts, topRated, externalSignals, topRatedBroll] = await Promise.all([
+  const [ownPosts, topCompPosts, customPosts, thomasDna, trendPosts, topRated, externalSignals, topRatedBroll, compCarousels, ownCarousels] = await Promise.all([
     dbQuery('instagram_posts?select=caption,transcript,visual_text,post_type,likes_count,views_count&source=eq.own&order=views_count.desc&limit=30'),
     dbQuery('instagram_posts?select=caption,transcript,visual_text,post_type,likes_count,views_count&source=eq.competitor&order=views_count.desc&limit=20'),
     dbQuery('instagram_posts?select=caption,transcript,visual_text,post_type&source=eq.custom&limit=10'),
@@ -175,6 +358,18 @@ Deno.serve(async (req: Request) => {
     dbQuery('external_signals?select=title,body,signal_type,source,relevance_score,claude_insight&relevance_score=gte.70&order=fetched_at.desc&limit=10'),
     content_type === 'b_roll'
       ? dbQuery('generated_content?select=topic,content&user_rating=eq.1&content_type=eq.b_roll&order=created_at.desc&limit=5')
+      : Promise.resolve([]),
+    content_type === 'carousel'
+      ? (activeSubtype
+          ? dbQuery(`instagram_posts?select=caption,visual_text,likes_count&source=eq.competitor&post_type=eq.carousel&content_pillar=eq.${activeSubtype}&order=likes_count.desc&limit=15`)
+              .then(rows => rows.length >= 3 ? rows : dbQuery('instagram_posts?select=caption,visual_text,likes_count&source=eq.competitor&post_type=eq.carousel&order=likes_count.desc&limit=15'))
+          : dbQuery('instagram_posts?select=caption,visual_text,likes_count&source=eq.competitor&post_type=eq.carousel&order=likes_count.desc&limit=20'))
+      : Promise.resolve([]),
+    content_type === 'carousel'
+      ? (activeSubtype
+          ? dbQuery(`instagram_posts?select=caption,likes_count,content_pillar&source=eq.own&post_type=eq.carousel&content_pillar=eq.${activeSubtype}&order=likes_count.desc&limit=8`)
+              .then(rows => rows.length >= 2 ? rows : dbQuery('instagram_posts?select=caption,likes_count,content_pillar&source=eq.own&post_type=eq.carousel&order=likes_count.desc&limit=10'))
+          : dbQuery('instagram_posts?select=caption,likes_count&source=eq.own&post_type=eq.carousel&order=likes_count.desc&limit=10'))
       : Promise.resolve([]),
   ])
 
@@ -397,11 +592,115 @@ Das Ziel: Hooks die sich nach Thomas anfühlen UND so stark sind wie die Competi
 ${parts.join('\n\n')}`
   }
 
+  // ── Karussell-spezifischer Datenbankabschnitt ──────────────────────────────
+  let carouselSection = ''
+  if (content_type === 'carousel') {
+    const carouselParts: string[] = []
+
+    // Helper: ersten sinnvollen Satz aus Caption
+    const firstSentence = (cap: string) =>
+      cap.replace(/\n/g, ' ').match(/^.{5,120}?[.!?…]/)?.[0]?.trim()
+      || cap.replace(/\n/g, ' ').substring(0, 90).trim()
+
+    // Competitor Slide-1-Hooks mit Likes
+    const seenComp = new Set<string>()
+    const compSlide1 = (compCarousels as any[])
+      .filter((p: any) => {
+        const cap = (p.caption || '').trim()
+        if (!cap || cap.length < 10) return false
+        const key = cap.substring(0, 40)
+        if (seenComp.has(key)) return false
+        seenComp.add(key)
+        return true
+      })
+      .map((p: any) => {
+        const cap = (p.caption || '').trim()
+        const slide1 = firstSentence(cap)
+        if (!slide1 || slide1.length < 5) return null
+        const vt = (p.visual_text || '').trim()
+        const vtLine = vt && vt.length > 10 && vt.split(/\s+/).length >= 3
+          ? `\n  VISUAL TEXT: "${vt.replace(/\n/g, ' ').substring(0, 120)}"`
+          : ''
+        const wc = slide1.split(/\s+/).length
+        return `[${(p.likes_count || 0).toLocaleString()} Likes] [${wc}W] "${slide1}"${vtLine}`
+      })
+      .filter(Boolean)
+
+    if (compSlide1.length > 0) {
+      carouselParts.push(`━━━ COMPETITOR SLIDE 1 — NUR FÜR THEMEN UND TONALITÄT ━━━
+ACHTUNG: Diese Competitors nutzen Bold-Claim-Hooks die sofort das Insight verraten.
+Das ist NICHT der Stil den wir wollen. Ignoriere ihre Slide-1-Struktur komplett.
+Nutze diese Daten NUR für: Welche Themen performen? Welchen Ton treffen sie?
+Die Slide-1-STRUKTUR ist immer: Neugier-Lücke. Kein Insight. Kein Spoiler. (Siehe Pflicht-Regeln oben.)
+
+${compSlide1.join('\n\n')}`)
+    }
+
+    // Thomas' eigene Slide-1-Hooks
+    const seenOwn = new Set<string>()
+    const ownSlide1 = (ownCarousels as any[])
+      .filter((p: any) => {
+        const cap = (p.caption || '').trim()
+        if (!cap) return false
+        const key = cap.substring(0, 40)
+        if (seenOwn.has(key)) return false
+        seenOwn.add(key)
+        return true
+      })
+      .map((p: any) => {
+        const cap = (p.caption || '').trim()
+        const lines = cap.split('\n').map((l: string) => l.trim()).filter(Boolean)
+        const slide1 = lines[0] || ''
+        const slide2 = lines[1] || ''
+        if (!slide1) return null
+        return `[${(p.likes_count || 0).toLocaleString()} Likes] "${slide1}"${slide2 ? `\n  Zeile 2: "${slide2}"` : ''}`
+      })
+      .filter(Boolean)
+
+    if (ownSlide1.length > 0) {
+      carouselParts.push(`━━━ THOMAS' EIGENE KARUSSELL-HOOKS ━━━
+Sein stärkstes Muster: Kurze Behauptung + sofortiger Kontrast in Zeile 2.
+"Die meisten Männer checken ihren Kontostand täglich."
+"Aber ihren Körper?" [Kontrast] "Einmal im Jahr." [Punch]
+Diesen Rhythmus bei Slide 1 + 2 imitieren:
+
+${ownSlide1.join('\n\n')}`)
+    }
+
+    if (carouselParts.length > 0) {
+      const subtypeContext = activeSubtype ? {
+        mehrwert: 'KARUSSELL-TYP: MEHRWERT — Ziel ist Speichern. Jede Slide liefert einen konkreten, umsetzbaren Mehrwert.',
+        transformation: 'KARUSSELL-TYP: TRANSFORMATION — Ziel ist Teilen. Narrative Struktur, konkrete Zahlen, emotionale Identifikation.',
+        haltung: 'KARUSSELL-TYP: HALTUNG — Ziel ist Kommentare. Provokanter Kontrast, Reframing, Identitäts-Trigger.',
+        verkauf: 'KARUSSELL-TYP: SALES — Ziel ist Anfragen. Spezifischer Schmerzpunkt, Vertrauen durch Konkretheit, ein klarer CTA.',
+      }[activeSubtype] : ''
+
+      carouselSection = `
+═══════════════════════════════════════════════════════
+[10] KARUSSELL-DATEN AUS DER DATENBANK
+═══════════════════════════════════════════════════════
+${subtypeContext ? subtypeContext + '\n' : ''}SYNTHESE-AUFTRAG: Erkenne das Muster hinter den performenden Slide-1-Hooks INTERN.
+Wende Thomas' Rhythmus auf das konkrete Thema an. Kein Copy-Paste, das Prinzip adaptieren.
+
+${carouselParts.join('\n\n')}`
+    }
+  }
+
   // ── SYSTEM PROMPT ───────────────────────────────────────────────────────────
-  const systemPrompt = `Du bist die KI-Instanz die ausschließlich für Thomas Pfeffer arbeitet — Fitness-Coach, DACH-Markt, Männer 30+.
+  const systemPrompt = `Du bist die KI-Instanz die ausschließlich für Thomas Pfeffer arbeitet. Fitness-Coach, DACH-Markt, Männer 30+.
 
 Deine Aufgabe: Alle verfügbaren Datenpunkte synthetisieren und den perfekten Content erstellen.
-Nicht einen Datenpunkt priorisieren — ALLE gleichzeitig aktivieren.
+Nicht einen Datenpunkt priorisieren. ALLE gleichzeitig aktivieren.
+
+ABSOLUTES SCHREIBVERBOT IN JEDEM OUTPUT:
+Keine Gedankenstriche (—). Keine Bindestriche als Satzzeichen (–). Niemals.
+Erlaubt: Punkt, Komma, Ausrufezeichen, Fragezeichen, Doppelpunkt, Ellipse (…).
+Wenn du einen Gedankenstrich setzen willst, nutze stattdessen einen Punkt oder ein Komma.
+
+KARUSSELL-SLIDE-1-GESETZ (unverhandelbar, gilt vor allem anderen):
+Slide 1 eines Karussells darf NIEMALS ein Insight, eine Erklärung oder eine Antwort enthalten.
+Slide 1 benennt nur das Thema und öffnet eine Neugier-Lücke. Fertig.
+Prüfung: Kann der Leser nach Slide 1 die Kernaussage erraten? Wenn ja, ist Slide 1 falsch.
 
 ═══════════════════════════════════════════════════════
 [1] THOMAS' ZIELGRUPPE — wer sie wirklich sind
@@ -488,6 +787,7 @@ ${externalSignals.map((s: any) => {
   return `[${s.source?.toUpperCase()} · ${type.toUpperCase()}] "${clean(s.title)}"${body ? `\n${body}` : ''}${insight}`
 }).join('\n\n')}` : ''}
 ${brollSection}
+${carouselSection}
 
 ═══════════════════════════════════════════════════════
 SYNTHESE-PRINZIP
@@ -498,19 +798,29 @@ Für jeden Content-Output:
 3. Forme den Trigger durch Thomas' Hook-Formeln aus [2] und seinen Stil aus [3]
 4. Stelle sicher dass es zu seiner Zielgruppe aus [1] passt
 5. Das Ergebnis klingt nach Thomas — und schlägt wie ein viraler Post
+
+FÜR KARUSSELL GILT ZUSÄTZLICH — NICHT VERHANDELBAR:
+Schritt 0 vor allem anderen: Schreibe Slide 1 nach dem NEUGIER-LÜCKE-Prinzip.
+Zwei Zeilen. Kein Insight. Kein Bold Claim. Kein "Aber in Wahrheit...".
+Wenn du nach dem Schreiben von Slide 1 merkst dass der Leser die Antwort ahnen kann: Lösche Slide 1 und schreibe neu.
 ${content_type === 'carousel' && dna('carousel_rule') ? `
 ═══════════════════════════════════════════════════════
 [CAROUSEL-SPEZIFISCHE REGELN — ZWINGEND EINHALTEN]
 ═══════════════════════════════════════════════════════
 ${dna('carousel_rule')}` : ''}`
 
+  const carouselFormatKey = content_type === 'carousel' && activeSubtype ? `carousel_${activeSubtype}` : content_type
+  const carouselSubtypeLabel = activeSubtype ? { mehrwert: 'MEHRWERT', transformation: 'TRANSFORMATION', haltung: 'HALTUNG', verkauf: 'SALES' }[activeSubtype] : ''
+
   const userPrompt = `THEMA: ${topic}
-FORMAT: ${content_type.replace(/_/g, ' ').toUpperCase()}
+FORMAT: ${content_type === 'carousel' && carouselSubtypeLabel ? `KARUSSELL (${carouselSubtypeLabel})` : content_type.replace(/_/g, ' ').toUpperCase()}
 ${additional_info ? `ZUSATZINFO: ${additional_info}` : ''}
 
-${FORMAT_INSTRUCTIONS[content_type] || 'Freie Form.'}
+${FORMAT_INSTRUCTIONS[carouselFormatKey] || FORMAT_INSTRUCTIONS[content_type] || 'Freie Form.'}
 ${content_type === 'b_roll' ? `
-PFLICHT für B-Roll Hooks: Analysiere die realen Beispiele aus [10] — erkenne welches Prinzip die Hooks stoppend macht (Kürze? Widerspruch? Direktheit?) und wende exakt dieses Prinzip auf "${topic}" an. Nicht kopieren — das Muster adaptieren.` : ''}
+PFLICHT für B-Roll Hooks: Analysiere die realen Beispiele aus [10]. Erkenne welches Prinzip die Hooks stoppend macht (Kürze? Widerspruch? Direktheit?) und wende exakt dieses Prinzip auf "${topic}" an. Nicht kopieren, das Muster adaptieren.` : ''}
+${content_type === 'carousel' ? `
+PFLICHT für Karussell: Lies zuerst Abschnitt [10] komplett. Erkenne INTERN welcher Hook-Typ bei den Competitors am stärksten performt und wie Thomas' Kontrast-Muster aufgebaut ist. Wende das auf "${topic}" an. Slide 1 ist EINE starke Aussage, kein Absatz.${activeSubtype === 'mehrwert' ? ' Jeder Tipp muss spezifisch und direkt umsetzbar sein. Keine vagen Aussagen.' : ''}${activeSubtype === 'transformation' ? ' Nutze konkrete Zahlen und Zeiträume. Keine abstrakten Beschreibungen.' : ''}${activeSubtype === 'haltung' ? ' Jede Slide spiegelt, provoziert oder reframet. Keine leere Motivation.' : ''}${activeSubtype === 'verkauf' ? ' Kein Druck, kein Hype. Vertrauen durch Spezifität.' : ''}` : ''}
 
 Gib NUR den fertigen Content aus — keine Analyse, keine Erklärungen, keine Meta-Kommentare.`
 
@@ -528,6 +838,13 @@ Gib NUR den fertigen Content aus — keine Analyse, keine Erklärungen, keine Me
     if (claudeRes.ok) {
       const claudeData = await claudeRes.json()
       content = claudeData.content?.[0]?.text || ''
+      // Em/En-Dashes als Satzzeichen entfernen (KI-typische Stilmittel die Thomas nicht will)
+      content = content
+        .replace(/ — /g, ' ')
+        .replace(/ – /g, ' ')
+        .replace(/—/g, ' ')
+        .replace(/–/g, ' ')
+        .replace(/  +/g, ' ')
       break
     }
     const errText = await claudeRes.text()
