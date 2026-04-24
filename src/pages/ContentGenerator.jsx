@@ -685,7 +685,7 @@ export default function ContentGenerator() {
               <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, textAlign: 'center' }}>
                 {copyMode
                   ? (progress < 30 ? 'Slides werden analysiert…' : progress < 70 ? 'Claude schreibt in Thomas\' Stil…' : 'Fast fertig…')
-                  : (progress < 30 ? 'Daten werden geladen…' : progress < 70 ? 'Claude analysiert & schreibt…' : 'Fast fertig…')
+                  : (progress < 25 ? 'Datenbank wird gescannt…' : progress < 55 ? 'Claude analysiert alle Posts…' : progress < 80 ? 'Content wird generiert…' : 'Fast fertig…')
                 }
               </div>
             </div>

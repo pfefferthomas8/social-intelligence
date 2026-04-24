@@ -315,7 +315,11 @@ Deno.serve(async (req: Request) => {
   const validSubtypes = ['mehrwert', 'transformation', 'haltung', 'verkauf']
   const activeSubtype = content_type === 'carousel' && validSubtypes.includes(carousel_subtype) ? carousel_subtype : null
 
-  const [ownPosts, topCompPosts, customPosts, thomasDna, trendPosts, topRated, externalSignals, topRatedBroll, compCarousels, ownCarousels] = await Promise.all([
+  const pillarFilter = activeSubtype || null
+
+  const [ownPosts, topCompPosts, customPosts, thomasDna, trendPosts, topRated, externalSignals, topRatedBroll, compCarousels, ownCarousels,
+    ownPostsAll, compPostsByPillar, ratedContentAll] = await Promise.all([
+    // ── Bestehende Queries (für Generation Prompt) ────────────────────────────
     dbQuery('instagram_posts?select=caption,transcript,visual_text,post_type,likes_count,views_count&source=eq.own&order=views_count.desc&limit=30'),
     dbQuery('instagram_posts?select=caption,transcript,visual_text,post_type,likes_count,views_count&source=eq.competitor&order=views_count.desc&limit=20'),
     dbQuery('instagram_posts?select=caption,transcript,visual_text,post_type&source=eq.custom&limit=10'),
@@ -338,6 +342,13 @@ Deno.serve(async (req: Request) => {
               .then(rows => rows.length >= 2 ? rows : dbQuery('instagram_posts?select=caption,likes_count,content_pillar&source=eq.own&post_type=eq.carousel&order=likes_count.desc&limit=10'))
           : dbQuery('instagram_posts?select=caption,likes_count&source=eq.own&post_type=eq.carousel&order=likes_count.desc&limit=10'))
       : Promise.resolve([]),
+    // ── Erweiterte Queries für Analyse-Call ───────────────────────────────────
+    dbQuery('instagram_posts?select=caption,transcript,visual_text,post_type,likes_count,views_count,content_pillar&source=eq.own&order=views_count.desc&limit=100'),
+    pillarFilter
+      ? dbQuery(`instagram_posts?select=caption,visual_text,likes_count,post_type,content_pillar&source=eq.competitor&content_pillar=eq.${pillarFilter}&order=likes_count.desc&limit=60`)
+          .then(rows => rows.length >= 5 ? rows : dbQuery('instagram_posts?select=caption,visual_text,likes_count,post_type,content_pillar&source=eq.competitor&order=likes_count.desc&limit=60'))
+      : dbQuery('instagram_posts?select=caption,visual_text,likes_count,post_type,content_pillar&source=eq.competitor&order=likes_count.desc&limit=60'),
+    dbQuery(`generated_content?select=topic,content_type,content,content_pillar,user_rating&user_rating=gte.1&order=created_at.desc&limit=30`),
   ])
 
   // ── DNA nach Kategorie gruppieren ──────────────────────────────────────────
@@ -779,6 +790,89 @@ ${content_type === 'carousel' && dna('carousel_rule') ? `
 ═══════════════════════════════════════════════════════
 ${dna('carousel_rule')}` : ''}`
 
+  // ── PHASE 1: ANALYSE-CALL — Claude scannt die komplette Datenbank ────────────
+  let researchBrief = ''
+  try {
+    const formatLabel = content_type === 'carousel' && activeSubtype
+      ? `Karussell (${activeSubtype})`
+      : content_type.replace(/_/g, ' ')
+
+    const ownPostsForAnalysis = (ownPostsAll as any[]).map((p: any) => {
+      const text = clean([p.caption, p.transcript].filter(Boolean).join(' '))
+      const vt = p.visual_text ? ` | HOOK: "${(p.visual_text as string).replace(/\n/g, ' ').substring(0, 80)}"` : ''
+      return `[${p.post_type} | ${p.content_pillar || '?'} | ${(p.likes_count || 0)}L ${(p.views_count || 0)}V]${vt} "${text.substring(0, 180)}"`
+    }).join('\n')
+
+    const compPostsForAnalysis = (compPostsByPillar as any[]).map((p: any) => {
+      const cap = clean(p.caption || '').substring(0, 180)
+      const vt = p.visual_text ? ` | VISUAL: "${(p.visual_text as string).replace(/\n/g, ' ').substring(0, 80)}"` : ''
+      return `[${p.post_type || '?'} | ${p.content_pillar || '?'} | ${(p.likes_count || 0)}L]${vt} "${cap}"`
+    }).join('\n')
+
+    const ratedForAnalysis = (ratedContentAll as any[]).map((r: any) => {
+      return `[${r.content_type} | ${r.content_pillar || '?'} | Rating:${r.user_rating}] Thema:"${r.topic}"\n"${clean(r.content).substring(0, 250)}"`
+    }).join('\n\n')
+
+    const thomasDnaForAnalysis = (thomasDna as any[]).map((d: any) => `[${d.category}] ${d.insight}`).join('\n')
+
+    const analysisPrompt = `Du analysierst die komplette Content-Datenbank von Thomas Pfeffer (Fitness-Coach, DACH, Männer ab 30) und erstellst einen präzisen Research Brief für die Content-Erstellung.
+
+AUFGABE: Erstelle einen Research Brief für folgendes:
+Thema: "${topic}"
+Format: ${formatLabel}
+${additional_info ? `Zusatzinfo: ${additional_info}` : ''}
+
+━━━ THOMAS' EIGENE POSTS — ALLE ${(ownPostsAll as any[]).length} POSTS ━━━
+${ownPostsForAnalysis || 'Noch keine Posts.'}
+
+━━━ COMPETITOR POSTS (${(compPostsByPillar as any[]).length} Posts${pillarFilter ? ` — Pillar: ${pillarFilter}` : ''}) ━━━
+${compPostsForAnalysis || 'Keine Daten.'}
+
+━━━ THOMAS' DNA — ANALYSIERTE MUSTER ━━━
+${thomasDnaForAnalysis || 'Noch nicht analysiert.'}
+
+━━━ BEWERTETE GENERIERUNGEN (${(ratedContentAll as any[]).length} Stück) ━━━
+${ratedForAnalysis || 'Noch keine Bewertungen.'}
+
+Erstelle jetzt einen Research Brief mit maximal 700 Wörtern. Struktur:
+
+1. THOMAS' ECHTER STIL (aus seinen Posts): Wie klingt er wirklich? Satzlänge, Wortwahl, Rhythmus. Konkrete Beobachtungen, keine Allgemeinplätze.
+
+2. WAS PERFORMT für dieses Format/Thema: Die konkreten Muster aus Top-Posts (Hook-Typen, Einstieg, Struktur). Mit Beispielen aus den Daten.
+
+3. WAS NICHT FUNKTIONIERT: Muster aus schwach performenden Posts oder Mustern die fehlen.
+
+4. SPEZIFISCH FÜR DIESES THEMA "${topic}": Was sollte unbedingt vorkommen? Welche Winkel, Fakten, Perspektiven hat die Datenbank zu diesem Thema?
+
+5. LERNEFFEKT: Was haben positiv bewertete Generierungen gemeinsam? Was soll wiederholt werden?
+
+Nur den Brief ausgeben. Keine Einleitung, kein "Hier ist der Brief:".`
+
+    const analysisRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 1000, messages: [{ role: 'user', content: analysisPrompt }] })
+    })
+    if (analysisRes.ok) {
+      const ad = await analysisRes.json()
+      researchBrief = ad.content?.[0]?.text || ''
+    }
+  } catch { /* Fallback: ohne Brief generieren */ }
+
+  // ── PHASE 2: GENERATION-CALL ──────────────────────────────────────────────
+  const systemPromptFinal = researchBrief
+    ? systemPrompt + `
+
+═══════════════════════════════════════════════════════
+[11] DYNAMISCHER RESEARCH BRIEF — FRISCH AUS DER DATENBANK
+═══════════════════════════════════════════════════════
+Dieser Brief wurde soeben durch eine vollständige Datenbankanalyse erstellt.
+Er enthält was wirklich funktioniert — abgeleitet aus echten Daten, nicht aus Annahmen.
+Nutze ihn als primäre Grundlage. Je mehr Posts in der DB, desto präziser wird er.
+
+${researchBrief}`
+    : systemPrompt
+
   const carouselFormatKey = content_type === 'carousel' && activeSubtype ? `carousel_${activeSubtype}` : content_type
   const carouselSubtypeLabel = activeSubtype ? { mehrwert: 'MEHRWERT', transformation: 'TRANSFORMATION', haltung: 'HALTUNG', verkauf: 'SALES' }[activeSubtype] : ''
 
@@ -795,7 +889,7 @@ PFLICHT für Karussell: Lies zuerst Abschnitt [10] komplett. Erkenne INTERN welc
 Gib NUR den fertigen Content aus — keine Analyse, keine Erklärungen, keine Meta-Kommentare.`
 
   // Claude-Call mit Retry bei Overloaded
-  const claudeBody = JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 3000, messages: [{ role: 'user', content: userPrompt }], system: systemPrompt })
+  const claudeBody = JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 3000, messages: [{ role: 'user', content: userPrompt }], system: systemPromptFinal })
   let content = ''
   let lastErrContent = ''
   for (let attempt = 0; attempt < 3; attempt++) {
