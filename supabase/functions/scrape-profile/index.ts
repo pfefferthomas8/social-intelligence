@@ -8,8 +8,6 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 const APIFY_KEY = Deno.env.get('APIFY_API_KEY') || ''
 const DASHBOARD_TOKEN = Deno.env.get('DASHBOARD_TOKEN') || ''
-// Instagram Session-Cookie (optional) — wird als JSON-Array gespeichert
-// Format: '[{"name":"sessionid","value":"...","domain":".instagram.com"},...]'
 const IG_COOKIES_RAW = Deno.env.get('INSTAGRAM_SESSION_COOKIES') || ''
 let IG_COOKIES: Record<string, unknown>[] = []
 try { if (IG_COOKIES_RAW) IG_COOKIES = JSON.parse(IG_COOKIES_RAW) } catch { /* ignored */ }
@@ -45,6 +43,35 @@ async function startRun(actor: string, input: Record<string, unknown>, webhooksP
   }
 }
 
+// Actor-Reihenfolge: 1→2→3→4 (sequenziell, Fallback im Webhook)
+function buildActorCall(actorNum: number, username: string): { actor: string; input: Record<string, unknown> } | null {
+  const proxyConfig = { useApifyProxy: true }
+  const profileUrl = `https://www.instagram.com/${username}/`
+  const hasCookies = IG_COOKIES.length > 0
+  const cookiesParam = hasCookies ? { cookies: IG_COOKIES } : {}
+  const loginCookiesParam = hasCookies ? { loginCookies: IG_COOKIES } : {}
+
+  switch (actorNum) {
+    case 1: return {
+      actor: 'apify~instagram-profile-scraper',
+      input: { usernames: [username], resultsLimit: 100, proxyConfiguration: proxyConfig, ...loginCookiesParam }
+    }
+    case 2: return {
+      actor: 'apify~instagram-scraper',
+      input: { directUrls: [profileUrl], resultsType: 'posts', resultsLimit: 100, proxyConfiguration: proxyConfig, loginRequired: true, ...cookiesParam }
+    }
+    case 3: return {
+      actor: 'apify~instagram-api-scraper',
+      input: { startUrls: [{ url: profileUrl }], resultsLimit: 100, proxyConfiguration: proxyConfig, ...cookiesParam }
+    }
+    case 4: return {
+      actor: 'instagram-scraper~fast-instagram-post-scraper',
+      input: { username, resultsLimit: 100, proxyConfiguration: proxyConfig, ...cookiesParam }
+    }
+    default: return null
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS })
 
@@ -55,7 +82,6 @@ Deno.serve(async (req: Request) => {
 
   const body = await req.json()
   const source = body.source
-  // Leerzeichen + Sonderzeichen entfernen — verhindert kaputte Apify-URLs
   const username = (body.username || '').trim().replace(/\s+/g, '').replace(/[^a-zA-Z0-9_.]/g, '').toLowerCase()
   if (!username || !source) {
     return new Response(JSON.stringify({ error: 'username + source required' }), { status: 400, headers: CORS })
@@ -78,8 +104,6 @@ Deno.serve(async (req: Request) => {
   }
 
   const webhookUrl = `${SUPABASE_URL}/functions/v1/scrape-webhook`
-
-  // Beide Actors bekommen denselben Webhook → scrape-webhook nimmt wer zuerst Daten liefert
   const webhooksParam = btoa(JSON.stringify([{
     eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED', 'ACTOR.RUN.TIMED_OUT'],
     requestUrl: webhookUrl,
@@ -87,77 +111,53 @@ Deno.serve(async (req: Request) => {
     payloadTemplate: `{"job_id":"${job.id}","run_id":"{{resource.id}}","status":"{{eventType}}"}`
   }]))
 
-  const proxyConfig = { useApifyProxy: true }
-  const profileUrl = `https://www.instagram.com/${username}/`
+  // Sequenziell: Actor 1 starten. Falls nicht startbar → Actor 2, usw.
+  // Async-Fallback (Actor läuft, liefert aber leeres Dataset) → scrape-webhook übernimmt
+  let runId: string | null = null
+  let startedActorNum = 0
 
-  // Cookie-Varianten für verschiedene Actor-Parameter-Namen
-  const hasCookies = IG_COOKIES.length > 0
-  // apify~instagram-scraper: Parameter heißt 'cookies'
-  const cookiesParam = hasCookies ? { cookies: IG_COOKIES } : {}
-  // apify~instagram-profile-scraper: Parameter heißt 'loginCookies'
-  const loginCookiesParam = hasCookies ? { loginCookies: IG_COOKIES } : {}
+  for (let actorNum = 1; actorNum <= 4; actorNum++) {
+    const call = buildActorCall(actorNum, username)
+    if (!call) break
+    runId = await startRun(call.actor, call.input, webhooksParam)
+    if (runId) {
+      startedActorNum = actorNum
+      console.log(`Actor ${actorNum} (${call.actor}) gestartet: ${runId}`)
+      break
+    }
+    console.log(`Actor ${actorNum} konnte nicht gestartet werden, versuche nächsten...`)
+  }
 
-  // 4 Actors parallel — wer zuerst valide Posts liefert, gewinnt
-  // WICHTIG: Cookies seit Instagram Login-Wall (ab April 2026) erforderlich
-  const [runId1, runId2, runId3, runId4] = await Promise.all([
-    // Actor 1: Instagram Profile Scraper
-    startRun('apify~instagram-profile-scraper', {
-      usernames: [username],
-      resultsLimit: 100,
-      proxyConfiguration: proxyConfig,
-      ...loginCookiesParam
-    }, webhooksParam),
-    // Actor 2: Instagram Scraper (loginRequired → Apify managed sessions)
-    startRun('apify~instagram-scraper', {
-      directUrls: [profileUrl],
-      resultsType: 'posts',
-      resultsLimit: 100,
-      proxyConfiguration: proxyConfig,
-      loginRequired: true,
-      ...cookiesParam
-    }, webhooksParam),
-    // Actor 3: Instagram API Scraper
-    startRun('apify~instagram-api-scraper', {
-      startUrls: [{ url: profileUrl }],
-      resultsLimit: 100,
-      proxyConfiguration: proxyConfig,
-      ...cookiesParam
-    }, webhooksParam),
-    // Actor 4: Fast Instagram Post Scraper (178K+ Runs)
-    startRun('instagram-scraper~fast-instagram-post-scraper', {
-      username: username,
-      resultsLimit: 100,
-      proxyConfiguration: proxyConfig,
-      ...cookiesParam
-    }, webhooksParam),
-  ])
-
-  const startedRuns = [runId1, runId2, runId3, runId4].filter(Boolean)
-  if (startedRuns.length === 0) {
+  if (!runId) {
     await fetch(`${SUPABASE_URL}/rest/v1/scrape_jobs?id=eq.${job.id}`, {
       method: 'PATCH',
       headers: dbHeaders(),
-      body: JSON.stringify({ status: 'error', error_msg: 'Beide Apify-Actors konnten nicht gestartet werden' })
+      body: JSON.stringify({ status: 'error', error_msg: 'Alle Actors konnten nicht gestartet werden' })
     })
-    return new Response(JSON.stringify({ error: 'Apify actors failed to start' }), { status: 502, headers: CORS })
+    return new Response(JSON.stringify({ error: 'Alle Apify-Actors fehlgeschlagen' }), { status: 502, headers: CORS })
   }
+
+  // error_msg speichert: welcher Actor als nächstes bei Fallback dran ist + bereits gestartete Run-IDs
+  // scrape-webhook liest "fallback:N" um zu wissen welchen Actor er als nächstes starten soll
+  const nextFallback = startedActorNum < 4 ? startedActorNum + 1 : null
+  const errorMsg = nextFallback ? `fallback:${nextFallback} ${runId}` : null
 
   await fetch(`${SUPABASE_URL}/rest/v1/scrape_jobs?id=eq.${job.id}`, {
     method: 'PATCH',
     headers: dbHeaders(),
     body: JSON.stringify({
       status: 'running',
-      apify_run_id: startedRuns[0],
-      // Beide Run-IDs im error_msg für Debugging
-      error_msg: startedRuns.length > 1 ? `dual: ${startedRuns.join(', ')}` : null
+      apify_run_id: runId,
+      error_msg: errorMsg
     })
   })
 
   return new Response(JSON.stringify({
     job_id: job.id,
-    run_ids: startedRuns,
-    actors_started: startedRuns.length,
+    run_id: runId,
+    actor_num: startedActorNum,
+    next_fallback: nextFallback,
     status: 'running',
-    message: `Scraping @${username} gestartet (${startedRuns.length} Actor${startedRuns.length > 1 ? 's' : ''}).`
+    message: `Scraping @${username} gestartet (Actor ${startedActorNum}/4).`
   }), { headers: { ...CORS, 'Content-Type': 'application/json' } })
 })

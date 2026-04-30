@@ -5,6 +5,9 @@ const SERVICE_KEY = Deno.env.get('SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_S
 const DASHBOARD_TOKEN = Deno.env.get('DASHBOARD_TOKEN') || ''
 const APIFY_KEY = Deno.env.get('APIFY_API_KEY') || ''
 const ASSEMBLYAI_KEY = Deno.env.get('ASSEMBLYAI_API_KEY') || ''
+const IG_COOKIES_RAW = Deno.env.get('INSTAGRAM_SESSION_COOKIES') || ''
+let IG_COOKIES: Record<string, unknown>[] = []
+try { if (IG_COOKIES_RAW) IG_COOKIES = JSON.parse(IG_COOKIES_RAW) } catch { /* ignored */ }
 
 function dbHeaders() {
   return {
@@ -52,6 +55,76 @@ async function dbUpsert(table: string, body: Record<string, unknown>, onConflict
     body: JSON.stringify(body)
   })
   return res.ok
+}
+
+async function startRun(actor: string, input: Record<string, unknown>, webhooksParam: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://api.apify.com/v2/acts/${actor}/runs?token=${APIFY_KEY}&webhooks=${webhooksParam}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }
+    )
+    if (!res.ok) { console.error(`${actor} start failed: ${res.status}`); return null }
+    const data = await res.json()
+    return data.data?.id || null
+  } catch (e) { console.error(`${actor} error:`, e); return null }
+}
+
+// Startet den nächsten Fallback-Actor wenn der vorherige fehlschlug (leer oder FAILED)
+// Liest "fallback:N" aus error_msg um zu wissen welchen Actor als nächstes starten
+async function tryFallbackActor(job: Record<string, unknown>, jobId: string): Promise<boolean> {
+  const msg = String(job.error_msg || '')
+  const fallbackMatch = msg.match(/fallback:(\d)/)
+  if (!fallbackMatch) return false
+
+  const nextActorNum = parseInt(fallbackMatch[1])
+  if (nextActorNum > 4) return false
+
+  const username = String(job.target || '')
+  if (!username) return false
+
+  const proxyConfig = { useApifyProxy: true }
+  const profileUrl = `https://www.instagram.com/${username}/`
+  const hasCookies = IG_COOKIES.length > 0
+  const cookiesParam = hasCookies ? { cookies: IG_COOKIES } : {}
+  const loginCookiesParam = hasCookies ? { loginCookies: IG_COOKIES } : {}
+
+  const actors: Record<number, { actor: string; input: Record<string, unknown> }> = {
+    2: { actor: 'apify~instagram-scraper', input: { directUrls: [profileUrl], resultsType: 'posts', resultsLimit: 100, proxyConfiguration: proxyConfig, loginRequired: true, ...cookiesParam } },
+    3: { actor: 'apify~instagram-api-scraper', input: { startUrls: [{ url: profileUrl }], resultsLimit: 100, proxyConfiguration: proxyConfig, ...cookiesParam } },
+    4: { actor: 'instagram-scraper~fast-instagram-post-scraper', input: { username, resultsLimit: 100, proxyConfiguration: proxyConfig, ...cookiesParam } },
+  }
+
+  const call = actors[nextActorNum]
+  if (!call) return false
+
+  // Webhook-Param für denselben Job neu aufbauen
+  const webhooksParam = btoa(JSON.stringify([{
+    eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED', 'ACTOR.RUN.TIMED_OUT'],
+    requestUrl: `${SUPABASE_URL}/functions/v1/scrape-webhook`,
+    headersTemplate: `{"Authorization":"Bearer ${DASHBOARD_TOKEN}"}`,
+    payloadTemplate: `{"job_id":"${jobId}","run_id":"{{resource.id}}","status":"{{eventType}}"}`
+  }]))
+
+  const newRunId = await startRun(call.actor, call.input, webhooksParam)
+  if (!newRunId) {
+    console.log(`Fallback Actor ${nextActorNum} konnte nicht gestartet werden`)
+    return false
+  }
+
+  // Alle bisherigen Run-IDs aus error_msg extrahieren + neue anhängen
+  const existingRunIds = (msg.match(/\b[A-Za-z0-9]{17,18}\b/g) || [])
+  const allRunIds = [...new Set([...existingRunIds, newRunId])].join(',')
+  const afterNext = nextActorNum < 4 ? nextActorNum + 1 : null
+  const newErrorMsg = afterNext ? `fallback:${afterNext} ${allRunIds}` : `exhausted ${allRunIds}`
+
+  await dbUpdate('scrape_jobs', `id=eq.${jobId}`, {
+    status: 'running',
+    apify_run_id: newRunId,
+    error_msg: newErrorMsg
+  })
+
+  console.log(`Fallback: Actor ${nextActorNum} (${call.actor}) gestartet: ${newRunId}`)
+  return true
 }
 
 function parseTimestamp(ts: unknown): string | null {
@@ -203,8 +276,15 @@ Deno.serve(async (req: Request) => {
 
     // Fehler-Events — NUR wenn Apify korrekt substituiert (nicht "{{eventType}}")
     if (status === 'ACTOR.RUN.FAILED' || status === 'ACTOR.RUN.TIMED_OUT') {
+      const failedJob = await dbGet('scrape_jobs', `id=eq.${job_id}`)
+      if (failedJob) {
+        const started = await tryFallbackActor(failedJob, job_id)
+        if (started) {
+          return new Response(JSON.stringify({ ok: true, fallback: 'started' }), { headers: { 'Content-Type': 'application/json' } })
+        }
+      }
       await dbUpdate('scrape_jobs', `id=eq.${job_id}`, {
-        status: 'error', error_msg: status, completed_at: new Date().toISOString()
+        status: 'error', error_msg: `${status} (alle Actors erschöpft)`, completed_at: new Date().toISOString()
       })
       return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } })
     }
@@ -303,18 +383,27 @@ Deno.serve(async (req: Request) => {
 
     if (!items || items.length === 0) {
       const now = new Date().toISOString()
-      // Nochmals prüfen ob ein anderer Actor inzwischen Erfolg hatte
+      // Nochmals prüfen ob ein anderer Webhook-Call inzwischen Erfolg hatte
       const freshJob = await dbGet('scrape_jobs', `id=eq.${job_id}`)
       if (freshJob && (freshJob.result_count || 0) > 0) {
         console.log(`Job ${job_id} bereits erfolgreich (${freshJob.result_count} Posts), kein Überschreiben`)
-        return new Response(JSON.stringify({ ok: true, skipped: 'other_actor_succeeded' }), {
+        return new Response(JSON.stringify({ ok: true, skipped: 'already_succeeded' }), {
           headers: { 'Content-Type': 'application/json' }
         })
       }
+      // Fallback: nächsten Actor versuchen
+      if (freshJob) {
+        const started = await tryFallbackActor(freshJob, job_id)
+        if (started) {
+          return new Response(JSON.stringify({ ok: true, fallback: 'started' }), {
+            headers: { 'Content-Type': 'application/json' }
+          })
+        }
+      }
+      // Alle Actors erschöpft → als done markieren
       await dbUpdate('scrape_jobs', `id=eq.${job_id}`, {
-        status: 'done', result_count: 0, error_msg: `empty dataset after retries (tried: ${allRunIds.join(',')})`, completed_at: now
+        status: 'done', result_count: 0, error_msg: `empty dataset (alle Actors erschöpft, tried: ${allRunIds.join(',')})`, completed_at: now
       })
-      // last_scraped_at auch bei leerem Ergebnis setzen — damit UI nicht "Nie" zeigt
       if (job.job_type === 'own_profile') {
         const own = await dbGet('own_profile', 'limit=1')
         if (own) await dbUpdate('own_profile', `id=eq.${own.id}`, { last_scraped_at: now })

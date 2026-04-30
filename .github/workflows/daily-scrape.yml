@@ -4,8 +4,8 @@ on:
   schedule:
     # Eigenes Profil täglich 06:00 UTC
     - cron: '0 6 * * *'
-    # Competitors täglich 06:30 UTC
-    - cron: '30 6 * * *'
+    # Competitors Mo/Mi/Fr 06:30 UTC (3x/Woche reicht — Competitors posten nicht täglich)
+    - cron: '30 6 * * 1,3,5'
     # Trend Scout jeden Montag + Donnerstag 07:00 UTC
     - cron: '0 7 * * 1,4'
     # Coach Discovery jeden Sonntag 05:00 UTC — findet neue Online-Coaching Accounts
@@ -49,7 +49,7 @@ jobs:
   scrape-competitors:
     name: Competitors scrapen
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'competitors' || github.event.schedule == '30 6 * * *'
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'competitors' || github.event.schedule == '30 6 * * 1,3,5'
     steps:
       - name: Trigger competitor scrapes
         run: |
