@@ -35,3 +35,32 @@ registerRoute(
 
 self.addEventListener('activate', () => self.clients.claim())
 self.addEventListener('install', () => self.skipWaiting())
+
+// Push Notifications empfangen
+self.addEventListener('push', (event) => {
+  let data = { title: 'DM Center', body: 'Neue Nachricht', url: '/dm-center' }
+  try { data = event.data?.json() || data } catch {}
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/icon-192.svg',
+      badge: '/icon-192.svg',
+      tag: 'dm-notification',
+      renotify: true,
+      data: { url: data.url }
+    })
+  )
+})
+
+// Notification-Klick → App öffnen
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = event.notification.data?.url || '/dm-center'
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      const existing = list.find(c => c.url.includes(url))
+      if (existing) return existing.focus()
+      return clients.openWindow(url)
+    })
+  )
+})
