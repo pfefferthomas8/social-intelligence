@@ -501,5 +501,74 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.5; }
 .pill.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
 .pill.active-blue { border-color: var(--blue); color: var(--blue); background: var(--blue-dim); }
 
+/* ─── Login Layout ─── */
+.login-branding {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 60px;
+  border-right: 1px solid #1a1a1a;
+}
+
+.login-form-panel {
+  width: 440px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.login-mobile-logo {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+/* ─── Mobile Responsive ─── */
+@media (max-width: 767px) {
+  /* Login: nur Formular, kein Branding-Panel */
+  .login-branding {
+    display: none;
+  }
+
+  .login-form-panel {
+    width: 100%;
+    padding: 32px 24px;
+    align-items: flex-start;
+    padding-top: env(safe-area-inset-top, 48px);
+  }
+
+  .login-mobile-logo {
+    display: flex;
+  }
+
+  /* App Shell: Sidebar versteckt auf Mobile */
+  .sidebar {
+    display: none;
+  }
+
+  .main-content {
+    width: 100%;
+  }
+
+  /* Page Body weniger Padding auf Mobile */
+  .page-body {
+    padding: 16px;
+  }
+
+  .page-header {
+    padding: 0 16px;
+  }
+
+  /* Input größer für Touch */
+  .input {
+    font-size: 16px; /* verhindert iOS zoom */
+    padding: 12px 14px;
+  }
+}
+
 /* ─── Separator ─── */
 .v-sep { width: 1px; background: var(--border); height: 20px; }

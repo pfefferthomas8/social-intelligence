@@ -32,12 +32,8 @@ export default function Login() {
       background: '#080808',
       backgroundImage: 'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(238,79,0,0.08), transparent)',
     }}>
-      {/* Left Panel - Branding */}
-      <div style={{
-        flex: 1, display: 'flex', flexDirection: 'column',
-        justifyContent: 'center', padding: '60px',
-        borderRight: '1px solid #1a1a1a',
-      }}>
+      {/* Left Panel - Branding (nur Desktop) */}
+      <div className="login-branding">
         <div style={{ maxWidth: 440 }}>
           <div style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -48,7 +44,6 @@ export default function Login() {
               <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6L12 2z" fill="#fff"/>
             </svg>
           </div>
-
           <h1 style={{ fontSize: 36, fontWeight: 700, color: '#fff', letterSpacing: '-0.03em', marginBottom: 12, lineHeight: 1.1 }}>
             Social Intelligence
           </h1>
@@ -57,7 +52,6 @@ export default function Login() {
             Erkenne Trends, analysiere Competitors,<br/>
             generiere Content auf Knopfdruck.
           </p>
-
           {[
             ['Automatisches Scraping', 'Profile & Posts werden täglich aktualisiert'],
             ['KI Content Generator', 'Skripte, Karussells, Captions — in Sekunden'],
@@ -74,12 +68,22 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Right Panel - Login form */}
-      <div style={{
-        width: 440, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '40px',
-      }}>
+      {/* Login Form Panel */}
+      <div className="login-form-panel">
         <div style={{ width: '100%', maxWidth: 340, animation: 'fadeUp 0.3s ease forwards' }}>
+          {/* Mobile: Logo oben */}
+          <div className="login-mobile-logo">
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: 40, height: 40, background: '#ee4f00', borderRadius: 10, marginBottom: 20,
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6L12 2z" fill="#fff"/>
+              </svg>
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginBottom: 4 }}>Social Intelligence</div>
+          </div>
+
           <h2 style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
             Willkommen zurück
           </h2>
@@ -99,8 +103,7 @@ export default function Login() {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 autoComplete="current-password"
-                autoFocus
-                style={{ fontSize: 14, padding: '11px 14px' }}
+                style={{ fontSize: 16, padding: '14px 16px' }}
               />
             </div>
 
@@ -119,7 +122,7 @@ export default function Login() {
               type="submit"
               className="btn btn-primary"
               disabled={!password || loading}
-              style={{ width: '100%', padding: '11px', fontSize: 14, fontWeight: 600, marginTop: 4 }}
+              style={{ width: '100%', padding: '14px', fontSize: 15, fontWeight: 600, marginTop: 4, minHeight: 52 }}
             >
               {loading
                 ? <span className="spinner" style={{ width: 16, height: 16, borderColor: 'rgba(255,255,255,0.2)', borderTopColor: '#fff' }} />
