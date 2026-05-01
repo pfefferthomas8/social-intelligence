@@ -138,6 +138,56 @@ Instagram CDN → Supabase Storage → AssemblyAI. Umweg nötig weil AssemblyAI 
 
 ---
 
+## DM Center (Instagram Appointment Setter)
+
+### Übersicht
+Claude fungiert als KI-Appointment-Setter für Instagram DMs. ManyChat fängt eingehende Nachrichten ab, leitet sie an Supabase weiter, Claude generiert Antwortvorschläge, Thomas genehmigt oder sendet vollautomatisch.
+
+### ManyChat Flow-Architektur
+```
+Lead schreibt → Default Reply → External Request (dm-manychat-reply) 
+→ Condition: claude_reply is not 0 → Send Text ({{custom.claude_reply}}) → Set Field = "0"
+```
+- **Feld:** `claude_reply` (Custom Field in ManyChat)
+- **Wichtig:** "Set Field = 0" kommt NACH dem Send-Step (nicht davor!)
+- **Mode A/B:** dm-manychat-reply gibt `{ reply: "" }` zurück → Vorschlag nur im UI gespeichert
+- **Mode C:** gibt auch `{ reply: "" }` zurück, sendet aber verzögert (60–180s) via `setCustomFieldByName` + `sendFlow` im Hintergrund (`EdgeRuntime.waitUntil`)
+
+### DB-Tabellen DM Center
+
+| Tabelle | Wichtiges |
+|---------|-----------|
+| `dm_conversations` | `manychat_contact_id`, `gender` (male/female/unknown), `lead_heat` (hot/warm/cold/archived), `autonomy_mode` (A/B/C), `lead_score` (0–100), `deal_status` (open/won/lost/nurture), `notes`, `has_unread`, `claude_blocked` |
+| `dm_messages` | `direction` (inbound/outbound), `claude_suggestion`, `claude_reasoning`, `original_suggestion` (für KI-Learning), `sent_by` (user/claude/thomas) |
+| `dm_config` | Key-Value: `global_claude_enabled`, `manychat_api_key`, `manychat_flow_ns`, `style_dna`, `blocked_usernames`, `opening_msg_1/2/3`, `primary/secondary_product_*`, `default_autonomy_mode` |
+
+### Edge Functions DM
+
+| Funktion | Zweck |
+|----------|-------|
+| `dm-manychat-reply` | ManyChat Webhook — speichert Inbound, generiert Claude-Vorschlag, Anti-Loop-Schutz (90s Fenster), blockiert Frauen + Blocklist + Archived |
+| `dm-reply` | Manuell aus UI aufgerufen (Button "Vorschlag generieren") — generiert + speichert Suggestion auf lastInbound |
+| `dm-send` | Sendet Nachricht via ManyChat (`setCustomFieldByName` + `sendFlow`), speichert `original_suggestion` für KI-Learning |
+
+### KI-Learning-Loop
+- Wenn Thomas einen Vorschlag **ohne Änderung** sendet → `original_suggestion = content` → gilt als ✓ Approval
+- Wenn Thomas **bearbeitet** → `original_suggestion ≠ content` → gilt als Korrektur
+- `dm-reply` lädt letzte 15 Feedback-Einträge und gibt Claude "So schreibt er NICHT / So schreibt er":
+
+### Wichtige Eigenheiten & Bugs
+- **Anti-Loop Mode C:** `sendFlow` re-triggert `dm-manychat-reply`. Fix: Outbound wird VOR `sendFlow` in DB gespeichert. Anti-Loop-Check: gleiche Nachricht in DB + Outbound danach → skip (90s Fenster)
+- **Frauen-Filter:** `gender === 'female'` → kein Claude, aber Nachricht wird trotzdem gespeichert
+- **Archived:** `lead_heat === 'archived'` → komplett übersprungen (weder Nachricht gespeichert noch Claude)
+- **Gender-Detection:** Aus `display_name` + `instagram_username`. DB speichert `conv.gender`, aber dm-manychat-reply erkennt frisch bei jedem Aufruf. Override im UI möglich (♂/♀/? Buttons)
+- **ManyChat Default Reply feuert NICHT** wenn Subscriber in aktivem Flow steckt → Fix: In ManyChat Kontakt prüfen → aus Sequence entfernen
+- **Supabase Realtime:** Tabellen `dm_conversations` + `dm_messages` müssen in Publication sein: `ALTER PUBLICATION supabase_realtime ADD TABLE dm_conversations, dm_messages;`
+- **ClaudeBanner:** Bleibt als kompakte Leiste sichtbar auch nach manueller Antwort ("alreadyReplied"). Zeigt Fehlermeldung wenn dm-reply scheitert.
+
+### Route
+`/dm-center` → `src/pages/DMCenter.jsx`
+
+---
+
 ## Routing
 
 | Route | Seite |
